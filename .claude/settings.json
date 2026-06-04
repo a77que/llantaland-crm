@@ -28,7 +28,15 @@
       "Bash(git commit *)",
       "Bash(openssl rand *)",
       "Bash(git remote *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(python3 transform_to_crm.py)",
+      "Bash(curl -s -X GET http://161.97.102.3:3000/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzJhMTllNS1mMjg4LTRmMDEtYjAzMy1mOWY1MWJlZjJlMmEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzdmYTI0ZWYtYjE3MS00NGFmLTgzMDItYzNlMGQ0MWJhYTA0IiwiaWF0IjoxNzgwNTgyODc4fQ.onkbkdR4Tzic39xYxhp-RoQ26mGVYrKx1iRQXhM3SKg')",
+      "Bash(curl -s -X GET https://llantaland-n8n.vqoynm.easypanel.host/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzJhMTllNS1mMjg4LTRmMDEtYjAzMy1mOWY1MWJlZjJlMmEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzdmYTI0ZWYtYjE3MS00NGFmLTgzMDItYzNlMGQ0MWJhYTA0IiwiaWF0IjoxNzgwNTgyODc4fQ.onkbkdR4Tzic39xYxhp-RoQ26mGVYrKx1iRQXhM3SKg')",
+      "Bash(curl -s https://llantaland-n8n.vqoynm.easypanel.host/api/v1/workflows?limit=50 -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzJhMTllNS1mMjg4LTRmMDEtYjAzMy1mOWY1MWJlZjJlMmEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzdmYTI0ZWYtYjE3MS00NGFmLTgzMDItYzNlMGQ0MWJhYTA0IiwiaWF0IjoxNzgwNTgyODc4fQ.onkbkdR4Tzic39xYxhp-RoQ26mGVYrKx1iRQXhM3SKg')",
+      "Bash(python3 upload_to_n8n.py)"
+    ],
+    "additionalDirectories": [
+      "d:\\Visual Code Studio Project\\N8n Proyecto"
     ]
   }
 }

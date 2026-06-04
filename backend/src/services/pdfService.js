@@ -7,217 +7,150 @@ const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads');
 
 const EMPRESA = {
   nombre: 'LLANTALAND S.A.C.',
-  ruc: process.env.SUNAT_RUC || 'RUC: 20xxxxxxxxx',
-  direccion: 'Lima, Perú',
-  telefono: '',
-  web: 'www.llantaland.pe',
+  ruc: process.env.SUNAT_RUC || '20xxxxxxxxx',
+  web: 'www.llantaland.com',
+  telefono: '+51 972 124 470',
 };
 
-const COLORES = {
-  primario: '#1a3c5e',
-  acento: '#e63946',
-  grisClaro: '#f5f5f5',
-  grisOscuro: '#555555',
-  texto: '#222222',
+const C = {
+  amarillo: '#f5c400',
+  negro:    '#080808',
+  texto:    '#1e293b',
+  gris:     '#64748b',
+  grisClaro:'#f8fafc',
+  rojo:     '#e3000f',
 };
 
-function formatMoney(value) {
-  return `S/ ${parseFloat(value || 0).toFixed(2)}`;
-}
-
-function formatFecha(date) {
-  return new Date(date).toLocaleDateString('es-PE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
-}
-
-async function generarCotizacion(cotizacion) {
-  return new Promise((resolve, reject) => {
-    try {
-      const filename = `cotizacion-${cotizacion.numero}-${uuidv4().slice(0, 8)}.pdf`;
-      const filepath = path.join(UPLOADS_DIR, filename);
-
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
-      const stream = fs.createWriteStream(filepath);
-      doc.pipe(stream);
-
-      // Header
-      _dibujarHeader(doc, 'COTIZACIÓN', cotizacion.numero, cotizacion.createdAt);
-
-      // Datos cliente
-      const cliente = cotizacion.cliente;
-      const nombreCliente = cliente.razonSocial || `${cliente.nombre || ''} ${cliente.apellidos || ''}`.trim();
-      _dibujarDatosCliente(doc, nombreCliente, cliente);
-
-      // Tabla de items
-      _dibujarTabla(doc, cotizacion.items);
-
-      // Totales
-      _dibujarTotales(doc, cotizacion);
-
-      // Pie
-      _dibujarPie(doc);
-
-      doc.end();
-      stream.on('finish', () => resolve(filename));
-      stream.on('error', reject);
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
+const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
+const fmtFecha = (d) => new Date(d).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 async function generarVenta(venta) {
   return new Promise((resolve, reject) => {
     try {
+      if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
       const filename = `venta-${venta.numero}-${uuidv4().slice(0, 8)}.pdf`;
       const filepath = path.join(UPLOADS_DIR, filename);
-
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
       const stream = fs.createWriteStream(filepath);
       doc.pipe(stream);
 
-      _dibujarHeader(doc, 'COMPROBANTE DE VENTA', venta.numero, venta.createdAt);
+      // ── Header negro con acento amarillo ──
+      doc.rect(0, 0, doc.page.width, 90).fill(C.negro);
+      doc.rect(0, 88, doc.page.width, 3).fill(C.amarillo);
 
-      const cliente = venta.cliente;
-      const nombreCliente = cliente.razonSocial || `${cliente.nombre || ''} ${cliente.apellidos || ''}`.trim();
-      _dibujarDatosCliente(doc, nombreCliente, cliente);
+      doc.fontSize(20).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('LLANTALAND', 50, 22);
+      doc.fontSize(8).font('Helvetica').fillColor('#999')
+        .text(`RUC ${EMPRESA.ruc}  •  ${EMPRESA.web}  •  ${EMPRESA.telefono}`, 50, 46);
 
-      _dibujarTabla(doc, venta.items);
-      _dibujarTotales(doc, venta);
-      _dibujarPie(doc);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('COMPROBANTE DE VENTA', 340, 20, { align: 'right', width: 210 });
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('white')
+        .text(`N° ${venta.numero}`, 340, 36, { align: 'right', width: 210 });
+      doc.fontSize(8).font('Helvetica').fillColor('#999')
+        .text(`Fecha: ${fmtFecha(venta.createdAt)}`, 340, 56, { align: 'right', width: 210 });
+      if (venta.estado) {
+        doc.fontSize(8).font('Helvetica-Bold').fillColor(venta.estado === 'COMPLETADA' ? '#22c55e' : '#f59e0b')
+          .text(venta.estado, 340, 70, { align: 'right', width: 210 });
+      }
+
+      let y = 110;
+
+      // ── Sección cliente ──
+      doc.rect(50, y, doc.page.width - 100, 70).fill(C.grisClaro).stroke(C.grisClaro);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('DATOS DEL CLIENTE', 62, y + 8);
+
+      const nombre = venta.nombreCliente || 'Sin nombre';
+      const docCliente = venta.dniCe ? `DNI/CE: ${venta.dniCe}` : '';
+      const tel = venta.telefonoCliente ? `Tel: ${venta.telefonoCliente}` : '';
+      const auto = [venta.marcaAuto, venta.modeloAuto, venta.anioAuto].filter(Boolean).join(' ');
+
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(C.texto).text(nombre, 62, y + 22);
+      doc.fontSize(9).font('Helvetica').fillColor(C.gris)
+        .text([docCliente, tel].filter(Boolean).join('   '), 62, y + 38);
+      if (auto) doc.fontSize(9).fillColor(C.gris).text(`Vehículo: ${auto}`, 62, y + 52);
+
+      y += 82;
+
+      // ── Producto ──
+      doc.rect(50, y, doc.page.width - 100, 18).fill(C.negro);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('white')
+        .text('PRODUCTO', 62, y + 5)
+        .text('MEDIDA', 240, y + 5, { width: 80 })
+        .text('CANT.', 320, y + 5, { width: 50, align: 'right' })
+        .text('P. UNIT.', 370, y + 5, { width: 65, align: 'right' })
+        .text('TOTAL', 435, y + 5, { width: 65, align: 'right' });
+      y += 20;
+
+      const nombreProd = [venta.marcaLlanta, venta.modeloLlanta].filter(Boolean).join(' ') || 'Llanta';
+      doc.rect(50, y, doc.page.width - 100, 26).fill('white');
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.texto)
+        .text(nombreProd, 62, y + 7)
+        .text(venta.medidaLlanta || '—', 240, y + 7, { width: 80 });
+      doc.font('Helvetica')
+        .text(String(venta.cantidad || 1), 320, y + 7, { width: 50, align: 'right' })
+        .text(fmt(venta.precioUnit), 370, y + 7, { width: 65, align: 'right' });
+      doc.font('Helvetica-Bold').fillColor('#16a34a')
+        .text(fmt(venta.precioTotal), 435, y + 7, { width: 65, align: 'right' });
+      y += 30;
+
+      // Líneas de ítems de inventario si existen
+      if (venta.items && venta.items.length > 0) {
+        venta.items.forEach((item, idx) => {
+          const bg = idx % 2 === 0 ? C.grisClaro : 'white';
+          doc.rect(50, y, doc.page.width - 100, 22).fill(bg);
+          const pn = item.producto ? `${item.producto.marca} ${item.producto.nombreComercial || ''} ${item.producto.medida || ''}`.trim() : '—';
+          doc.fontSize(8).font('Helvetica').fillColor(C.texto)
+            .text(pn, 62, y + 7, { width: 180 })
+            .text(item.producto?.medida || '—', 240, y + 7, { width: 80 })
+            .text(String(item.cantidad), 320, y + 7, { width: 50, align: 'right' })
+            .text(fmt(item.precioUnit), 370, y + 7, { width: 65, align: 'right' })
+            .text(fmt(item.subtotal), 435, y + 7, { width: 65, align: 'right' });
+          y += 22;
+        });
+      }
+
+      y += 10;
+
+      // ── Total ──
+      doc.rect(370, y, 175, 30).fill(C.negro);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('TOTAL:', 375, y + 9, { width: 80 });
+      doc.fontSize(14).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text(fmt(venta.precioTotal), 375, y + 7, { width: 165, align: 'right' });
+      y += 44;
+
+      // ── Instalación ──
+      const local = venta.localInstalacion;
+      if (local || venta.fechaCita) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('INSTALACIÓN:', 50, y);
+        y += 14;
+        if (local?.Nombre || local?.nombre) {
+          doc.fontSize(9).font('Helvetica').fillColor(C.texto)
+            .text(`Local: ${local.Nombre || local.nombre}  —  ${local.Direccion || local.direccion || local.Distrito || ''}`, 50, y);
+          y += 14;
+        }
+        if (venta.fechaCita) {
+          doc.fontSize(9).fillColor(C.texto).text(`Fecha de cita: ${venta.fechaCita}`, 50, y);
+          y += 14;
+        }
+      }
+
+      // ── Pie ──
+      const pieY = doc.page.height - 50;
+      doc.rect(0, pieY - 5, doc.page.width, 2).fill(C.amarillo);
+      doc.fontSize(8).font('Helvetica').fillColor(C.gris)
+        .text('Gracias por su preferencia  •  Llantaland — Tu llanta, nuestra pasión  •  www.llantaland.com', 50, pieY + 4, {
+          align: 'center', width: doc.page.width - 100,
+        });
 
       doc.end();
       stream.on('finish', () => resolve(filename));
       stream.on('error', reject);
-    } catch (err) {
-      reject(err);
-    }
+    } catch (err) { reject(err); }
   });
 }
 
-function _dibujarHeader(doc, tipo, numero, fecha) {
-  // Fondo header
-  doc.rect(0, 0, doc.page.width, 100).fill(COLORES.primario);
-
-  // Logo placeholder (emoji llanta)
-  doc.fontSize(36).fillColor('white').text('🛞', 50, 28, { width: 60 });
-
-  // Nombre empresa
-  doc.fontSize(18).font('Helvetica-Bold').fillColor('white')
-    .text(EMPRESA.nombre, 110, 28);
-  doc.fontSize(9).font('Helvetica').fillColor('#ccddee')
-    .text(`${EMPRESA.ruc}  •  ${EMPRESA.web}`, 110, 52);
-
-  // Número y tipo de doc
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(COLORES.acento)
-    .text(tipo, 380, 22, { align: 'right', width: 165 });
-  doc.fontSize(14).font('Helvetica-Bold').fillColor('white')
-    .text(`N° ${numero}`, 380, 38, { align: 'right', width: 165 });
-  doc.fontSize(9).font('Helvetica').fillColor('#ccddee')
-    .text(`Fecha: ${formatFecha(fecha)}`, 380, 60, { align: 'right', width: 165 });
-
-  doc.moveDown(5);
-}
-
-function _dibujarDatosCliente(doc, nombre, cliente) {
-  const top = 115;
-  doc.rect(50, top, doc.page.width - 100, 60).fill(COLORES.grisClaro);
-  doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORES.primario)
-    .text('DATOS DEL CLIENTE', 60, top + 8);
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(COLORES.texto)
-    .text(nombre || 'Sin nombre', 60, top + 22);
-  doc.fontSize(9).font('Helvetica').fillColor(COLORES.grisOscuro)
-    .text(`${cliente.tipoDoc || ''}: ${cliente.numDoc || ''}   |   Cel: ${cliente.celular || '-'}   |   ${cliente.email || ''}`, 60, top + 38);
-  doc.y = top + 75;
-}
-
-function _dibujarTabla(doc, items) {
-  const colX = [50, 60, 310, 370, 430, 490];
-  const colW = [10, 250, 60, 60, 60, 65];
-  const headerY = doc.y;
-
-  // Header tabla
-  doc.rect(50, headerY, doc.page.width - 100, 20).fill(COLORES.primario);
-  const headers = ['#', 'Producto / Descripción', 'Medida', 'Cant.', 'P. Unit.', 'Subtotal'];
-  headers.forEach((h, i) => {
-    doc.fontSize(8).font('Helvetica-Bold').fillColor('white')
-      .text(h, colX[i], headerY + 6, { width: colW[i], align: i >= 3 ? 'right' : 'left' });
-  });
-
-  let rowY = headerY + 22;
-  items.forEach((item, idx) => {
-    const bg = idx % 2 === 0 ? 'white' : COLORES.grisClaro;
-    doc.rect(50, rowY, doc.page.width - 100, 22).fill(bg);
-
-    const prod = item.producto;
-    const nombreProd = prod ? `${prod.marca} ${prod.modelo || ''} ${prod.medida || ''}`.trim() : '—';
-    const medida = prod?.medida || item.medidaLlanta || '—';
-
-    doc.fontSize(8).font('Helvetica').fillColor(COLORES.texto)
-      .text(String(idx + 1), colX[0], rowY + 7, { width: colW[0] })
-      .text(nombreProd, colX[1], rowY + 7, { width: colW[1] })
-      .text(medida, colX[2], rowY + 7, { width: colW[2] })
-      .text(String(item.cantidad), colX[3], rowY + 7, { width: colW[3], align: 'right' })
-      .text(formatMoney(item.precioUnit), colX[4], rowY + 7, { width: colW[4], align: 'right' })
-      .text(formatMoney(item.subtotal), colX[5], rowY + 7, { width: colW[5], align: 'right' });
-
-    rowY += 22;
-  });
-
-  doc.y = rowY + 10;
-}
-
-function _dibujarTotales(doc, doc_data) {
-  const xLabel = 390;
-  const xValue = 490;
-  const wValue = 55;
-  let y = doc.y + 5;
-
-  const filas = [
-    ['Subtotal (sin IGV):', doc_data.subtotal],
-    ['IGV (18%):', doc_data.igv],
-  ];
-
-  if (doc_data.descuentoValor && parseFloat(doc_data.descuentoValor) > 0) {
-    const desc = doc_data.descuentoTipo === 'PORCENTAJE'
-      ? `Descuento (${doc_data.descuentoValor}%):`
-      : 'Descuento:';
-    const montoDesc = parseFloat(doc_data.total) - (parseFloat(doc_data.subtotal) + parseFloat(doc_data.igv));
-    filas.push([desc, montoDesc]);
-  }
-
-  filas.forEach(([label, value]) => {
-    doc.fontSize(9).font('Helvetica').fillColor(COLORES.grisOscuro)
-      .text(label, xLabel, y, { width: 95, align: 'right' });
-    doc.fontSize(9).font('Helvetica').fillColor(COLORES.texto)
-      .text(formatMoney(value), xValue, y, { width: wValue, align: 'right' });
-    y += 16;
-  });
-
-  // Total
-  y += 4;
-  doc.rect(380, y, 165, 26).fill(COLORES.primario);
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('white')
-    .text('TOTAL:', xLabel, y + 8, { width: 95, align: 'right' });
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('white')
-    .text(formatMoney(doc_data.total), xValue, y + 8, { width: wValue, align: 'right' });
-
-  if (doc_data.descuentoMotivo) {
-    doc.fontSize(8).font('Helvetica-Oblique').fillColor(COLORES.grisOscuro)
-      .text(`* Motivo descuento: ${doc_data.descuentoMotivo}`, 50, y + 38);
-  }
-
-  doc.y = y + 50;
-}
-
-function _dibujarPie(doc) {
-  const y = doc.page.height - 60;
-  doc.rect(0, y - 10, doc.page.width, 1).fill(COLORES.grisClaro);
-  doc.fontSize(8).font('Helvetica').fillColor(COLORES.grisOscuro)
-    .text('Gracias por su preferencia • Llantaland — Tu llanta, nuestra pasión', 50, y, {
-      align: 'center', width: doc.page.width - 100,
-    });
-}
-
-module.exports = { generarCotizacion, generarVenta };
+module.exports = { generarVenta };

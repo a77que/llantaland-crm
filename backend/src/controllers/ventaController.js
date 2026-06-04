@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const { paginar } = require('../utils/helpers');
+const pdfService = require('../services/pdfService');
 const prisma = new PrismaClient();
 
 const listar = async (req, res, next) => {
@@ -114,4 +115,26 @@ const crear = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear };
+const generarPdf = async (req, res, next) => {
+  try {
+    const venta = await prisma.venta.findUnique({
+      where: { id: req.params.id },
+      include: {
+        usuario: { select: { nombre: true } },
+        lead: { select: { telefono: true, nombreCliente: true } },
+        items: { include: { producto: true, sede: true } },
+        comprobantes: true,
+      },
+    });
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+
+    const filename = await pdfService.generarVenta(venta);
+    const pdfUrl = `/uploads/${filename}`;
+    await prisma.venta.update({ where: { id: req.params.id }, data: {} }); // touch
+    res.json({ pdfUrl });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, generarPdf };
