@@ -3,23 +3,32 @@ const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const { listar, obtener, crear, actualizar, compatibles, subirImagen } = require('../controllers/productoController');
-const { auth } = require('../middleware/auth');
+const { auth, requireAdmin } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
   destination: path.join(__dirname, '..', '..', 'uploads'),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    const ext = path.extname(file.originalname).toLowerCase();
     cb(null, `${uuidv4()}${ext}`);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME.includes(file.mimetype)) return cb(null, true);
+    cb(new Error('Solo se permiten imágenes JPG, PNG, WebP o GIF'));
+  },
+});
 
 router.use(auth);
-router.get('/', listar);
-router.get('/compatibles', compatibles);
-router.get('/:id', obtener);
-router.post('/', crear);
-router.put('/:id', actualizar);
-router.post('/:id/imagenes', upload.single('imagen'), subirImagen);
+router.get('/',           listar);
+router.get('/compatibles',compatibles);
+router.get('/:id',        obtener);
+router.post('/',          requireAdmin, crear);
+router.put('/:id',        requireAdmin, actualizar);
+router.post('/:id/imagenes', requireAdmin, upload.single('imagen'), subirImagen);
 
 module.exports = router;

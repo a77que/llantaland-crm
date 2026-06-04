@@ -46,7 +46,9 @@
       "Bash(docker restart *)",
       "Bash(python3 -c \"import json,sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); [print\\(' -', p['marca'], p['medida'], '| S/', p['precioRegular']\\) for p in d.get\\('data',[]\\)]\")",
       "Bash(docker-compose -f \"d:/Visual Code Studio Project/Llantaland CRM/docker-compose.yml\" up --build -d frontend)",
-      "Bash(chmod +x \"d:/Visual Code Studio Project/Llantaland CRM/.git/hooks/pre-commit\")"
+      "Bash(chmod +x \"d:/Visual Code Studio Project/Llantaland CRM/.git/hooks/pre-commit\")",
+      "Bash(Get-ChildItem -Path \"d:\\\\Visual Code Studio Project\\\\Llantaland CRM\\\\backend\\\\src\" -Recurse -Name)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\Visual Code Studio Project\\\\Llantaland CRM\\\\backend\\\\src\" -Recurse | Select-Object FullName | ForEach-Object { $_.FullName.Substring\\($_.FullName.LastIndexOf\\('src'\\) + 4\\) })"
     ],
     "additionalDirectories": [
       "d:\\Visual Code Studio Project\\N8n Proyecto"

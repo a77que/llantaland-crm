@@ -1,4 +1,20 @@
 require('dotenv').config();
+
+// Validar variables críticas antes de arrancar
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL'];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error(`❌ Variables de entorno faltantes: ${missing.join(', ')}`);
+  process.exit(1);
+}
+if (process.env.JWT_SECRET.length < 32) {
+  console.error('❌ JWT_SECRET debe tener al menos 32 caracteres');
+  process.exit(1);
+}
+if (process.env.JWT_SECRET === 'cambiar_en_produccion_por_secreto_seguro') {
+  console.warn('⚠️  JWT_SECRET usa el valor por defecto — cambia en producción');
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -31,10 +47,10 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Permitir requests sin origin (n8n server-side, curl, etc.)
+    // Requests sin origin: n8n server-side, mobile apps, curl — permitir
     if (!origin) return cb(null, true);
     if (allowedOrigins.includes(origin)) return cb(null, true);
-    cb(null, true); // En VPS propio, aceptar todo; ajustar en prod
+    cb(new Error(`Origin ${origin} no permitido por CORS`));
   },
   credentials: true,
 }));

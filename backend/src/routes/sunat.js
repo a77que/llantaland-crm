@@ -3,9 +3,9 @@ const { getConfig, saveConfig, emitir, listarComprobantes } = require('../contro
 const { auth, requireAdmin } = require('../middleware/auth');
 
 router.use(auth);
-router.get('/config', requireAdmin, getConfig);
-router.post('/config', requireAdmin, saveConfig);
-router.post('/emitir/:ventaId', emitir);
-router.get('/comprobantes', listarComprobantes);
+router.get('/config',           requireAdmin, getConfig);
+router.post('/config',          requireAdmin, saveConfig);
+router.post('/emitir/:ventaId', requireAdmin, emitir);
+router.get('/comprobantes',     requireAdmin, listarComprobantes);
 
 module.exports = router;
