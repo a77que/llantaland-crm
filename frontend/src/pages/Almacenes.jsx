@@ -39,9 +39,9 @@ function ModalSede({ sede, onClose, onGuardado }) {
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px 16px' }}>
           {!sede && (
-            <G half><{lbl('Código Local (L0-L5)', true)} <input style={inp} value={form.codigoLocal} onChange={set('codigoLocal')} placeholder="L0, L1, L2..." maxLength={3} /></G>
+            <G half>{lbl('Código Local (L0-L5)', true)}<input style={inp} value={form.codigoLocal} onChange={set('codigoLocal')} placeholder="L0, L1, L2..." maxLength={3} /></G>
           )}
-          <G><{lbl('Nombre', true)} <input style={inp} value={form.nombre} onChange={set('nombre')} placeholder="Tienda Miraflores" /></G>
+          <G>{lbl('Nombre', true)}<input style={inp} value={form.nombre} onChange={set('nombre')} placeholder="Tienda Miraflores" /></G>
           <G half>
             {lbl('Tipo')}
             <select style={inp} value={form.tipo} onChange={set('tipo')}>
@@ -49,14 +49,14 @@ function ModalSede({ sede, onClose, onGuardado }) {
               <option value="ALMACEN">🏭 Almacén</option>
             </select>
           </G>
-          <G half><{lbl('Distrito')} <input style={inp} value={form.distrito||''} onChange={set('distrito')} placeholder="Miraflores" /></G>
-          <G><{lbl('Dirección')} <input style={inp} value={form.direccion||''} onChange={set('direccion')} placeholder="Av. Larco 654, Miraflores" /></G>
-          <G half><{lbl('Teléfono')} <input style={inp} value={form.telefono||''} onChange={set('telefono')} placeholder="+51 01 445-5678" /></G>
-          <G half><{lbl('Email')} <input style={inp} type="email" value={form.email||''} onChange={set('email')} placeholder="tienda@llantaland.com" /></G>
-          <G><{lbl('Horario')} <input style={inp} value={form.horario||''} onChange={set('horario')} placeholder="Lun-Sab 8am-7pm, Dom 9am-2pm" /></G>
-          <G><{lbl('Encargado')} <input style={inp} value={form.encargado||''} onChange={set('encargado')} placeholder="Juan Pérez" /></G>
-          <G half><{lbl('Latitud')} <input style={inp} value={form.latitud||''} onChange={set('latitud')} placeholder="-12.1191" /></G>
-          <G half><{lbl('Longitud')} <input style={inp} value={form.longitud||''} onChange={set('longitud')} placeholder="-77.0282" /></G>
+          <G half>{lbl('Distrito')}<input style={inp} value={form.distrito||''} onChange={set('distrito')} placeholder="Miraflores" /></G>
+          <G>{lbl('Dirección')}<input style={inp} value={form.direccion||''} onChange={set('direccion')} placeholder="Av. Larco 654, Miraflores" /></G>
+          <G half>{lbl('Teléfono')}<input style={inp} value={form.telefono||''} onChange={set('telefono')} placeholder="+51 01 445-5678" /></G>
+          <G half>{lbl('Email')}<input style={inp} type="email" value={form.email||''} onChange={set('email')} placeholder="tienda@llantaland.com" /></G>
+          <G>{lbl('Horario')}<input style={inp} value={form.horario||''} onChange={set('horario')} placeholder="Lun-Sab 8am-7pm, Dom 9am-2pm" /></G>
+          <G>{lbl('Encargado')}<input style={inp} value={form.encargado||''} onChange={set('encargado')} placeholder="Juan Pérez" /></G>
+          <G half>{lbl('Latitud')}<input style={inp} value={form.latitud||''} onChange={set('latitud')} placeholder="-12.1191" /></G>
+          <G half>{lbl('Longitud')}<input style={inp} value={form.longitud||''} onChange={set('longitud')} placeholder="-77.0282" /></G>
         </div>
 
         <div style={{ marginTop:14, display:'flex', alignItems:'center', gap:8 }}>
