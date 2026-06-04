@@ -336,7 +336,7 @@ export default function Inventario() {
                 <tr key={prod.id} style={{ background: idx%2===0 ? 'var(--color-surface)' : 'var(--color-bg)', borderBottom:'1px solid var(--color-border)' }}>
                   {/* Acciones — sticky */}
                   <td style={{ padding:'8px 10px', position:'sticky', left:0, background: idx%2===0 ? 'var(--color-surface)' : 'var(--color-bg)', zIndex:1, borderRight:'2px solid var(--color-border)' }}>
-                    <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'3px 8px', background:'var(--color-primary)', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap' }}>
+                    <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'4px 10px', background:'#0f0f0f', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c40050' }}>
                       Ver →
                     </Link>
                   </td>
