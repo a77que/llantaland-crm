@@ -25,7 +25,10 @@
       "Bash(git commit -m ' *)",
       "Bash(git config *)",
       "Bash(git commit -m 'feat: Llantaland CRM v2 — full stack con integracion n8n *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(openssl rand *)",
+      "Bash(git remote *)",
+      "Bash(git push *)"
     ]
   }
 }

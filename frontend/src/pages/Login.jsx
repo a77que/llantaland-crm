@@ -4,19 +4,6 @@ import toast from 'react-hot-toast';
 import { authApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
-const S = {
-  page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1a3c5e 0%, #0f2236 100%)' },
-  card: { background: '#fff', borderRadius: 12, padding: '40px 36px', width: '100%', maxWidth: 400, boxShadow: '0 20px 40px rgba(0,0,0,.3)' },
-  logo: { textAlign: 'center', marginBottom: 28 },
-  logoIcon: { fontSize: 48 },
-  logoText: { fontSize: 24, fontWeight: 800, color: 'var(--color-primary)', marginTop: 6 },
-  logoSub: { color: 'var(--color-text-muted)', fontSize: 13 },
-  label: { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 6 },
-  input: { width: '100%', padding: '10px 12px', border: '1.5px solid var(--color-border)', borderRadius: 8, fontSize: 14, outline: 'none', transition: 'border-color .2s' },
-  group: { marginBottom: 18 },
-  btn: { width: '100%', padding: '12px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 8 },
-};
-
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,23 +26,128 @@ export default function Login() {
   };
 
   return (
-    <div style={S.page}>
-      <div style={S.card}>
-        <div style={S.logo}>
-          <div style={S.logoIcon}>🛞</div>
-          <div style={S.logoText}>Llantaland</div>
-          <div style={S.logoSub}>Sistema CRM</div>
+    <div style={{
+      minHeight: '100dvh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#080808',
+      padding: 16,
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Línea decorativa superior amarilla */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: '#f5c400' }} />
+
+      {/* Card */}
+      <div style={{
+        background: '#141414',
+        border: '1px solid #242424',
+        borderTop: '3px solid #f5c400',
+        borderRadius: 12,
+        padding: '40px 32px',
+        width: '100%',
+        maxWidth: 400,
+        boxShadow: '0 20px 60px rgba(0,0,0,.8)',
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <img
+            src="https://llantaland.com/OsoLogoSVG.svg"
+            alt="Llantaland"
+            style={{ height: 56, marginBottom: 12 }}
+            onError={e => { e.target.style.display = 'none'; }}
+          />
+          <div style={{
+            fontFamily: "'Black Ops One', sans-serif",
+            fontSize: 26,
+            color: '#f5c400',
+            letterSpacing: 2,
+          }}>
+            LLANTALAND
+          </div>
+          <div style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 4,
+            color: '#888',
+            textTransform: 'uppercase',
+            marginTop: 4,
+          }}>
+            Sistema CRM
+          </div>
         </div>
+
         <form onSubmit={handleSubmit}>
-          <div style={S.group}>
-            <label style={S.label}>Email</label>
-            <input style={S.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@llantaland.pe" autoFocus />
+          <div style={{ marginBottom: 18 }}>
+            <label style={{
+              display: 'block', fontSize: 12, fontWeight: 700,
+              color: '#888', marginBottom: 7,
+              textTransform: 'uppercase', letterSpacing: 1.5,
+              fontFamily: "'Barlow Condensed', sans-serif",
+            }}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoFocus
+              placeholder="correo@llantaland.com"
+              style={{
+                width: '100%', padding: '11px 14px',
+                background: '#1a1a1a', border: '1.5px solid #303030',
+                borderRadius: 8, fontSize: 15, color: '#f0ede8',
+                outline: 'none', transition: 'border-color .2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#f5c400'}
+              onBlur={e => e.target.style.borderColor = '#303030'}
+            />
           </div>
-          <div style={S.group}>
-            <label style={S.label}>Contraseña</label>
-            <input style={S.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{
+              display: 'block', fontSize: 12, fontWeight: 700,
+              color: '#888', marginBottom: 7,
+              textTransform: 'uppercase', letterSpacing: 1.5,
+              fontFamily: "'Barlow Condensed', sans-serif",
+            }}>
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+              style={{
+                width: '100%', padding: '11px 14px',
+                background: '#1a1a1a', border: '1.5px solid #303030',
+                borderRadius: 8, fontSize: 15, color: '#f0ede8',
+                outline: 'none', transition: 'border-color .2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#f5c400'}
+              onBlur={e => e.target.style.borderColor = '#303030'}
+            />
           </div>
-          <button style={S.btn} disabled={loading}>{loading ? 'Ingresando...' : 'Ingresar'}</button>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%', padding: '13px',
+              background: loading ? '#d4a900' : '#f5c400',
+              color: '#000', border: 'none', borderRadius: 8,
+              fontSize: 15, fontWeight: 900, cursor: loading ? 'not-allowed' : 'pointer',
+              fontFamily: "'Barlow Condensed', sans-serif",
+              letterSpacing: 2, textTransform: 'uppercase',
+              transition: 'background .2s',
+            }}
+          >
+            {loading ? 'Ingresando...' : 'Ingresar →'}
+          </button>
         </form>
       </div>
     </div>

@@ -2,65 +2,74 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛞</text></svg>" />
+    <link rel="icon" type="image/svg+xml" href="https://llantaland.com/OsoLogoSVG.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Llantaland CRM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&family=Black+Ops+One&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #f8fafc;
-        color: #1e293b;
+        font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #080808;
+        color: #f0ede8;
         -webkit-font-smoothing: antialiased;
         overscroll-behavior: none;
       }
 
       :root {
-        --color-primary: #1a3c5e;
-        --color-primary-light: #2563eb;
-        --color-accent: #e63946;
-        --color-success: #16a34a;
-        --color-warning: #ca8a04;
-        --color-danger: #dc2626;
-        --color-bg: #f8fafc;
-        --color-surface: #ffffff;
-        --color-border: #e2e8f0;
-        --color-text: #1e293b;
-        --color-text-muted: #64748b;
-        --sidebar-width: 240px;
-        --topbar-height: 56px;
-        --bottom-nav-height: 64px;
-        --radius: 8px;
-        --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
-        --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
-        --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
-        /* Safe area para notch/home indicator de iPhone */
-        --safe-bottom: env(safe-area-inset-bottom, 0px);
-        --safe-top: env(safe-area-inset-top, 0px);
+        /* ── Colores Llantaland ── */
+        --color-primary:       #f5c400;   /* amarillo marca */
+        --color-primary-dark:  #d4a900;   /* amarillo oscuro hover */
+        --color-primary-light: #ffd400;   /* amarillo claro */
+        --color-accent:        #e3000f;   /* rojo marca */
+        --color-success:       #22c55e;
+        --color-warning:       #f5c400;
+        --color-danger:        #e3000f;
+
+        /* ── Fondos oscuros ── */
+        --color-bg:            #080808;
+        --color-surface:       #141414;
+        --color-surface2:      #1a1a1a;
+
+        /* ── Bordes ── */
+        --color-border:        #242424;
+        --color-border2:       #303030;
+
+        /* ── Texto ── */
+        --color-text:          #f0ede8;
+        --color-text-muted:    #888;
+
+        /* ── Layout ── */
+        --sidebar-width:       240px;
+        --topbar-height:       56px;
+        --bottom-nav-height:   64px;
+        --radius:              8px;
+        --safe-bottom:         env(safe-area-inset-bottom, 0px);
+        --safe-top:            env(safe-area-inset-top, 0px);
+
+        /* ── Sombras ── */
+        --shadow:    0 1px 3px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.4);
+        --shadow-md: 0 4px 6px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.3);
+        --shadow-lg: 0 10px 20px rgba(0,0,0,.7), 0 4px 8px rgba(0,0,0,.4);
       }
 
       a { color: inherit; text-decoration: none; }
       button { cursor: pointer; font-family: inherit; }
-      input, select, textarea { font-family: inherit; font-size: 16px; /* evita zoom en iOS */ }
+      input, select, textarea { font-family: inherit; font-size: 16px; }
 
-      /* Scrollbar fino en desktop */
-      ::-webkit-scrollbar { width: 4px; height: 4px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+      /* Scrollbar amarillo */
+      ::-webkit-scrollbar { width: 3px; height: 3px; }
+      ::-webkit-scrollbar-track { background: #000; }
+      ::-webkit-scrollbar-thumb { background: #f5c400; border-radius: 2px; }
 
-      /* Tap highlight transparente en móvil */
+      ::selection { background: #f5c400; color: #000; }
       * { -webkit-tap-highlight-color: transparent; }
-
-      /* Texto no seleccionable en botones */
       button { user-select: none; -webkit-user-select: none; }
 
-      /* Transiciones suaves globales */
-      .slide-in { animation: slideIn .25s ease; }
-      @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
       .fade-in { animation: fadeIn .2s ease; }
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
