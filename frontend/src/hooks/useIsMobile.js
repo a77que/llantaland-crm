@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 
-const MOBILE_BREAKPOINT = 768;
+export const BREAKPOINTS = { mobile: 768, tablet: 1024 };
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < MOBILE_BREAKPOINT);
-
+function useMediaQuery(maxWidth) {
+  const [matches, setMatches] = useState(() => window.innerWidth < maxWidth);
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
-    const handler = (e) => setIsMobile(e.matches);
+    const mq = window.matchMedia(`(max-width: ${maxWidth - 1}px)`);
+    const handler = (e) => setMatches(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  return isMobile;
+  }, [maxWidth]);
+  return matches;
 }
+
+export function useIsMobile() { return useMediaQuery(BREAKPOINTS.mobile); }
+export function useIsTablet() { return useMediaQuery(BREAKPOINTS.tablet); }
+
+// true en móvil O tablet (< 1024px)
+export function useIsMobileOrTablet() { return useMediaQuery(BREAKPOINTS.tablet); }

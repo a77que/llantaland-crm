@@ -9,17 +9,17 @@ async function main() {
   // ── Usuarios ──────────────────────────────────────────────────────────────
   const hash = await bcrypt.hash('Llantaland2024!', 10);
   const admin = await prisma.usuario.upsert({
-    where: { email: 'admin@llantaland.pe' },
+    where: { email: 'admin@llantaland.com' },
     update: {},
-    create: { nombre: 'Administrador', email: 'admin@llantaland.pe', password: hash, rol: 'ADMIN' },
+    create: { nombre: 'Administrador', email: 'admin@llantaland.com', password: hash, rol: 'ADMIN' },
   });
   console.log(`✓ Admin: ${admin.email}`);
 
   const hash2 = await bcrypt.hash('Vendedor2024!', 10);
   const vendedor = await prisma.usuario.upsert({
-    where: { email: 'vendedor@llantaland.pe' },
+    where: { email: 'vendedor@llantaland.com' },
     update: {},
-    create: { nombre: 'Vendedor Demo', email: 'vendedor@llantaland.pe', password: hash2, rol: 'VENDEDOR' },
+    create: { nombre: 'Vendedor Demo', email: 'vendedor@llantaland.com', password: hash2, rol: 'VENDEDOR' },
   });
   console.log(`✓ Vendedor: ${vendedor.email}`);
 
@@ -87,8 +87,8 @@ async function main() {
 
   console.log('\n✅ Seed completado.');
   console.log('\nCredenciales de acceso:');
-  console.log('  Admin:    admin@llantaland.pe   / Llantaland2024!');
-  console.log('  Vendedor: vendedor@llantaland.pe / Vendedor2024!');
+  console.log('  Admin:    admin@llantaland.com   / Llantaland2024!');
+  console.log('  Vendedor: vendedor@llantaland.com / Vendedor2024!');
   console.log('\nEndpoints n8n (requieren x-n8n-api-key header):');
   console.log('  GET  /api/n8n/crm/:telefono       — leer lead');
   console.log('  POST /api/n8n/crm                 — crear lead');

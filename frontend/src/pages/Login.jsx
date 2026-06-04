@@ -32,12 +32,15 @@ export default function Login() {
       alignItems: 'center',
       justifyContent: 'center',
       background: '#080808',
+      backgroundImage: `repeating-linear-gradient(92deg, transparent 0px, transparent 3px, rgba(255,255,255,.004) 3px, rgba(255,255,255,.004) 4px)`,
       padding: 16,
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Línea decorativa superior amarilla */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: '#f5c400' }} />
+      {/* Línea amarilla superior — igual a la web */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #f5c400, #ffd400, #f5c400)', zIndex: 10 }} />
+      {/* Resplandor de fondo */}
+      <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,196,0,.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
       {/* Card */}
       <div style={{
