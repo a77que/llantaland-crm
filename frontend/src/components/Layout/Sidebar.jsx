@@ -75,7 +75,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
               <div style={{ fontFamily: "'Black Ops One', sans-serif", fontSize: 14, color: '#f5c400', letterSpacing: 1.5 }}>
                 LLANTALAND
               </div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 9, color: '#444', letterSpacing: 2, textTransform: 'uppercase' }}>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 9, color: 'rgba(255,255,255,.35)', letterSpacing: 2, textTransform: 'uppercase' }}>
                 CRM v2.0
               </div>
             </div>
@@ -104,7 +104,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
           <div key={si}>
             {sec.label && !collapsed && (
               <div style={{
-                padding: '10px 16px 4px', fontSize: 9, fontWeight: 700, color: '#444',
+                padding: '10px 16px 4px', fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,.35)',
                 textTransform: 'uppercase', letterSpacing: 2,
                 fontFamily: "'Barlow Condensed', sans-serif",
               }}>
@@ -124,7 +124,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
                   justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
                   gap: 10,
                   padding: collapsed && !isMobile ? '12px 0' : isMobile ? '13px 16px' : '9px 16px',
-                  color: isActive ? '#f5c400' : '#666',
+                  color: isActive ? '#f5c400' : 'rgba(255,255,255,.82)',
                   fontSize: 13.5,
                   fontWeight: isActive ? 700 : 500,
                   fontFamily: "'Barlow Condensed', sans-serif",
@@ -152,7 +152,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
           <>
             <div style={{ fontSize: 11, marginBottom: 8 }}>
               <span style={{ color: '#f5c400', fontWeight: 700, fontSize: 12 }}>{usuario?.nombre}</span>
-              <span style={{ display: 'block', color: '#444', marginTop: 1, letterSpacing: 1, fontSize: 10, fontFamily: "'Barlow Condensed', sans-serif", textTransform: 'uppercase' }}>{usuario?.rol}</span>
+              <span style={{ display: 'block', color: 'rgba(255,255,255,.35)', marginTop: 1, letterSpacing: 1, fontSize: 10, fontFamily: "'Barlow Condensed', sans-serif", textTransform: 'uppercase' }}>{usuario?.rol}</span>
             </div>
             <button onClick={handleLogout} style={{
               width: '100%', padding: '7px',
