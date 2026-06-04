@@ -19,13 +19,13 @@ export default function Topbar({ title = '', isMobile, onMenuClick }) {
   return (
     <header style={{
       height: 'var(--topbar-height)',
-      background: '#0f0f0f',
-      borderBottom: '1px solid #1e1e1e',
+      background: 'var(--color-surface)',
+      borderBottom: '2px solid #f5c400',
       display: 'flex', alignItems: 'center',
       justifyContent: 'space-between',
       padding: isMobile ? '0 14px' : '0 24px',
       position: 'sticky', top: 0, zIndex: 50,
-      boxShadow: '0 2px 12px rgba(0,0,0,.5)',
+      boxShadow: 'var(--shadow)',
       gap: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 0, minWidth: 0 }}>
@@ -45,7 +45,7 @@ export default function Topbar({ title = '', isMobile, onMenuClick }) {
           fontFamily: "'Barlow Condensed', sans-serif",
           fontSize: isMobile ? 16 : 17,
           fontWeight: 700, letterSpacing: 1,
-          color: '#f0ede8', textTransform: 'uppercase',
+          color: 'var(--color-text)', textTransform: 'uppercase',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
           {title}

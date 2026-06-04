@@ -71,7 +71,7 @@ export default function Layout() {
           paddingBottom: isMobile
             ? `calc(var(--bottom-nav-height) + var(--safe-bottom) + 14px)`
             : '24px',
-          background: '#080808',
+          background: 'var(--color-bg)',
           overflowX: 'hidden',
         }}>
           <Outlet />
