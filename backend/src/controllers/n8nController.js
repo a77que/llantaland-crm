@@ -254,8 +254,14 @@ const marcarOptOut = async (req, res, next) => {
 
 const listarOptOut = async (req, res, next) => {
   try {
-    const lista = await prisma.optOut.findMany({ orderBy: { fecha: 'desc' } });
-    res.json(lista);
+    // Paginación obligatoria para evitar extracción masiva de teléfonos
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const skip  = parseInt(req.query.offset) || 0;
+    const [lista, total] = await Promise.all([
+      prisma.optOut.findMany({ orderBy: { fecha: 'desc' }, take: limit, skip }),
+      prisma.optOut.count(),
+    ]);
+    res.json({ data: lista, total, limit, offset: skip });
   } catch (err) {
     next(err);
   }
@@ -289,9 +295,11 @@ const guardarLogistica = async (req, res, next) => {
 const listarLogistica = async (req, res, next) => {
   try {
     const { estado } = req.query;
+    const limit = Math.min(parseInt(req.query.limit) || 100, 200);
     const lista = await prisma.logisticaPendiente.findMany({
       where: estado ? { estado } : {},
       orderBy: { createdAt: 'desc' },
+      take: limit,
     });
     res.json(lista);
   } catch (err) {
@@ -432,40 +440,42 @@ function mapSheetToLead(body) {
 }
 
 function mapLeadToSheet(lead) {
+  // Solo expone campos que el flujo n8n necesita operacionalmente
+  // DNI_CE y datos sensibles se incluyen porque el flujo los necesita para registrar la venta
   return {
-    // Campos con nombre idéntico al sheet CRM
-    Telefono: lead.telefono,
-    Timestamp: lead.timestamp,
-    Paso_Actual: lead.pasoActual,
-    Nombre_Cliente: lead.nombreCliente || '',
-    DNI_CE: lead.dniCe || '',
-    Marca_Auto: lead.marcaAuto || '',
-    Modelo_Auto: lead.modeloAuto || '',
-    Anio_Auto: lead.anioAuto || '',
-    Medida_Detectada: lead.medidaDetectada || '',
-    Precio: lead.precioLlanta || '',
-    Ranking: lead.ranking || '',
-    Tipo_Servicio: lead.tipoServicio || '',
-    Distrito_Cliente: lead.distritoCliente || '',
-    Provincia_Destino: lead.provinciaDestino || '',
-    Local_Asignado: lead.localAsignado ? JSON.stringify(lead.localAsignado) : '',
-    Local_Instalacion: lead.localInstalacion ? JSON.stringify(lead.localInstalacion) : '',
-    Local_Origen_Traslado: lead.localOrigenTraslado ? JSON.stringify(lead.localOrigenTraslado) : '',
-    Estado_Flujo: lead.estadoFlujo ? JSON.stringify(lead.estadoFlujo) : '',
-    Stock_Map: lead.stockMap ? JSON.stringify(lead.stockMap) : '',
-    Oferta_Precios: lead.ofertaPrecios ? JSON.stringify(lead.ofertaPrecios) : '',
-    Intentos_Medida: lead.intentosMedida,
-    Hash_Mensaje: lead.hashMensaje || '',
-    Mensaje_Cliente: lead.mensajeCliente || '',
-    Respuesta_Bot: lead.respuestaBot || '',
-    Estado_Logistica: lead.estadoLogistica || '',
-    Fecha_Cita: lead.fechaCita || '',
-    Calendar_Event_ID: lead.calendarEventId || '',
-    Email_Seguimiento_Enviado: lead.emailSeguimientoEnviado ? 'si' : 'no',
-    // Campos internos del CRM
-    _id: lead.id,
-    _updatedAt: lead.updatedAt,
-    _humanTakeover: lead.humanTakeover || null,
+    Telefono:                   lead.telefono,
+    Timestamp:                  lead.timestamp,
+    Paso_Actual:                lead.pasoActual,
+    Nombre_Cliente:             lead.nombreCliente || '',
+    DNI_CE:                     lead.dniCe || '',           // necesario para registro de venta
+    Marca_Auto:                 lead.marcaAuto || '',
+    Modelo_Auto:                lead.modeloAuto || '',
+    Anio_Auto:                  lead.anioAuto || '',
+    Medida_Detectada:           lead.medidaDetectada || '',
+    Precio:                     lead.precioLlanta || '',
+    Ranking:                    lead.ranking || '',
+    Tipo_Servicio:              lead.tipoServicio || '',
+    Distrito_Cliente:           lead.distritoCliente || '',
+    Provincia_Destino:          lead.provinciaDestino || '',
+    Local_Asignado:             lead.localAsignado ? JSON.stringify(lead.localAsignado) : '',
+    Local_Instalacion:          lead.localInstalacion ? JSON.stringify(lead.localInstalacion) : '',
+    Local_Origen_Traslado:      lead.localOrigenTraslado ? JSON.stringify(lead.localOrigenTraslado) : '',
+    Estado_Flujo:               lead.estadoFlujo ? JSON.stringify(lead.estadoFlujo) : '',
+    Stock_Map:                  lead.stockMap ? JSON.stringify(lead.stockMap) : '',
+    Oferta_Precios:             lead.ofertaPrecios ? JSON.stringify(lead.ofertaPrecios) : '',
+    Intentos_Medida:            lead.intentosMedida,
+    Hash_Mensaje:               lead.hashMensaje || '',
+    Mensaje_Cliente:            lead.mensajeCliente || '',
+    Respuesta_Bot:              lead.respuestaBot || '',
+    Estado_Logistica:           lead.estadoLogistica || '',
+    Fecha_Cita:                 lead.fechaCita || '',
+    Calendar_Event_ID:          lead.calendarEventId || '',
+    Email_Seguimiento_Enviado:  lead.emailSeguimientoEnviado ? 'si' : 'no',
+    // Metadatos internos (no PII directamente)
+    _id:                        lead.id,
+    _updatedAt:                 lead.updatedAt,
+    // Human takeover: solo estado activo, sin datos personales del agente
+    _agenteActivo:              lead.humanTakeover?.agenteActivo ?? false,
   };
 }
 

@@ -1,10 +1,28 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Campos seguros para VENDEDOR (sin historial completo)
+const LEAD_SELECT_VENDEDOR = {
+  id: true, telefono: true, timestamp: true, updatedAt: true,
+  pasoActual: true, ranking: true, tipoServicio: true,
+  medidaDetectada: true, marcaLlanta: true, modeloLlanta: true,
+  precioLlanta: true, cantidadLlantas: true,
+  distritoCliente: true, localInstalacion: true,
+  estadoLogistica: true, fechaCita: true,
+  nombreCliente: true,           // necesario para llamar al cliente
+  marcaAuto: true, modeloAuto: true, anioAuto: true,
+  intentosMedida: true, emailSeguimientoEnviado: true,
+  // EXCLUIDOS para vendedor: dniCe, estadoFlujo, stockMap, ofertaPrecios, hashMensaje
+};
+
 const listar = async (req, res, next) => {
   try {
     const { paso, ranking, q, page = 1, limit = 50 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const isAdmin = req.usuario?.rol === 'ADMIN';
+
+    // Forzar máximo 100 registros para evitar extracción masiva
+    const take = Math.min(parseInt(limit) || 50, 100);
+    const skip = (parseInt(page) - 1) * take;
 
     const where = {};
     if (paso) where.pasoActual = paso;
@@ -22,13 +40,18 @@ const listar = async (req, res, next) => {
         where,
         orderBy: { updatedAt: 'desc' },
         skip,
-        take: parseInt(limit),
-        include: { humanTakeover: true, _count: { select: { historial: true } } },
+        take,
+        // Admin ve todo; vendedor ve campos filtrados
+        ...(isAdmin ? {
+          include: { humanTakeover: true, _count: { select: { historial: true } } },
+        } : {
+          select: { ...LEAD_SELECT_VENDEDOR, humanTakeover: true, _count: { select: { historial: true } } },
+        }),
       }),
       prisma.leadCRM.count({ where }),
     ]);
 
-    res.json({ leads, total, page: parseInt(page), limit: parseInt(limit) });
+    res.json({ leads, total, page: parseInt(page), limit: take });
   } catch (err) {
     next(err);
   }
@@ -36,15 +59,37 @@ const listar = async (req, res, next) => {
 
 const obtener = async (req, res, next) => {
   try {
+    const isAdmin = req.usuario?.rol === 'ADMIN';
+
     const lead = await prisma.leadCRM.findUnique({
       where: { id: req.params.id },
       include: {
         humanTakeover: true,
-        historial: { orderBy: { timestamp: 'asc' } },
-        ventas: { orderBy: { createdAt: 'desc' }, take: 5 },
+        // Historial solo para admin (datos completos de conversación)
+        ...(isAdmin ? {
+          historial: { orderBy: { timestamp: 'asc' }, take: 200 },
+        } : {
+          historial: {
+            orderBy: { timestamp: 'asc' },
+            take: 50,
+            select: { id: true, rol: true, mensaje: true, timestamp: true, pasoActual: true },
+          },
+        }),
+        ventas: { orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, numero: true, estado: true, precioTotal: true, createdAt: true } },
       },
     });
     if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+
+    // Ocultar campos sensibles para vendedor
+    if (!isAdmin) {
+      delete lead.dniCe;
+      delete lead.estadoFlujo;
+      delete lead.stockMap;
+      delete lead.ofertaPrecios;
+      delete lead.hashMensaje;
+      delete lead.respuestaBot;
+    }
+
     res.json(lead);
   } catch (err) {
     next(err);
@@ -53,14 +98,28 @@ const obtener = async (req, res, next) => {
 
 const obtenerPorTelefono = async (req, res, next) => {
   try {
+    const isAdmin = req.usuario?.rol === 'ADMIN';
+
     const lead = await prisma.leadCRM.findUnique({
       where: { telefono: req.params.telefono },
       include: {
         humanTakeover: true,
-        historial: { orderBy: { timestamp: 'asc' }, take: 50 },
+        historial: {
+          orderBy: { timestamp: 'asc' },
+          take: isAdmin ? 100 : 30,
+          select: { id: true, rol: true, mensaje: true, timestamp: true },
+        },
       },
     });
     if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+
+    if (!isAdmin) {
+      delete lead.dniCe;
+      delete lead.estadoFlujo;
+      delete lead.stockMap;
+      delete lead.hashMensaje;
+    }
+
     res.json(lead);
   } catch (err) {
     next(err);
@@ -69,10 +128,17 @@ const obtenerPorTelefono = async (req, res, next) => {
 
 const actualizar = async (req, res, next) => {
   try {
-    const lead = await prisma.leadCRM.update({
-      where: { id: req.params.id },
-      data: req.body,
-    });
+    // Vendedor solo puede actualizar campos no sensibles
+    const isAdmin = req.usuario?.rol === 'ADMIN';
+    const CAMPOS_VENDEDOR = ['pasoActual', 'nombreCliente', 'marcaAuto', 'modeloAuto', 'anioAuto', 'fechaCita', 'estadoLogistica', 'notas'];
+
+    const data = isAdmin
+      ? req.body
+      : Object.fromEntries(Object.entries(req.body).filter(([k]) => CAMPOS_VENDEDOR.includes(k)));
+
+    if (Object.keys(data).length === 0) return res.status(403).json({ error: 'Sin campos permitidos para actualizar' });
+
+    const lead = await prisma.leadCRM.update({ where: { id: req.params.id }, data });
     res.json(lead);
   } catch (err) {
     next(err);
@@ -85,9 +151,7 @@ const resumen = async (req, res, next) => {
       prisma.leadCRM.groupBy({ by: ['pasoActual'], _count: true }),
       prisma.leadCRM.groupBy({ by: ['ranking'], _count: true }),
       prisma.leadCRM.count(),
-      prisma.leadCRM.count({
-        where: { timestamp: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
-      }),
+      prisma.leadCRM.count({ where: { timestamp: { gte: new Date(new Date().setHours(0,0,0,0)) } } }),
     ]);
     res.json({ porPaso, porRanking, total, hoy });
   } catch (err) {

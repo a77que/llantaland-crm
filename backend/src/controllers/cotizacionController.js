@@ -7,9 +7,12 @@ const listar = async (req, res, next) => {
   try {
     const { estado, leadId, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
+    const isAdmin = req.usuario?.rol === 'ADMIN';
     const where = {};
     if (estado) where.estado = estado;
     if (leadId) where.leadId = leadId;
+    // Vendedor solo ve sus propias cotizaciones
+    if (!isAdmin) where.usuarioId = req.usuario.id;
 
     const [total, cotizaciones] = await Promise.all([
       prisma.cotizacion.count({ where }),

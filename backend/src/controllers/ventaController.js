@@ -7,9 +7,12 @@ const listar = async (req, res, next) => {
   try {
     const { estado, tipoVenta, desde, hasta, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
+    const isAdmin = req.usuario?.rol === 'ADMIN';
     const where = {};
     if (estado) where.estado = estado;
     if (tipoVenta) where.tipoVenta = tipoVenta;
+    // Vendedor solo ve sus propias ventas
+    if (!isAdmin) where.usuarioId = req.usuario.id;
     if (desde || hasta) {
       where.createdAt = {};
       if (desde) where.createdAt.gte = new Date(desde);
