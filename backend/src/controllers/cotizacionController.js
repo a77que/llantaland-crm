@@ -56,6 +56,16 @@ const crear = async (req, res, next) => {
     const qty   = parseInt(cantidad || 1);
     const pUnit = parseFloat(precioUnit || 0);
     const desc  = descuento ? parseFloat(descuento) : 0;
+
+    // Validaciones de integridad
+    if (qty <= 0)   return res.status(400).json({ error: 'Cantidad debe ser mayor a 0' });
+    if (pUnit < 0)  return res.status(400).json({ error: 'Precio no puede ser negativo' });
+    if (pUnit === 0 && req.body.estado !== 'BORRADOR') {
+      return res.status(400).json({ error: 'Precio requerido para cotización confirmada' });
+    }
+    if (desc < 0)   return res.status(400).json({ error: 'Descuento no puede ser negativo' });
+    if (desc > pUnit * qty) return res.status(400).json({ error: 'Descuento no puede superar el total' });
+
     const total = Math.max(0, (pUnit * qty) - desc);
 
     const count  = await prisma.cotizacion.count();

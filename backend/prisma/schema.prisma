@@ -201,6 +201,9 @@ model Producto {
   alertasStock AlertaStock[]
   itemsVenta  ItemVenta[]
 
+  @@index([medida])
+  @@index([marca])
+  @@index([activo])
   @@map("productos")
 }
 
@@ -225,12 +228,14 @@ model MovimientoStock {
   tipo       TipoMovimiento
   cantidad   Int
   referencia String?
-  usuarioId  String
+  usuarioId  String?                              // nullable para SetNull al borrar usuario
   createdAt  DateTime       @default(now())
 
-  producto Producto @relation(fields: [productoId], references: [id])
-  sede     Sede     @relation(fields: [sedeId], references: [id])
-  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+  // Restrict: no borrar producto/sede con movimientos en auditoría
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  sede     Sede     @relation(fields: [sedeId], references: [id],     onDelete: Restrict)
+  // SetNull: conservar historial de auditoría si se elimina usuario
+  usuario  Usuario? @relation(fields: [usuarioId], references: [id],  onDelete: SetNull)
 
   @@map("movimientos_stock")
 }
@@ -292,6 +297,9 @@ model LeadCRM {
   ventas           Venta[]
   cotizaciones     Cotizacion[]
 
+  @@index([pasoActual])
+  @@index([ranking])
+  @@index([updatedAt])
   @@map("leads_crm")
 }
 
@@ -310,6 +318,8 @@ model MensajeHistorial {
 
   lead LeadCRM @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  @@index([leadId])
+  @@index([telefono])
   @@map("historial_mensajes")
 }
 
@@ -395,10 +405,15 @@ model Cotizacion {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  lead    LeadCRM?   @relation(fields: [leadId],   references: [id])
-  usuario Usuario    @relation(fields: [usuarioId], references: [id])
+  // SetNull: si se borra el lead la cotizacion queda sin lead pero no se pierde
+  lead    LeadCRM?   @relation(fields: [leadId],   references: [id], onDelete: SetNull)
+  // Restrict: no borrar usuario con cotizaciones activas
+  usuario Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
   venta   Venta?
 
+  @@index([estado])
+  @@index([usuarioId])
+  @@index([leadId])
   @@map("cotizaciones")
 }
 
@@ -452,11 +467,17 @@ model Venta {
 
   createdAt        DateTime      @default(now())
 
-  lead         LeadCRM?      @relation(fields: [leadId], references: [id])
-  usuario      Usuario       @relation(fields: [usuarioId], references: [id])
+  // SetNull: si se borra el lead, la venta queda sin lead pero no se pierde
+  lead         LeadCRM?      @relation(fields: [leadId],    references: [id], onDelete: SetNull)
+  // Restrict: no borrar usuario con ventas — desactivarlo en su lugar
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
   items        ItemVenta[]
   comprobantes Comprobante[]
 
+  @@index([estado])
+  @@index([usuarioId])
+  @@index([createdAt])
+  @@index([leadId])
   @@map("ventas")
 }
 
@@ -469,9 +490,10 @@ model ItemVenta {
   precioUnit Decimal @db.Decimal(10, 2)
   subtotal   Decimal @db.Decimal(10, 2)
 
-  venta    Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
-  producto Producto @relation(fields: [productoId], references: [id])
-  sede     Sede     @relation(fields: [sedeId], references: [id])
+  venta    Venta    @relation(fields: [ventaId],    references: [id], onDelete: Cascade)
+  // Restrict: no borrar producto/sede si hay ventas históricas que lo referencian
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  sede     Sede     @relation(fields: [sedeId],     references: [id], onDelete: Restrict)
 
   @@map("items_venta")
 }
@@ -491,7 +513,7 @@ model Comprobante {
   fechaEmision DateTime          @default(now())
   createdAt    DateTime          @default(now())
 
-  venta Venta @relation(fields: [ventaId], references: [id])
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
 
   @@map("comprobantes")
 }
@@ -522,9 +544,11 @@ model AlertaStock {
   resuelta       Boolean  @default(false)
   createdAt      DateTime @default(now())
 
-  producto Producto @relation(fields: [productoId], references: [id])
-  sede     Sede     @relation(fields: [sedeId], references: [id])
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  sede     Sede     @relation(fields: [sedeId],     references: [id], onDelete: Cascade)
 
+  @@index([resuelta])
+  @@index([productoId])
   @@map("alertas_stock")
 }
 

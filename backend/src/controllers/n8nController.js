@@ -149,28 +149,32 @@ const guardarHistorial = async (req, res, next) => {
     const tel = Telefono || telefono;
     if (!tel) return res.status(400).json({ error: 'Telefono requerido' });
 
-    const lead = await prisma.leadCRM.upsert({
-      where: { telefono: tel },
-      update: {},
-      create: { telefono: tel },
+    const result = await prisma.$transaction(async (tx) => {
+      const lead = await tx.leadCRM.upsert({
+        where: { telefono: tel },
+        update: {},
+        create: { telefono: tel },
+      });
+
+      // Deduplicación dentro de la misma transacción
+      if (Hash_Mensaje) {
+        const existe = await tx.mensajeHistorial.findUnique({ where: { hashMensaje: Hash_Mensaje } });
+        if (existe) return existe;
+      }
+
+      return tx.mensajeHistorial.create({
+        data: {
+          leadId: lead.id,
+          telefono: tel,
+          hashMensaje: Hash_Mensaje || null,
+          rol: Rol || rol || 'cliente',
+          mensaje: Mensaje || mensaje || '',
+          pasoActual: Paso_Actual || paso_actual || null,
+        },
+      });
     });
 
-    if (Hash_Mensaje) {
-      const existe = await prisma.mensajeHistorial.findUnique({ where: { hashMensaje: Hash_Mensaje } });
-      if (existe) return res.json(existe);
-    }
-
-    const msg = await prisma.mensajeHistorial.create({
-      data: {
-        leadId: lead.id,
-        telefono: tel,
-        hashMensaje: Hash_Mensaje || null,
-        rol: Rol || rol || 'cliente',
-        mensaje: Mensaje || mensaje || '',
-        pasoActual: Paso_Actual || paso_actual || null,
-      },
-    });
-    res.json(msg);
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -198,25 +202,28 @@ const activarHumanTakeover = async (req, res, next) => {
     const tel = Telefono || telefono;
     if (!tel) return res.status(400).json({ error: 'Telefono requerido' });
 
-    const lead = await prisma.leadCRM.upsert({
-      where: { telefono: tel },
-      update: {},
-      create: { telefono: tel },
+    const ht = await prisma.$transaction(async (tx) => {
+      const lead = await tx.leadCRM.upsert({
+        where: { telefono: tel },
+        update: {},
+        create: { telefono: tel },
+      });
+
+      return tx.humanTakeover.upsert({
+        where: { telefono: tel },
+        update: {
+          agenteActivo: Agente_Activo === true || Agente_Activo === 'true',
+          timestampUltimoAgente: Timestamp_Ultimo_Agente ? new Date(Timestamp_Ultimo_Agente) : new Date(),
+        },
+        create: {
+          leadId: lead.id,
+          telefono: tel,
+          agenteActivo: Agente_Activo === true || Agente_Activo === 'true',
+          timestampUltimoAgente: new Date(),
+        },
+      });
     });
 
-    const ht = await prisma.humanTakeover.upsert({
-      where: { telefono: tel },
-      update: {
-        agenteActivo: Agente_Activo === true || Agente_Activo === 'true',
-        timestampUltimoAgente: Timestamp_Ultimo_Agente ? new Date(Timestamp_Ultimo_Agente) : new Date(),
-      },
-      create: {
-        leadId: lead.id,
-        telefono: tel,
-        agenteActivo: Agente_Activo === true || Agente_Activo === 'true',
-        timestampUltimoAgente: new Date(),
-      },
-    });
     res.json(ht);
   } catch (err) {
     next(err);
@@ -240,12 +247,17 @@ const marcarOptOut = async (req, res, next) => {
     const tel = telefono || Telefono;
     if (!tel) return res.status(400).json({ error: 'Telefono requerido' });
 
-    const oo = await prisma.optOut.upsert({
-      where: { telefono: tel },
-      update: { mensaje: mensaje || Mensaje || null, fecha: new Date() },
-      create: { telefono: tel, mensaje: mensaje || Mensaje || null },
+    const oo = await prisma.$transaction(async (tx) => {
+      const o = await tx.optOut.upsert({
+        where: { telefono: tel },
+        update: { mensaje: mensaje || Mensaje || null, fecha: new Date() },
+        create: { telefono: tel, mensaje: mensaje || Mensaje || null },
+      });
+      // Actualizar lead atómicamente — si falla, el optOut también se revierte
+      await tx.leadCRM.updateMany({ where: { telefono: tel }, data: { pasoActual: 'opt_out' } });
+      return o;
     });
-    await prisma.leadCRM.updateMany({ where: { telefono: tel }, data: { pasoActual: 'opt_out' } });
+
     res.json(oo);
   } catch (err) {
     next(err);
@@ -342,7 +354,8 @@ const registrarVenta = async (req, res, next) => {
       ? (typeof b.Local_Instalacion === 'string' ? (() => { try { return JSON.parse(b.Local_Instalacion); } catch { return {}; } })() : b.Local_Instalacion)
       : null;
 
-    const venta = await prisma.venta.create({
+    const venta = await prisma.$transaction(async (tx) => {
+      const v = await tx.venta.create({
       data: {
         numero,
         leadId: lead?.id || null,
@@ -371,11 +384,15 @@ const registrarVenta = async (req, res, next) => {
         estadoLogistica: b.Estado_Logistica || b._reg_estado_logistica || null,
         estado: 'PENDIENTE',
       },
-    });
+      });
 
-    if (lead) {
-      await prisma.leadCRM.update({ where: { id: lead.id }, data: { pasoActual: 'completado' } });
-    }
+      // Actualización del lead atómica con la venta
+      if (lead) {
+        await tx.leadCRM.update({ where: { id: lead.id }, data: { pasoActual: 'completado' } });
+      }
+
+      return v;
+    }); // fin $transaction
 
     res.json({ ok: true, ventaId: venta.id, numero: venta.numero });
   } catch (err) {

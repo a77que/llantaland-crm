@@ -296,7 +296,8 @@ const aplicarUpdate = async (req, res, next) => {
           if (campoCRM.startsWith('stock_')) {
             const codigoLocal = campoCRM.replace('stock_', '').toUpperCase();
             const sedeId = sedeMap[codigoLocal];
-            if (sedeId) datosStock[sedeId] = parseInt(valorArchivo) || 0;
+            const qty = parseInt(valorArchivo) || 0;
+            if (sedeId) datosStock[sedeId] = Math.max(0, qty); // stock nunca negativo
           } else if (campoCRM === 'precioRegular' || campoCRM === 'precioOferta') {
             const num = parseFloat(String(valorArchivo).replace(',', '.'));
             if (!isNaN(num)) datosProducto[campoCRM] = num;

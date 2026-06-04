@@ -61,10 +61,21 @@ const crear = async (req, res, next) => {
   try {
     const { items, medidaLlanta, marcaLlanta, modeloLlanta, cantidad, precioUnit, ...rest } = req.body;
 
+    const cantFinal   = parseInt(cantidad || 1);
+    const precioFinal = parseFloat(precioUnit || 0);
+
+    // Validaciones de integridad
+    if (cantFinal <= 0) return res.status(400).json({ error: 'Cantidad debe ser mayor a 0' });
+    if (precioFinal < 0) return res.status(400).json({ error: 'Precio no puede ser negativo' });
+    if (items?.length > 0) {
+      for (const item of items) {
+        if (parseInt(item.cantidad) <= 0) return res.status(400).json({ error: 'Cantidad de item debe ser mayor a 0' });
+        if (parseFloat(item.precioUnit) < 0) return res.status(400).json({ error: 'Precio de item no puede ser negativo' });
+      }
+    }
+
     const count = await prisma.venta.count();
     const numero = `VTA-${String(count + 1).padStart(5, '0')}`;
-    const cantFinal = parseInt(cantidad || 1);
-    const precioFinal = parseFloat(precioUnit || 0);
 
     const venta = await prisma.$transaction(async (tx) => {
       const v = await tx.venta.create({
