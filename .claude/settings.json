@@ -44,7 +44,9 @@
       "Bash(python3 -c \"import json,sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); [print\\(' -', p['marca'], p['medida']\\) for p in d.get\\('data',[]\\)]\")",
       "Bash(docker cp *)",
       "Bash(docker restart *)",
-      "Bash(python3 -c \"import json,sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); [print\\(' -', p['marca'], p['medida'], '| S/', p['precioRegular']\\) for p in d.get\\('data',[]\\)]\")"
+      "Bash(python3 -c \"import json,sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); [print\\(' -', p['marca'], p['medida'], '| S/', p['precioRegular']\\) for p in d.get\\('data',[]\\)]\")",
+      "Bash(docker-compose -f \"d:/Visual Code Studio Project/Llantaland CRM/docker-compose.yml\" up --build -d frontend)",
+      "Bash(chmod +x \"d:/Visual Code Studio Project/Llantaland CRM/.git/hooks/pre-commit\")"
     ],
     "additionalDirectories": [
       "d:\\Visual Code Studio Project\\N8n Proyecto"

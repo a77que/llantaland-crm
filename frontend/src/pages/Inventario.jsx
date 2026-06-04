@@ -286,6 +286,11 @@ export default function Inventario() {
     try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM_KEY) || '[]'); } catch { return []; }
   });
   const [showGestor, setShowGestor] = useState(false);
+  // Edición masiva
+  const [modoEdicion, setModoEdicion] = useState(false);   // hoja editable
+  const [seleccionados, setSeleccionados] = useState([]);   // IDs seleccionados
+  const [cambiosMasivos, setCambiosMasivos] = useState({}); // { prodId: { campo: valor } }
+  const [guardandoMasivo, setGuardandoMasivo] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['productos', { q, tipo, page }],
@@ -372,14 +377,18 @@ export default function Inventario() {
           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight:700 }}>Inventario</div>
           <div style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:2 }}>{total} productos · {columnasVisibles.length} columnas visibles</div>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button
-            onClick={() => setShowGestor(true)}
-            style={{ padding:'8px 16px', border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}
-          >
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          <button onClick={() => setShowGestor(true)}
+            style={{ padding:'8px 14px', border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', fontSize:13, fontWeight:600, cursor:'pointer' }}>
             ⚙️ Columnas
           </button>
-          <Link to="/importar" style={{ padding:'8px 16px', background:'#f5c400', color:'#000', borderRadius:8, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
+          <button
+            onClick={() => { setModoEdicion(m => !m); setCambiosMasivos({}); setSeleccionados([]); }}
+            style={{ padding:'8px 14px', border:`2px solid ${modoEdicion ? '#f5c400' : 'var(--color-border)'}`, borderRadius:8, background: modoEdicion ? '#fffbeb' : 'var(--color-surface)', color: modoEdicion ? '#b45309' : 'var(--color-text)', fontSize:13, fontWeight:700, cursor:'pointer' }}
+          >
+            {modoEdicion ? '✏️ Modo edición ON' : '✏️ Edición masiva'}
+          </button>
+          <Link to="/importar" style={{ padding:'8px 14px', background:'#f5c400', color:'#000', borderRadius:8, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
             📂 {isMobile ? '' : 'Importar'}
           </Link>
         </div>
@@ -415,7 +424,16 @@ export default function Inventario() {
           <table style={{ borderCollapse:'collapse', background:'var(--color-surface)', fontSize:12.5, minWidth: columnasVisibles.length * 110 }}>
             <thead>
               <tr style={{ background:'var(--color-primary)' }}>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'#f5c400', whiteSpace:'nowrap', position:'sticky', left:0, background:'var(--color-primary)', zIndex:2, minWidth:100 }}>Acciones</th>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'#f5c400', whiteSpace:'nowrap', position:'sticky', left:0, background:'var(--color-primary)', zIndex:2, minWidth: modoEdicion ? 50 : 100 }}>
+                  {modoEdicion ? (
+                    <input type="checkbox"
+                      checked={seleccionados.length === productos.length && productos.length > 0}
+                      onChange={() => setSeleccionados(s => s.length === productos.length ? [] : productos.map(p=>p.id))}
+                      style={{ width:16, height:16, accentColor:'#f5c400', cursor:'pointer' }}
+                      title="Seleccionar todos"
+                    />
+                  ) : 'Acciones'}
+                </th>
                 {columnasVisibles.map(col => (
                   <th key={col.key} style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'rgba(255,255,255,.85)', whiteSpace:'nowrap', textTransform:'uppercase', letterSpacing:.5, borderLeft:'1px solid rgba(255,255,255,.1)' }}>
                     {col.label}
@@ -424,40 +442,66 @@ export default function Inventario() {
               </tr>
             </thead>
             <tbody>
-              {productos.map((prod, idx) => (
-                <tr key={prod.id} style={{ background: idx%2===0 ? 'var(--color-surface)' : 'var(--color-bg)', borderBottom:'1px solid var(--color-border)' }}>
-                  {/* Acciones — sticky */}
-                  <td style={{ padding:'8px 10px', position:'sticky', left:0, background: idx%2===0 ? 'var(--color-surface)' : 'var(--color-bg)', zIndex:1, borderRight:'2px solid var(--color-border)' }}>
-                    <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'4px 10px', background:'#0f0f0f', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c40050' }}>
-                      Ver →
-                    </Link>
-                  </td>
-                  {columnasVisibles.map(col => {
-                    const raw = getCellValue(prod, col.key);
-                    const isStock = col.key.startsWith('stock_') || col.key === 'stockTotal';
-                    const isCustom = col.key.startsWith('custom_');
-                    const isEditable = !['medida','marca','stockTotal'].includes(col.key) && !col.key.startsWith('stock_');
+              {productos.map((prod, idx) => {
+                const isSel = seleccionados.includes(prod.id);
+                const rowBg = isSel ? '#fffbeb' : idx%2===0 ? 'var(--color-surface)' : 'var(--color-bg)';
+                return (
+                  <tr key={prod.id} style={{ background: rowBg, borderBottom:'1px solid var(--color-border)', outline: isSel ? '2px solid #f5c400' : 'none', outlineOffset:'-1px' }}>
+                    {/* Acciones — sticky */}
+                    <td style={{ padding:'6px 8px', position:'sticky', left:0, background:rowBg, zIndex:1, borderRight:'2px solid var(--color-border)', whiteSpace:'nowrap' }}>
+                      {modoEdicion ? (
+                        <input type="checkbox" checked={isSel}
+                          onChange={() => setSeleccionados(s => isSel ? s.filter(id=>id!==prod.id) : [...s, prod.id])}
+                          style={{ width:16, height:16, accentColor:'#f5c400', cursor:'pointer' }}
+                        />
+                      ) : (
+                        <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'4px 10px', background:'#0f0f0f', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c40050' }}>
+                          Ver →
+                        </Link>
+                      )}
+                    </td>
+                    {columnasVisibles.map(col => {
+                      // En modo edición masiva usar el valor pendiente si existe
+                      const rawOriginal = getCellValue(prod, col.key);
+                      const rawPendiente = cambiosMasivos[prod.id]?.[col.key];
+                      const raw = rawPendiente !== undefined ? rawPendiente : rawOriginal;
+                      const hasCambio = rawPendiente !== undefined && String(rawPendiente) !== String(rawOriginal === '—' ? '' : rawOriginal || '');
 
-                    return (
-                      <td key={col.key} style={{ padding:'6px 12px', borderLeft:'1px solid var(--color-border)', whiteSpace:'nowrap', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis' }}>
-                        {isStock ? (
-                          <StockCell value={typeof raw === 'number' ? raw : parseInt(raw)||0} />
-                        ) : isEditable ? (
-                          <CeldaEditable
-                            value={raw} prodId={prod.id} campo={col.key}
-                            onSave={guardarCelda} isCustom={isCustom}
-                            colDef={isCustom ? customCols.find(c=>c.key===col.key) : null}
-                          />
-                        ) : (
-                          <span style={{ color: col.key==='tipo' ? TIPO_COLOR[raw] : undefined, fontWeight: col.key==='medida'?700:undefined }}>
-                            {raw}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                      const isStock = col.key.startsWith('stock_') || col.key === 'stockTotal';
+                      const isCustom = col.key.startsWith('custom_');
+                      const isEditable = !['medida','marca','stockTotal'].includes(col.key) && !col.key.startsWith('stock_');
+
+                      // En modo edición masiva: guardar en estado local
+                      const onSaveMasivo = (prodId, campo, valor, isC) => {
+                        setCambiosMasivos(prev => ({
+                          ...prev,
+                          [prodId]: { ...(prev[prodId]||{}), [campo]: valor },
+                        }));
+                      };
+
+                      return (
+                        <td key={col.key} style={{ padding:'6px 12px', borderLeft:'1px solid var(--color-border)', whiteSpace:'nowrap', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', background: hasCambio ? '#fffbeb' : undefined }}>
+                          {isStock ? (
+                            <StockCell value={typeof raw === 'number' ? raw : parseInt(raw)||0} />
+                          ) : isEditable ? (
+                            <CeldaEditable
+                              value={raw} prodId={prod.id} campo={col.key}
+                              onSave={modoEdicion ? onSaveMasivo : guardarCelda}
+                              isCustom={isCustom}
+                              colDef={isCustom ? customCols.find(c=>c.key===col.key) : null}
+                            />
+                          ) : (
+                            <span style={{ color: col.key==='tipo' ? TIPO_COLOR[raw] : undefined, fontWeight: col.key==='medida'?700:undefined }}>
+                              {raw}
+                            </span>
+                          )}
+                          {hasCambio && <span style={{ fontSize:9, color:'#f59e0b', marginLeft:3 }}>●</span>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -475,13 +519,88 @@ export default function Inventario() {
       {/* Gestor de columnas */}
       {showGestor && (
         <GestorColumnas
-          visibles={visibles}
-          onToggle={toggleColumna}
-          onCrear={crearColumna}
-          onEliminar={eliminarColumna}
-          customCols={customCols}
-          onClose={() => setShowGestor(false)}
+          visibles={visibles} onToggle={toggleColumna}
+          onCrear={crearColumna} onEliminar={eliminarColumna}
+          customCols={customCols} onClose={() => setShowGestor(false)}
         />
+      )}
+
+      {/* Barra flotante de edición masiva */}
+      {modoEdicion && (
+        <div style={{
+          position:'fixed', bottom: 80, left:'50%', transform:'translateX(-50%)',
+          background:'#0f0f0f', border:'2px solid #f5c400', borderRadius:12,
+          padding:'12px 20px', display:'flex', alignItems:'center', gap:14,
+          boxShadow:'0 8px 32px rgba(0,0,0,.5)', zIndex:200, whiteSpace:'nowrap',
+        }}>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,.8)' }}>
+            {seleccionados.length > 0 ? (
+              <><span style={{ color:'#f5c400', fontWeight:700 }}>{seleccionados.length}</span> seleccionados</>
+            ) : (
+              <span style={{ color:'#888' }}>Selecciona filas para editar en masa</span>
+            )}
+            {Object.keys(cambiosMasivos).length > 0 && (
+              <span style={{ marginLeft:10, color:'#f59e0b' }}>
+                · <span style={{ fontWeight:700 }}>{Object.values(cambiosMasivos).reduce((a,v)=>a+Object.keys(v).length,0)}</span> cambios pendientes
+              </span>
+            )}
+          </div>
+
+          {/* Aplicar campo a seleccionados */}
+          {seleccionados.length > 0 && (
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <select id="campoMasivo" style={{ padding:'6px 10px', borderRadius:6, fontSize:12, border:'1px solid #555', background:'#1a1a1a', color:'#f0ede8' }}>
+                {columnasVisibles.filter(c => !['medida','marca','stockTotal'].includes(c.key) && !c.key.startsWith('stock_')).map(c => (
+                  <option key={c.key} value={c.key}>{c.label}</option>
+                ))}
+              </select>
+              <input id="valorMasivo" placeholder="Nuevo valor..." style={{ padding:'6px 10px', borderRadius:6, fontSize:12, border:'1px solid #555', background:'#1a1a1a', color:'#f0ede8', width:130 }} />
+              <button
+                onClick={() => {
+                  const campo = document.getElementById('campoMasivo').value;
+                  const valor = document.getElementById('valorMasivo').value;
+                  if (!campo || !valor) return;
+                  setCambiosMasivos(prev => {
+                    const next = { ...prev };
+                    seleccionados.forEach(id => { next[id] = { ...(next[id]||{}), [campo]: valor }; });
+                    return next;
+                  });
+                  toast.success(`"${valor}" aplicado a ${seleccionados.length} llantas`);
+                }}
+                style={{ padding:'6px 12px', background:'#f5c400', color:'#000', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}
+              >Aplicar</button>
+            </div>
+          )}
+
+          {Object.keys(cambiosMasivos).length > 0 && (
+            <button
+              disabled={guardandoMasivo}
+              onClick={async () => {
+                setGuardandoMasivo(true);
+                let ok = 0;
+                for (const [prodId, cambios] of Object.entries(cambiosMasivos)) {
+                  for (const [campo, valor] of Object.entries(cambios)) {
+                    const isCustom = campo.startsWith('custom_');
+                    await guardarCelda(prodId, campo, valor, isCustom).catch(()=>{});
+                    ok++;
+                  }
+                }
+                setCambiosMasivos({});
+                setSeleccionados([]);
+                setGuardandoMasivo(false);
+                toast.success(`✅ ${ok} cambios guardados`);
+              }}
+              style={{ padding:'8px 18px', background:'#16a34a', color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:800, cursor:'pointer' }}
+            >
+              {guardandoMasivo ? '⏳ Guardando...' : `💾 Guardar ${Object.values(cambiosMasivos).reduce((a,v)=>a+Object.keys(v).length,0)} cambios`}
+            </button>
+          )}
+
+          <button
+            onClick={() => { setModoEdicion(false); setCambiosMasivos({}); setSeleccionados([]); }}
+            style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}
+          >✕ Salir</button>
+        </div>
       )}
     </div>
   );
