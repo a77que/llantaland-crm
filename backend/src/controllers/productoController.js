@@ -33,7 +33,7 @@ const listar = async (req, res, next) => {
         include: {
           stocks: sedeId
             ? { where: { sedeId }, include: { sede: true } }
-            : { include: { sede: { orderBy: { codigoLocal: 'asc' } } } },
+            : { include: { sede: true }, orderBy: { sede: { codigoLocal: 'asc' } } },
         },
       }),
     ]);
@@ -49,7 +49,7 @@ const obtener = async (req, res, next) => {
     const producto = await prisma.producto.findUnique({
       where: { id: req.params.id },
       include: {
-        stocks: { include: { sede: { orderBy: { codigoLocal: 'asc' } } } },
+        stocks: { include: { sede: true }, orderBy: { sede: { codigoLocal: 'asc' } } },
       },
     });
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
