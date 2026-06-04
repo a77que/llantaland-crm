@@ -64,22 +64,12 @@ export const sedesApi = {
 };
 
 export const cotizacionesApi = {
-  listar: (params) => api.get('/cotizaciones', { params }),
-  obtener: (id) => api.get(`/cotizaciones/${id}`),
-  crear: (data) => api.post('/cotizaciones', data),
-  actualizar: (id, data) => api.put(`/cotizaciones/${id}`, data),
-  generarPdf: (id) => api.post(`/cotizaciones/${id}/pdf`),
-  convertir: (id, data) => api.post(`/cotizaciones/${id}/convertir`, data),
-  whatsapp: (id) => api.post(`/cotizaciones/${id}/whatsapp`),
-};
-
-export const cotizacionesApi = {
-  listar:         (params) => api.get('/cotizaciones', { params }),
-  obtener:        (id)     => api.get(`/cotizaciones/${id}`),
-  crear:          (data)   => api.post('/cotizaciones', data),
-  actualizar:     (id, data) => api.put(`/cotizaciones/${id}`, data),
-  convertirAVenta:(id)     => api.post(`/cotizaciones/${id}/convertir`),
-  generarPdf:     (id)     => api.post(`/cotizaciones/${id}/pdf`),
+  listar:          (params)   => api.get('/cotizaciones', { params }),
+  obtener:         (id)       => api.get(`/cotizaciones/${id}`),
+  crear:           (data)     => api.post('/cotizaciones', data),
+  actualizar:      (id, data) => api.put(`/cotizaciones/${id}`, data),
+  convertirAVenta: (id)       => api.post(`/cotizaciones/${id}/convertir`),
+  generarPdf:      (id)       => api.post(`/cotizaciones/${id}/pdf`),
 };
 
 export const ventasApi = {
