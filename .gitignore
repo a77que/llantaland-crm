@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Variables de entorno (¡nunca subir!)
+.env
+backend/.env
+.env.local
+.env.production
+
+# Uploads / archivos generados
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Build
+frontend/dist/
+backend/dist/
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+*.log

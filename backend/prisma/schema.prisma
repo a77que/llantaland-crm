@@ -1,0 +1,498 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum Rol {
+  ADMIN
+  VENDEDOR
+}
+
+enum TipoDoc {
+  DNI
+  RUC
+  CE
+  PASAPORTE
+}
+
+enum TipoProducto {
+  AUTO
+  CAMIONETA
+  CAMION
+  MOTO
+}
+
+enum TipoSede {
+  TIENDA
+  ALMACEN
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  TRASLADO
+}
+
+enum EstadoVenta {
+  PENDIENTE
+  COMPLETADA
+  ANULADA
+}
+
+enum TipoDescuento {
+  PORCENTAJE
+  MONTO
+}
+
+enum TipoComprobante {
+  BOLETA
+  FACTURA
+  NOTA_CREDITO
+}
+
+enum EstadoComprobante {
+  PENDIENTE
+  EMITIDO
+  ACEPTADO
+  RECHAZADO
+}
+
+enum PseProvider {
+  NUBEFACT
+  APISUNAT
+  GREENTER
+}
+
+enum OrigenWebhook {
+  N8N
+  WHATSAPP
+  API_EXTERNA
+}
+
+// Pasos del flujo WhatsApp (replica Paso_Actual del sheet CRM)
+enum PasoLead {
+  nuevo
+  esperando_medida
+  esperando_version_auto
+  info_tecnica
+  esperando_datos_cliente
+  esperando_eleccion_llanta
+  esperando_distrito
+  esperando_eleccion_b
+  esperando_local_destino
+  esperando_confirmacion
+  completado
+  opt_out
+}
+
+// Ranking de lead (calidad de la oportunidad)
+enum RankingLead {
+  caliente
+  tibio
+  frio
+}
+
+// Caso del flujo (A=stock directo, B=traslado, C=almacen, D=despacho, E=provincia)
+enum CasoFlujo {
+  A
+  B
+  C
+  D
+  E
+}
+
+// ─── USUARIOS Y SESIONES ─────────────────────────────────────────────────────
+
+model Usuario {
+  id        String   @id @default(cuid())
+  nombre    String
+  email     String   @unique
+  password  String
+  rol       Rol      @default(VENDEDOR)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  sesiones         Sesion[]
+  ventas           Venta[]
+  movimientosStock MovimientoStock[]
+  webhookLogs      WebhookLog[]
+
+  @@map("usuarios")
+}
+
+model Sesion {
+  id        String   @id @default(cuid())
+  usuarioId String
+  token     String   @unique
+  expiresAt DateTime
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("sesiones")
+}
+
+// ─── SEDES / LOCALES ─────────────────────────────────────────────────────────
+// Replica hoja LOCALES del Google Sheet
+
+model Sede {
+  id          String   @id @default(cuid())
+  codigoLocal String   @unique  // L0, L1, L2, L3, L4, L5 — clave usada por n8n
+  nombre      String
+  tipo        TipoSede @default(TIENDA)
+  distrito    String?
+  direccion   String?
+  activo      Boolean  @default(true)
+
+  stocks          Stock[]
+  movimientos     MovimientoStock[]
+  alertasStock    AlertaStock[]
+  itemsVenta      ItemVenta[]
+
+  @@map("sedes")
+}
+
+// ─── CATÁLOGO / INVENTARIO ───────────────────────────────────────────────────
+// Replica hoja PRECIOS del Google Sheet
+
+model Producto {
+  id              String       @id @default(cuid())
+  sku             String       @unique
+  medida          String                         // e.g. "195/65R15"
+  marca           String
+  nombreComercial String?                        // Nombre_Comercial en sheet
+  grupo           String?                        // Grupo (Turismo, SUV, etc.)
+  tipo            TipoProducto @default(AUTO)
+  precioRegular   Decimal      @db.Decimal(10, 2)
+  precioOferta    Decimal?     @db.Decimal(10, 2) // null = sin oferta
+  imagenUrl       String?                        // URL imagen en sheet PRECIOS
+  // Ficha técnica (opcional)
+  indice_carga    String?
+  velocidad_max   String?
+  garantia        String?
+  activo          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  stocks      Stock[]
+  movimientos MovimientoStock[]
+  alertasStock AlertaStock[]
+  itemsVenta  ItemVenta[]
+
+  @@map("productos")
+}
+
+model Stock {
+  id          String   @id @default(cuid())
+  productoId  String
+  sedeId      String
+  cantidad    Int      @default(0)
+  stockMinimo Int      @default(3)
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  sede     Sede     @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, sedeId])
+  @@map("stock")
+}
+
+model MovimientoStock {
+  id         String         @id @default(cuid())
+  productoId String
+  sedeId     String
+  tipo       TipoMovimiento
+  cantidad   Int
+  referencia String?
+  usuarioId  String
+  createdAt  DateTime       @default(now())
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  sede     Sede     @relation(fields: [sedeId], references: [id])
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@map("movimientos_stock")
+}
+
+// ─── LEADS / CRM WHATSAPP ────────────────────────────────────────────────────
+// Replica hoja CRM del Google Sheet — un registro por número de teléfono
+
+model LeadCRM {
+  id                     String      @id @default(cuid())
+  telefono               String      @unique       // clave principal = Telefono del sheet
+  timestamp              DateTime    @default(now())
+
+  // Datos del cliente (se completan durante el flujo)
+  nombreCliente          String?
+  dniCe                  String?
+  tipoDoc                TipoDoc?
+  marcaAuto              String?
+  modeloAuto             String?
+  anioAuto               Int?
+
+  // Estado del flujo
+  pasoActual             PasoLead    @default(nuevo)
+  intentosMedida         Int         @default(0)
+  emailSeguimientoEnviado Boolean    @default(false)
+  hashMensaje            String?     // deduplicación
+
+  // Producto / llanta de interés
+  medidaDetectada        String?
+  marcaLlanta            String?
+  modeloLlanta           String?
+  precioLlanta           Decimal?    @db.Decimal(10, 2)
+  cantidadLlantas        Int         @default(1)
+  tipoServicio           String?     // caso A/B/C/D/E
+  ranking                RankingLead?
+
+  // Logística
+  distritoCliente        String?
+  provinciaDestino       String?
+  localAsignado          Json?       // JSON objeto tienda asignada
+  localInstalacion       Json?       // JSON tienda instalación confirmada
+  localOrigenTraslado    Json?
+  estadoFlujo            Json?       // JSON blob con estado completo del flujo
+  stockMap               Json?       // mapa stock por local
+  ofertaPrecios          Json?       // opciones presentadas al cliente
+
+  // Cierre
+  estadoLogistica        String?
+  fechaCita              String?
+  calendarEventId        String?
+
+  // Conversación
+  mensajeCliente         String?     @db.Text
+  respuestaBot           String?     @db.Text
+
+  updatedAt              DateTime    @updatedAt
+
+  historial        MensajeHistorial[]
+  humanTakeover    HumanTakeover?
+  ventas           Venta[]
+
+  @@map("leads_crm")
+}
+
+// ─── HISTORIAL DE MENSAJES ───────────────────────────────────────────────────
+// Replica hoja HISTORIAL del Google Sheet
+
+model MensajeHistorial {
+  id          String   @id @default(cuid())
+  leadId      String
+  telefono    String
+  hashMensaje String?  @unique     // evita duplicados
+  rol         String               // "cliente" | "bot"
+  mensaje     String   @db.Text
+  pasoActual  String?
+  timestamp   DateTime @default(now())
+
+  lead LeadCRM @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("historial_mensajes")
+}
+
+// ─── HUMAN TAKEOVER ──────────────────────────────────────────────────────────
+// Replica hoja HUMAN_TAKEOVER del Google Sheet
+
+model HumanTakeover {
+  id                   String   @id @default(cuid())
+  leadId               String   @unique
+  telefono             String   @unique
+  agenteActivo         Boolean  @default(false)
+  timestampUltimoAgente DateTime?
+  updatedAt            DateTime @updatedAt
+
+  lead LeadCRM @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("human_takeover")
+}
+
+// ─── OPT-OUT ─────────────────────────────────────────────────────────────────
+// Replica hoja OPT_OUT del Google Sheet
+
+model OptOut {
+  id       String   @id @default(cuid())
+  telefono String   @unique
+  mensaje  String?  @db.Text
+  fecha    DateTime @default(now())
+
+  @@map("opt_out")
+}
+
+// ─── LOGÍSTICA PENDIENTE ─────────────────────────────────────────────────────
+// Replica hoja LOGISTICA_PENDIENTE del Google Sheet
+
+model LogisticaPendiente {
+  id               String   @id @default(cuid())
+  telefono         String
+  nombreCliente    String?
+  medida           String?
+  marcaLlanta      String?
+  cantidad         Int      @default(1)
+  precioUnit       Decimal? @db.Decimal(10, 2)
+  localOrigen      Json?
+  localDestino     Json?
+  tipoLogistica    String?  // "traslado" | "despacho_almacen"
+  estado           String   @default("pendiente")
+  observaciones    String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("logistica_pendiente")
+}
+
+// ─── VENTAS ──────────────────────────────────────────────────────────────────
+// Enriquecida con campos del Registro_Ventas sheet de n8n
+
+model Venta {
+  id               String        @id @default(cuid())
+  numero           String        @unique
+  leadId           String?                        // link al lead WhatsApp
+  clienteId        String?                        // para ventas en tienda
+  usuarioId        String
+
+  // Datos cliente (redundante para ventas sin lead)
+  telefonoCliente  String?
+  nombreCliente    String?
+  dniCe            String?
+  tipoDoc          TipoDoc?
+  marcaAuto        String?
+  modeloAuto       String?
+  anioAuto         Int?
+
+  // Llanta
+  medidaLlanta     String?
+  marcaLlanta      String?
+  modeloLlanta     String?
+  cantidad         Int           @default(1)
+  precioUnit       Decimal       @db.Decimal(10, 2) @default(0)
+  precioTotal      Decimal       @db.Decimal(10, 2) @default(0)
+
+  // Flujo n8n
+  tipoVenta        String?       // "whatsapp" | "tienda" | "web"
+  caso             CasoFlujo?
+  esTraslado       Boolean       @default(false)
+  localInstalacion Json?
+  direccionLocal   String?
+  provinciaDestino String?
+  fechaCita        String?
+  calendarId       String?
+  rankingLead      RankingLead?
+  estadoLogistica  String?
+
+  estado           EstadoVenta   @default(PENDIENTE)
+  descuentoTipo    TipoDescuento?
+  descuentoValor   Decimal?      @db.Decimal(10, 2)
+  descuentoMotivo  String?
+
+  createdAt        DateTime      @default(now())
+
+  lead         LeadCRM?      @relation(fields: [leadId], references: [id])
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id])
+  items        ItemVenta[]
+  comprobantes Comprobante[]
+
+  @@map("ventas")
+}
+
+model ItemVenta {
+  id         String  @id @default(cuid())
+  ventaId    String
+  productoId String
+  sedeId     String
+  cantidad   Int
+  precioUnit Decimal @db.Decimal(10, 2)
+  subtotal   Decimal @db.Decimal(10, 2)
+
+  venta    Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  producto Producto @relation(fields: [productoId], references: [id])
+  sede     Sede     @relation(fields: [sedeId], references: [id])
+
+  @@map("items_venta")
+}
+
+// ─── FACTURACIÓN SUNAT ───────────────────────────────────────────────────────
+
+model Comprobante {
+  id           String            @id @default(cuid())
+  ventaId      String
+  tipo         TipoComprobante
+  serie        String
+  correlativo  String
+  estado       EstadoComprobante @default(PENDIENTE)
+  xmlUrl       String?
+  cdrUrl       String?
+  hashCdr      String?
+  fechaEmision DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+
+  venta Venta @relation(fields: [ventaId], references: [id])
+
+  @@map("comprobantes")
+}
+
+model ConfigSunat {
+  id                 String       @id @default(cuid())
+  rucEmpresa         String
+  razonSocialEmpresa String
+  certificadoPath    String?
+  pse                PseProvider?
+  pseApiKey          String?
+  pseApiUrl          String?
+  seriesBoleta       String       @default("B001")
+  seriesFactura      String       @default("F001")
+  activo             Boolean      @default(false)
+
+  @@map("config_sunat")
+}
+
+// ─── ALERTAS ─────────────────────────────────────────────────────────────────
+
+model AlertaStock {
+  id             String   @id @default(cuid())
+  productoId     String
+  sedeId         String
+  cantidadActual Int
+  stockMinimo    Int
+  resuelta       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  producto Producto @relation(fields: [productoId], references: [id])
+  sede     Sede     @relation(fields: [sedeId], references: [id])
+
+  @@map("alertas_stock")
+}
+
+// ─── WEBHOOK LOGS ─────────────────────────────────────────────────────────────
+
+model WebhookLog {
+  id        String        @id @default(cuid())
+  origen    OrigenWebhook
+  payload   Json?
+  respuesta Json?
+  estado    String?
+  usuarioId String?
+  createdAt DateTime      @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@map("webhook_logs")
+}
+
+// ─── COLA DE REINTENTOS WHATSAPP ─────────────────────────────────────────────
+
+model ColaReintento {
+  id            String   @id @default(cuid())
+  timestamp     DateTime @default(now())
+  telefono      String
+  mensajeBody   String   @db.Text
+  intentos      Int      @default(0)
+  status        String   @default("pendiente")
+  errorDetalle  String?
+  updatedAt     DateTime @updatedAt
+
+  @@map("cola_reintentos")
+}

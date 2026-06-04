@@ -1,0 +1,75 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llantaland_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: llantaland_crm
+      POSTGRES_USER: llantaland
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-llantaland2024}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    networks:
+      - llantaland_net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U llantaland -d llantaland_crm']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: llantaland_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://llantaland:${DB_PASSWORD:-llantaland2024}@postgres:5432/llantaland_crm
+      JWT_SECRET: ${JWT_SECRET:-cambiar_en_produccion_por_secreto_seguro}
+      JWT_EXPIRES_IN: 8h
+      PORT: 3001
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      N8N_API_KEY: ${N8N_API_KEY:-}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      API_DNI_URL: ${API_DNI_URL:-}
+      API_DNI_KEY: ${API_DNI_KEY:-}
+      API_RUC_URL: ${API_RUC_URL:-}
+      API_RUC_KEY: ${API_RUC_KEY:-}
+      API_CE_URL: ${API_CE_URL:-}
+      API_CE_KEY: ${API_CE_KEY:-}
+      UPLOAD_PATH: /app/uploads
+      MAX_FILE_SIZE: 10mb
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - '3001:3001'
+    networks:
+      - llantaland_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: llantaland_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '80:80'
+    networks:
+      - llantaland_net
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  llantaland_net:
+    driver: bridge
