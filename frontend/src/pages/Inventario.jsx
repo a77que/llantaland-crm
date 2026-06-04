@@ -65,8 +65,13 @@ function StockCell({ value }) {
 }
 
 // ── Gestor de columnas ────────────────────────────────────────────────────────
+const TIPO_ICONO = { texto:'📝', numero:'🔢', select:'📋', fecha:'📅', booleano:'✅' };
+const TIPO_LABEL = { texto:'Texto', numero:'Número', select:'Opciones', fecha:'Fecha', booleano:'Sí/No' };
+
 function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, onClose }) {
   const [nuevaCol, setNuevaCol] = useState('');
+  const [tipoNuevaCol, setTipoNuevaCol] = useState('texto');
+  const [opcionesNuevaCol, setOpcionesNuevaCol] = useState('');
   const groups = [...new Set(COLUMNAS_FIJAS.map(c => c.group))];
 
   return (
@@ -108,12 +113,15 @@ function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, o
                 <div key={col.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', borderRadius:8, background:'var(--color-bg)', border:'1px solid #8b5cf620' }}>
                   <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
                     <input type="checkbox" checked={visibles.includes(col.key)} onChange={() => onToggle(col.key)} style={{ width:14, height:14, accentColor:'#8b5cf6' }} />
-                    <span style={{ fontSize:12, fontWeight:500 }}>{col.label}</span>
+                    <span style={{ fontSize:12, fontWeight:600 }}>{col.label}</span>
+                    <span style={{ fontSize:10, padding:'1px 6px', borderRadius:6, background:'#8b5cf620', color:'#8b5cf6', fontWeight:700 }}>
+                      {TIPO_ICONO[col.tipo||'texto']} {TIPO_LABEL[col.tipo||'texto']}
+                    </span>
                   </label>
                   <button
                     onClick={() => onEliminar(col)}
                     style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:6, padding:'2px 8px', fontSize:11, color:'#dc2626', cursor:'pointer' }}
-                  >✕ Eliminar</button>
+                  >✕</button>
                 </div>
               ))}
             </div>
@@ -122,49 +130,135 @@ function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, o
 
         {/* Crear nueva columna */}
         <div style={{ borderTop:'1px solid var(--color-border)', paddingTop:16 }}>
-          <div style={{ fontSize:12, fontWeight:700, marginBottom:8, color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1 }}>Agregar columna personalizada</div>
-          <div style={{ display:'flex', gap:8 }}>
+          <div style={{ fontSize:12, fontWeight:700, marginBottom:10, color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1 }}>Agregar columna personalizada</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             <input
               value={nuevaCol}
               onChange={e => setNuevaCol(e.target.value)}
-              placeholder="Nombre de la columna (ej: Proveedor)"
-              style={{ flex:1, padding:'8px 12px', border:'1.5px solid var(--color-border)', borderRadius:8, fontSize:13, background:'var(--color-surface)', color:'var(--color-text)' }}
-              onKeyDown={e => { if (e.key==='Enter' && nuevaCol.trim()) { onCrear(nuevaCol.trim()); setNuevaCol(''); } }}
+              placeholder="Nombre de la columna (ej: Proveedor, Origen, Temporada)"
+              style={{ padding:'9px 12px', border:'1.5px solid var(--color-border)', borderRadius:8, fontSize:13, background:'var(--color-surface)', color:'var(--color-text)' }}
             />
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1, whiteSpace:'nowrap' }}>Tipo de dato:</div>
+              <select
+                value={tipoNuevaCol}
+                onChange={e => setTipoNuevaCol(e.target.value)}
+                style={{ flex:1, padding:'8px 10px', border:'1.5px solid var(--color-border)', borderRadius:8, fontSize:13, background:'var(--color-surface)', color:'var(--color-text)' }}
+              >
+                <option value="texto">📝 Texto libre</option>
+                <option value="numero">🔢 Número</option>
+                <option value="select">📋 Lista de opciones</option>
+                <option value="fecha">📅 Fecha</option>
+                <option value="booleano">✅ Sí / No</option>
+              </select>
+            </div>
+            {tipoNuevaCol === 'select' && (
+              <input
+                value={opcionesNuevaCol}
+                onChange={e => setOpcionesNuevaCol(e.target.value)}
+                placeholder="Opciones separadas por coma (ej: Rojo,Verde,Azul)"
+                style={{ padding:'8px 12px', border:'1.5px solid #f5c40060', borderRadius:8, fontSize:13, background:'#fffbeb', color:'var(--color-text)' }}
+              />
+            )}
             <button
-              onClick={() => { if (nuevaCol.trim()) { onCrear(nuevaCol.trim()); setNuevaCol(''); } }}
-              disabled={!nuevaCol.trim()}
-              style={{ padding:'8px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}
-            >+ Agregar</button>
+              onClick={() => {
+                if (!nuevaCol.trim()) return;
+                const opciones = tipoNuevaCol === 'select' ? opcionesNuevaCol.split(',').map(o=>o.trim()).filter(Boolean) : [];
+                onCrear(nuevaCol.trim(), tipoNuevaCol, opciones);
+                setNuevaCol(''); setOpcionesNuevaCol('');
+              }}
+              disabled={!nuevaCol.trim() || (tipoNuevaCol==='select' && !opcionesNuevaCol.trim())}
+              style={{ padding:'9px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}
+            >+ Agregar columna</button>
           </div>
-          <div style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:6 }}>La columna aparecerá en todas las llantas para ingresar información adicional.</div>
+          <div style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:6 }}>Aparecerá en todas las llantas para registrar esa información.</div>
         </div>
       </div>
     </div>
   );
 }
 
+const GRUPO_OPCIONES = ['Excelente', 'Muy buena', 'Buena'];
+const GRUPO_COLOR = { 'Excelente': '#16a34a', 'Muy buena': '#3b82f6', 'Buena': '#f59e0b' };
+
 // ── Celda editable inline ─────────────────────────────────────────────────────
-function CeldaEditable({ value, prodId, campo, onSave, isCustom }) {
+function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value === '—' ? '' : String(value || ''));
   const ref = useRef();
 
   useEffect(() => { if (editing && ref.current) ref.current.focus(); }, [editing]);
 
-  const save = () => {
+  const save = (newVal) => {
+    const v = newVal !== undefined ? newVal : val;
     setEditing(false);
-    if (String(val) !== String(value === '—' ? '' : value || '')) {
-      onSave(prodId, campo, val, isCustom);
+    if (String(v) !== String(value === '—' ? '' : value || '')) {
+      onSave(prodId, campo, v, isCustom);
     }
   };
 
+  // Grupo — dropdown fijo
+  if (campo === 'grupo') {
+    const color = GRUPO_COLOR[value] || 'var(--color-text-muted)';
+    if (editing) {
+      return (
+        <select ref={ref} value={val} autoFocus
+          onChange={e => { setVal(e.target.value); save(e.target.value); }}
+          onBlur={() => setEditing(false)}
+          style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}>
+          <option value="">— Sin grupo —</option>
+          {GRUPO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      );
+    }
+    return (
+      <span onClick={() => setEditing(true)} title="Clic para editar"
+        style={{ cursor:'pointer', display:'block', minHeight:20, fontWeight:600, color }}>
+        {value === '—' ? <span style={{ color:'var(--color-text-muted)', fontWeight:400 }}>— Clic para asignar</span> : value}
+      </span>
+    );
+  }
+
+  // Columna custom tipo select
+  if (isCustom && colDef?.tipo === 'select' && colDef?.opciones?.length > 0) {
+    if (editing) {
+      return (
+        <select ref={ref} value={val} autoFocus
+          onChange={e => { setVal(e.target.value); save(e.target.value); }}
+          onBlur={() => setEditing(false)}
+          style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}>
+          <option value="">— Elegir —</option>
+          {colDef.opciones.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      );
+    }
+    return (
+      <span onClick={() => setEditing(true)} title="Clic para elegir"
+        style={{ cursor:'pointer', display:'block', minHeight:20, padding:'1px 2px' }}>
+        {value === '—' ? <span style={{ color:'var(--color-text-muted)' }}>— Elegir</span> : value}
+      </span>
+    );
+  }
+
+  // Tipo booleano
+  if (isCustom && colDef?.tipo === 'booleano') {
+    const isTrue = value === 'true' || value === true || value === 'Sí';
+    return (
+      <span onClick={() => save(isTrue ? 'No' : 'Sí')} title="Clic para cambiar"
+        style={{ cursor:'pointer', display:'block', fontWeight:700, color: isTrue ? '#16a34a' : '#dc2626' }}>
+        {value === '—' ? '—' : isTrue ? '✅ Sí' : '❌ No'}
+      </span>
+    );
+  }
+
+  // Input genérico (texto, número, fecha)
+  const inputType = isCustom && colDef?.tipo === 'numero' ? 'number' : isCustom && colDef?.tipo === 'fecha' ? 'date' : 'text';
+
   if (editing) {
     return (
-      <input
-        ref={ref} value={val}
+      <input ref={ref} type={inputType} value={val}
         onChange={e => setVal(e.target.value)}
-        onBlur={save}
+        onBlur={() => save()}
         onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
         style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}
       />
@@ -172,9 +266,7 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom }) {
   }
 
   return (
-    <span
-      onClick={() => setEditing(true)}
-      title="Clic para editar"
+    <span onClick={() => setEditing(true)} title="Clic para editar"
       style={{ cursor:'text', display:'block', minHeight:20, padding:'1px 2px', borderRadius:3, color: value === '—' || value === 0 ? 'var(--color-text-muted)' : undefined }}
     >
       {value === 0 ? <StockCell value={0} /> : String(value)}
@@ -221,10 +313,10 @@ export default function Inventario() {
     });
   };
 
-  const crearColumna = (nombre) => {
+  const crearColumna = (nombre, tipo = 'texto', opciones = []) => {
     const key = 'custom_' + nombre.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     if (customCols.find(c => c.key === key)) { toast.error('Ya existe esa columna'); return; }
-    const newCol = { key, label: nombre };
+    const newCol = { key, label: nombre, tipo, opciones };
     const updated = [...customCols, newCol];
     setCustomCols(updated);
     localStorage.setItem(STORAGE_CUSTOM_KEY, JSON.stringify(updated));
@@ -354,6 +446,7 @@ export default function Inventario() {
                           <CeldaEditable
                             value={raw} prodId={prod.id} campo={col.key}
                             onSave={guardarCelda} isCustom={isCustom}
+                            colDef={isCustom ? customCols.find(c=>c.key===col.key) : null}
                           />
                         ) : (
                           <span style={{ color: col.key==='tipo' ? TIPO_COLOR[raw] : undefined, fontWeight: col.key==='medida'?700:undefined }}>
