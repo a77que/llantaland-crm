@@ -3,11 +3,11 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 const TABS = [
-  { to: '/',           icon: '📊', label: 'Inicio',  exact: true },
-  { to: '/leads',      icon: '📱', label: 'Leads'           },
-  { to: '/inventario', icon: '🛞', label: 'Stock'           },
-  { to: '/ventas',     icon: '💰', label: 'Ventas'          },
-  { to: '/importar',   icon: '📂', label: 'Más',  adminOnly: true },
+  { to: '/',             icon: '📊', label: 'Inicio',  exact: true },
+  { to: '/leads',        icon: '📱', label: 'Leads'           },
+  { to: '/cotizaciones', icon: '📋', label: 'Cotiz.'          },
+  { to: '/ventas',       icon: '💰', label: 'Ventas'          },
+  { to: '/inventario',   icon: '🛞', label: 'Stock'           },
 ];
 
 export default function BottomNav() {

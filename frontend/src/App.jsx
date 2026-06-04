@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Inventario from './pages/Inventario';
 import InventarioDetalle from './pages/InventarioDetalle';
 import Leads from './pages/Leads';
+import Cotizaciones from './pages/Cotizaciones';
 import Ventas from './pages/Ventas';
 import VentaDetalle from './pages/VentaDetalle';
 import Facturacion from './pages/Facturacion';
@@ -30,10 +31,11 @@ export default function App() {
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="leads" element={<Leads />} />
-            <Route path="inventario" element={<Inventario />} />
-            <Route path="inventario/:id" element={<InventarioDetalle />} />
+            <Route path="cotizaciones" element={<Cotizaciones />} />
             <Route path="ventas" element={<Ventas />} />
             <Route path="ventas/:id" element={<VentaDetalle />} />
+            <Route path="inventario" element={<Inventario />} />
+            <Route path="inventario/:id" element={<InventarioDetalle />} />
             <Route path="facturacion" element={<Facturacion />} />
 
             <Route element={<AdminRoute />}>

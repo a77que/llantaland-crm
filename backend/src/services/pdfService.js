@@ -153,4 +153,98 @@ async function generarVenta(venta) {
   });
 }
 
-module.exports = { generarVenta };
+async function generarCotizacion(cot) {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+      const filename = `cotizacion-${cot.numero}-${uuidv4().slice(0, 8)}.pdf`;
+      const filepath = path.join(UPLOADS_DIR, filename);
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      const stream = fs.createWriteStream(filepath);
+      doc.pipe(stream);
+
+      // Header
+      doc.rect(0, 0, doc.page.width, 90).fill(C.negro);
+      doc.rect(0, 88, doc.page.width, 3).fill(C.amarillo);
+      doc.fontSize(20).font('Helvetica-Bold').fillColor(C.amarillo).text('LLANTALAND', 50, 22);
+      doc.fontSize(8).font('Helvetica').fillColor('#999')
+        .text(`RUC ${EMPRESA.ruc}  •  ${EMPRESA.web}  •  ${EMPRESA.telefono}`, 50, 46);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('COTIZACIÓN', 340, 20, { align: 'right', width: 210 });
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('white')
+        .text(`N° ${cot.numero}`, 340, 36, { align: 'right', width: 210 });
+      doc.fontSize(8).font('Helvetica').fillColor('#999')
+        .text(`Fecha: ${fmtFecha(cot.createdAt)}   •   Vendedor: ${cot.usuario?.nombre || '—'}`, 340, 56, { align: 'right', width: 210 });
+      const estadoColor = { BORRADOR: '#f59e0b', ENVIADA: '#3b82f6', ACEPTADA: '#22c55e', RECHAZADA: '#ef4444', CONVERTIDA: '#8b5cf6' };
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(estadoColor[cot.estado] || '#888')
+        .text(cot.estado, 340, 70, { align: 'right', width: 210 });
+
+      let y = 110;
+
+      // Cliente
+      doc.rect(50, y, doc.page.width - 100, 70).fill(C.grisClaro);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(C.amarillo).text('DATOS DEL CLIENTE', 62, y + 8);
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(C.texto).text(cot.nombreCliente || 'Sin nombre', 62, y + 22);
+      doc.fontSize(9).font('Helvetica').fillColor(C.gris)
+        .text([cot.dniCe ? `DNI/CE: ${cot.dniCe}` : '', cot.telefonoCliente ? `Tel: ${cot.telefonoCliente}` : ''].filter(Boolean).join('   '), 62, y + 38);
+      const auto = [cot.marcaAuto, cot.modeloAuto, cot.anioAuto].filter(Boolean).join(' ');
+      if (auto) doc.fontSize(9).fillColor(C.gris).text(`Vehículo: ${auto}`, 62, y + 52);
+      y += 82;
+
+      // Tabla producto
+      doc.rect(50, y, doc.page.width - 100, 18).fill(C.negro);
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('white')
+        .text('PRODUCTO', 62, y + 5).text('MEDIDA', 240, y + 5, { width: 80 })
+        .text('CANT.', 320, y + 5, { width: 50, align: 'right' })
+        .text('P. UNIT.', 370, y + 5, { width: 65, align: 'right' })
+        .text('SUBTOTAL', 435, y + 5, { width: 65, align: 'right' });
+      y += 20;
+
+      doc.rect(50, y, doc.page.width - 100, 26).fill('white');
+      const nombreProd = [cot.marcaLlanta, cot.modeloLlanta].filter(Boolean).join(' ') || 'Llanta';
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.texto)
+        .text(nombreProd, 62, y + 7).text(cot.medidaLlanta || '—', 240, y + 7, { width: 80 });
+      doc.font('Helvetica')
+        .text(String(cot.cantidad || 1), 320, y + 7, { width: 50, align: 'right' })
+        .text(fmt(cot.precioUnit), 370, y + 7, { width: 65, align: 'right' });
+      const sub = parseFloat(cot.precioUnit) * (cot.cantidad || 1);
+      doc.font('Helvetica-Bold').fillColor(C.texto).text(fmt(sub), 435, y + 7, { width: 65, align: 'right' });
+      y += 32;
+
+      // Descuento + Total
+      if (cot.descuento && parseFloat(cot.descuento) > 0) {
+        doc.fontSize(9).font('Helvetica').fillColor(C.gris)
+          .text('Descuento:', 370, y, { width: 65, align: 'right' });
+        doc.fillColor(C.rojo).text(`- ${fmt(cot.descuento)}`, 435, y, { width: 65, align: 'right' });
+        y += 18;
+      }
+      doc.rect(370, y, 175, 30).fill(C.negro);
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('TOTAL:', 375, y + 9, { width: 80 });
+      doc.fontSize(14).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text(fmt(cot.precioTotal), 375, y + 7, { width: 165, align: 'right' });
+      y += 44;
+
+      if (cot.notas) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('NOTAS:', 50, y);
+        y += 14;
+        doc.fontSize(9).font('Helvetica').fillColor(C.texto).text(cot.notas, 50, y, { width: doc.page.width - 100 });
+      }
+
+      // Pie
+      const pieY = doc.page.height - 50;
+      doc.rect(0, pieY - 5, doc.page.width, 2).fill(C.amarillo);
+      doc.fontSize(8).font('Helvetica').fillColor(C.gris)
+        .text('Cotización válida por 7 días  •  Llantaland — Tu llanta, nuestra pasión  •  www.llantaland.com', 50, pieY + 4, {
+          align: 'center', width: doc.page.width - 100,
+        });
+
+      doc.end();
+      stream.on('finish', () => resolve(filename));
+      stream.on('error', reject);
+    } catch (err) { reject(err); }
+  });
+}
+
+module.exports = { generarVenta, generarCotizacion };

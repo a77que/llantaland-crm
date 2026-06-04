@@ -28,6 +28,14 @@ enum TipoProducto {
   MOTO
 }
 
+enum EstadoCotizacion {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  CONVERTIDA
+}
+
 enum TipoSede {
   TIENDA
   ALMACEN
@@ -120,6 +128,7 @@ model Usuario {
 
   sesiones         Sesion[]
   ventas           Venta[]
+  cotizaciones     Cotizacion[]
   movimientosStock MovimientoStock[]
   webhookLogs      WebhookLog[]
 
@@ -272,6 +281,7 @@ model LeadCRM {
   historial        MensajeHistorial[]
   humanTakeover    HumanTakeover?
   ventas           Venta[]
+  cotizaciones     Cotizacion[]
 
   @@map("leads_crm")
 }
@@ -344,6 +354,45 @@ model LogisticaPendiente {
   @@map("logistica_pendiente")
 }
 
+// ─── COTIZACIONES ────────────────────────────────────────────────────────────
+
+model Cotizacion {
+  id              String           @id @default(cuid())
+  numero          String           @unique
+  leadId          String?
+  usuarioId       String
+
+  // Datos del cliente (snapshot del lead)
+  telefonoCliente String?
+  nombreCliente   String?
+  dniCe           String?
+  marcaAuto       String?
+  modeloAuto      String?
+  anioAuto        Int?
+
+  // Producto cotizado
+  medidaLlanta    String?
+  marcaLlanta     String?
+  modeloLlanta    String?
+  cantidad        Int              @default(1)
+  precioUnit      Decimal          @db.Decimal(10, 2) @default(0)
+  descuento       Decimal?         @db.Decimal(10, 2)
+  precioTotal     Decimal          @db.Decimal(10, 2) @default(0)
+
+  // Estado y notas
+  estado          EstadoCotizacion @default(BORRADOR)
+  notas           String?          @db.Text
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  lead    LeadCRM?   @relation(fields: [leadId],   references: [id])
+  usuario Usuario    @relation(fields: [usuarioId], references: [id])
+  venta   Venta?
+
+  @@map("cotizaciones")
+}
+
 // ─── VENTAS ──────────────────────────────────────────────────────────────────
 // Enriquecida con campos del Registro_Ventas sheet de n8n
 
@@ -370,6 +419,10 @@ model Venta {
   cantidad         Int           @default(1)
   precioUnit       Decimal       @db.Decimal(10, 2) @default(0)
   precioTotal      Decimal       @db.Decimal(10, 2) @default(0)
+
+  // Cotización origen
+  cotizacionId     String?       @unique
+  cotizacion       Cotizacion?   @relation(fields: [cotizacionId], references: [id])
 
   // Flujo n8n
   tipoVenta        String?       // "whatsapp" | "tienda" | "web"

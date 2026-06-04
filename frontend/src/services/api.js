@@ -73,6 +73,15 @@ export const cotizacionesApi = {
   whatsapp: (id) => api.post(`/cotizaciones/${id}/whatsapp`),
 };
 
+export const cotizacionesApi = {
+  listar:         (params) => api.get('/cotizaciones', { params }),
+  obtener:        (id)     => api.get(`/cotizaciones/${id}`),
+  crear:          (data)   => api.post('/cotizaciones', data),
+  actualizar:     (id, data) => api.put(`/cotizaciones/${id}`, data),
+  convertirAVenta:(id)     => api.post(`/cotizaciones/${id}/convertir`),
+  generarPdf:     (id)     => api.post(`/cotizaciones/${id}/pdf`),
+};
+
 export const ventasApi = {
   listar: (params) => api.get('/ventas', { params }),
   obtener: (id) => api.get(`/ventas/${id}`),

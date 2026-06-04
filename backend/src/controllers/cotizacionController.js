@@ -1,251 +1,180 @@
 const { PrismaClient } = require('@prisma/client');
-const { calcularTotales, generarNumero, paginar } = require('../utils/helpers');
+const { paginar } = require('../utils/helpers');
 const pdfService = require('../services/pdfService');
-
 const prisma = new PrismaClient();
 
 const listar = async (req, res, next) => {
   try {
-    const { estado, clienteId, vendedorId, desde, hasta, page, limit } = req.query;
+    const { estado, leadId, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
     const where = {};
     if (estado) where.estado = estado;
-    if (clienteId) where.clienteId = clienteId;
-    if (vendedorId) where.usuarioId = vendedorId;
-    if (desde || hasta) {
-      where.createdAt = {};
-      if (desde) where.createdAt.gte = new Date(desde);
-      if (hasta) where.createdAt.lte = new Date(hasta);
-    }
+    if (leadId) where.leadId = leadId;
 
     const [total, cotizaciones] = await Promise.all([
       prisma.cotizacion.count({ where }),
       prisma.cotizacion.findMany({
-        where,
-        skip,
-        take,
+        where, skip, take,
         orderBy: { createdAt: 'desc' },
         include: {
-          cliente: { select: { nombre: true, apellidos: true, razonSocial: true, celular: true } },
           usuario: { select: { nombre: true } },
-          _count: { select: { items: true } },
+          lead:    { select: { telefono: true } },
+          venta:   { select: { id: true, numero: true } },
         },
       }),
     ]);
     res.json({ total, page: parseInt(page) || 1, limit: take, data: cotizaciones });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 const obtener = async (req, res, next) => {
   try {
-    const cotizacion = await prisma.cotizacion.findUnique({
+    const cot = await prisma.cotizacion.findUnique({
       where: { id: req.params.id },
       include: {
-        cliente: { include: { vehiculos: true } },
         usuario: { select: { nombre: true, email: true } },
-        items: { include: { producto: { include: { imagenes: { where: { esPortada: true }, take: 1 } } }, sede: true } },
+        lead:    true,
+        venta:   { select: { id: true, numero: true, estado: true } },
       },
     });
-    if (!cotizacion) return res.status(404).json({ error: 'Cotización no encontrada' });
-    res.json(cotizacion);
-  } catch (err) {
-    next(err);
-  }
+    if (!cot) return res.status(404).json({ error: 'Cotización no encontrada' });
+    res.json(cot);
+  } catch (err) { next(err); }
 };
 
 const crear = async (req, res, next) => {
   try {
-    const { clienteId, items, descuentoTipo, descuentoValor, descuentoMotivo } = req.body;
+    const {
+      leadId, medidaLlanta, marcaLlanta, modeloLlanta,
+      cantidad, precioUnit, descuento, notas,
+      nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
+    } = req.body;
 
-    const count = await prisma.cotizacion.count();
-    const numero = generarNumero('COT-', count);
-    const totales = calcularTotales(items || [], descuentoTipo, descuentoValor);
+    const qty   = parseInt(cantidad || 1);
+    const pUnit = parseFloat(precioUnit || 0);
+    const desc  = descuento ? parseFloat(descuento) : 0;
+    const total = Math.max(0, (pUnit * qty) - desc);
 
-    const cotizacion = await prisma.$transaction(async (tx) => {
-      const cot = await tx.cotizacion.create({
-        data: {
-          numero,
-          clienteId,
-          usuarioId: req.usuario.id,
-          descuentoTipo: descuentoTipo || null,
-          descuentoValor: descuentoValor ? parseFloat(descuentoValor) : null,
-          descuentoMotivo: descuentoMotivo || null,
-          subtotal: totales.subtotal,
-          igv: totales.igv,
-          total: totales.total,
-          items: {
-            create: items.map((item) => ({
-              productoId: item.productoId,
-              sedeId: item.sedeId,
-              cantidad: item.cantidad,
-              precioUnit: parseFloat(item.precioUnit),
-              subtotal: parseFloat(item.precioUnit) * item.cantidad,
-            })),
-          },
-        },
-        include: { items: true, cliente: true },
-      });
+    const count  = await prisma.cotizacion.count();
+    const numero = `COT-${String(count + 1).padStart(5, '0')}`;
 
-      // Crear alerta de descuento si aplica
-      if (descuentoTipo && descuentoValor > 0) {
-        const cliente = await tx.cliente.findUnique({ where: { id: clienteId } });
-        const resumen = items.map((i) => `${i.cantidad}x ${i.productoId}`).join(', ');
-        await tx.alertaDescuento.create({
-          data: {
-            cotizacionId: cot.id,
-            usuarioId: req.usuario.id,
-            clienteNombre: `${cliente.nombre || ''} ${cliente.apellidos || cliente.razonSocial || ''}`.trim(),
-            productoResumen: resumen,
-            descuentoTipo,
-            descuentoValor: parseFloat(descuentoValor),
-            motivo: descuentoMotivo || null,
-            montoAhorrado: totales.montoAhorrado,
-          },
-        });
-      }
+    // Snapshot del lead si existe
+    let leadData = {};
+    if (leadId) {
+      const lead = await prisma.leadCRM.findUnique({ where: { id: leadId } });
+      if (lead) leadData = {
+        telefonoCliente: lead.telefono,
+        nombreCliente:   lead.nombreCliente,
+        dniCe:           lead.dniCe,
+        marcaAuto:       lead.marcaAuto,
+        modeloAuto:      lead.modeloAuto,
+        anioAuto:        lead.anioAuto,
+        medidaLlanta:    medidaLlanta || lead.medidaDetectada,
+        marcaLlanta:     marcaLlanta  || lead.marcaLlanta,
+        modeloLlanta:    modeloLlanta || lead.modeloLlanta,
+      };
+    }
 
-      return cot;
+    const cot = await prisma.cotizacion.create({
+      data: {
+        numero,
+        leadId:          leadId || null,
+        usuarioId:       req.usuario.id,
+        nombreCliente:   nombreCliente   || leadData.nombreCliente   || null,
+        dniCe:           dniCe           || leadData.dniCe           || null,
+        telefonoCliente: telefonoCliente || leadData.telefonoCliente || null,
+        marcaAuto:       marcaAuto       || leadData.marcaAuto       || null,
+        modeloAuto:      modeloAuto      || leadData.modeloAuto      || null,
+        anioAuto:        anioAuto ? parseInt(anioAuto) : (leadData.anioAuto || null),
+        medidaLlanta:    medidaLlanta    || leadData.medidaLlanta    || null,
+        marcaLlanta:     marcaLlanta     || leadData.marcaLlanta     || null,
+        modeloLlanta:    modeloLlanta    || leadData.modeloLlanta    || null,
+        cantidad: qty, precioUnit: pUnit,
+        descuento: desc > 0 ? desc : null,
+        precioTotal: total,
+        notas: notas || null,
+        estado: 'BORRADOR',
+      },
+      include: { usuario: { select: { nombre: true } } },
     });
-
-    res.status(201).json(cotizacion);
-  } catch (err) {
-    next(err);
-  }
+    res.status(201).json(cot);
+  } catch (err) { next(err); }
 };
 
 const actualizar = async (req, res, next) => {
   try {
-    const { items, descuentoTipo, descuentoValor, descuentoMotivo, estado } = req.body;
-
-    const updateData = { estado };
-    if (items) {
-      const totales = calcularTotales(items, descuentoTipo, descuentoValor);
-      Object.assign(updateData, {
-        descuentoTipo: descuentoTipo || null,
-        descuentoValor: descuentoValor ? parseFloat(descuentoValor) : null,
-        descuentoMotivo: descuentoMotivo || null,
-        subtotal: totales.subtotal,
-        igv: totales.igv,
-        total: totales.total,
-      });
+    const { cantidad, precioUnit, descuento, ...rest } = req.body;
+    const data = { ...rest };
+    if (cantidad !== undefined) data.cantidad = parseInt(cantidad);
+    if (precioUnit !== undefined) data.precioUnit = parseFloat(precioUnit);
+    if (descuento !== undefined) data.descuento = parseFloat(descuento) || null;
+    // Recalcular total si cambian precio/cantidad
+    const cot = await prisma.cotizacion.findUnique({ where: { id: req.params.id }, select: { cantidad: true, precioUnit: true, descuento: true } });
+    if (cot) {
+      const qty  = data.cantidad   ?? cot.cantidad;
+      const pUnit = data.precioUnit ?? parseFloat(cot.precioUnit);
+      const disc  = data.descuento  ?? (cot.descuento ? parseFloat(cot.descuento) : 0);
+      data.precioTotal = Math.max(0, pUnit * qty - disc);
     }
 
-    const cotizacion = await prisma.cotizacion.update({
-      where: { id: req.params.id },
-      data: updateData,
-    });
-    res.json(cotizacion);
-  } catch (err) {
-    next(err);
-  }
-};
-
-const generarPdf = async (req, res, next) => {
-  try {
-    const cotizacion = await prisma.cotizacion.findUnique({
-      where: { id: req.params.id },
-      include: {
-        cliente: true,
-        usuario: { select: { nombre: true } },
-        items: { include: { producto: true } },
-      },
-    });
-    if (!cotizacion) return res.status(404).json({ error: 'Cotización no encontrada' });
-
-    const filename = await pdfService.generarCotizacion(cotizacion);
-    await prisma.cotizacion.update({ where: { id: req.params.id }, data: { pdfUrl: `/uploads/${filename}` } });
-    res.json({ pdfUrl: `/uploads/${filename}` });
-  } catch (err) {
-    next(err);
-  }
+    const updated = await prisma.cotizacion.update({ where: { id: req.params.id }, data });
+    res.json(updated);
+  } catch (err) { next(err); }
 };
 
 const convertirAVenta = async (req, res, next) => {
   try {
-    const cotizacion = await prisma.cotizacion.findUnique({
-      where: { id: req.params.id },
-      include: { items: true },
-    });
-    if (!cotizacion) return res.status(404).json({ error: 'Cotización no encontrada' });
-    if (cotizacion.estado === 'ACEPTADA') {
-      return res.status(409).json({ error: 'Cotización ya fue convertida' });
-    }
+    const cot = await prisma.cotizacion.findUnique({ where: { id: req.params.id }, include: { lead: true } });
+    if (!cot) return res.status(404).json({ error: 'Cotización no encontrada' });
+    if (cot.venta) return res.status(400).json({ error: 'Esta cotización ya tiene una venta asociada' });
 
-    const count = await prisma.venta.count();
-    const numero = generarNumero('VTA-', count);
+    const count  = await prisma.venta.count();
+    const numero = `VTA-${String(count + 1).padStart(5, '0')}`;
 
     const venta = await prisma.$transaction(async (tx) => {
       const v = await tx.venta.create({
         data: {
           numero,
-          cotizacionId: cotizacion.id,
-          clienteId: cotizacion.clienteId,
-          usuarioId: req.usuario.id,
-          descuentoTipo: cotizacion.descuentoTipo,
-          descuentoValor: cotizacion.descuentoValor,
-          descuentoMotivo: cotizacion.descuentoMotivo,
-          subtotal: cotizacion.subtotal,
-          igv: cotizacion.igv,
-          total: cotizacion.total,
-          metodoPago: req.body.metodoPago || null,
-          items: {
-            create: cotizacion.items.map((item) => ({
-              productoId: item.productoId,
-              sedeId: item.sedeId,
-              cantidad: item.cantidad,
-              precioUnit: item.precioUnit,
-              subtotal: item.subtotal,
-            })),
-          },
+          cotizacionId:    cot.id,
+          leadId:          cot.leadId,
+          usuarioId:       req.usuario.id,
+          telefonoCliente: cot.telefonoCliente,
+          nombreCliente:   cot.nombreCliente,
+          dniCe:           cot.dniCe,
+          marcaAuto:       cot.marcaAuto,
+          modeloAuto:      cot.modeloAuto,
+          anioAuto:        cot.anioAuto,
+          medidaLlanta:    cot.medidaLlanta,
+          marcaLlanta:     cot.marcaLlanta,
+          modeloLlanta:    cot.modeloLlanta,
+          cantidad:        cot.cantidad,
+          precioUnit:      cot.precioUnit,
+          precioTotal:     cot.precioTotal,
+          tipoVenta:       cot.leadId ? 'whatsapp' : 'tienda',
+          estado:          'PENDIENTE',
         },
       });
-
-      // Descontar stock
-      for (const item of cotizacion.items) {
-        const stock = await tx.stock.findUnique({
-          where: { productoId_sedeId: { productoId: item.productoId, sedeId: item.sedeId } },
-        });
-        if (!stock || stock.cantidad < item.cantidad) {
-          throw new Error(`Stock insuficiente para producto ${item.productoId}`);
-        }
-        await tx.stock.update({
-          where: { productoId_sedeId: { productoId: item.productoId, sedeId: item.sedeId } },
-          data: { cantidad: { decrement: item.cantidad } },
-        });
-        await tx.movimientoStock.create({
-          data: {
-            productoId: item.productoId,
-            sedeId: item.sedeId,
-            tipo: 'SALIDA',
-            cantidad: item.cantidad,
-            referencia: v.numero,
-            usuarioId: req.usuario.id,
-          },
-        });
+      await tx.cotizacion.update({ where: { id: cot.id }, data: { estado: 'CONVERTIDA' } });
+      if (cot.leadId) {
+        await tx.leadCRM.update({ where: { id: cot.leadId }, data: { pasoActual: 'completado' } });
       }
-
-      await tx.cotizacion.update({ where: { id: cotizacion.id }, data: { estado: 'ACEPTADA' } });
       return v;
     });
 
-    res.status(201).json(venta);
-  } catch (err) {
-    next(err);
-  }
+    res.json({ ventaId: venta.id, numero: venta.numero });
+  } catch (err) { next(err); }
 };
 
-const marcarWhatsapp = async (req, res, next) => {
+const generarPdf = async (req, res, next) => {
   try {
-    const cot = await prisma.cotizacion.update({
+    const cot = await prisma.cotizacion.findUnique({
       where: { id: req.params.id },
-      data: { whatsappEnviado: true },
+      include: { usuario: { select: { nombre: true } } },
     });
-    res.json(cot);
-  } catch (err) {
-    next(err);
-  }
+    if (!cot) return res.status(404).json({ error: 'Cotización no encontrada' });
+    const filename = await pdfService.generarCotizacion(cot);
+    res.json({ pdfUrl: `/uploads/${filename}` });
+  } catch (err) { next(err); }
 };
 
-module.exports = { listar, obtener, crear, actualizar, generarPdf, convertirAVenta, marcarWhatsapp };
+module.exports = { listar, obtener, crear, actualizar, convertirAVenta, generarPdf };

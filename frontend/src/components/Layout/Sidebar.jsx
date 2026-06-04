@@ -3,13 +3,14 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 const NAV = [
-  { section: null,         to: '/',           label: 'Dashboard',             icon: '📊', exact: true },
-  { section: 'WhatsApp',   to: '/leads',       label: 'Leads WhatsApp',        icon: '📱' },
-  { section: 'Inventario', to: '/inventario',  label: 'Inventario',            icon: '🛞' },
-  { section: 'Ventas',     to: '/ventas',      label: 'Ventas',                icon: '💰' },
-  { section: 'Admin',      to: '/admin/stock', label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
-  { section: 'Admin',      to: '/importar',    label: 'Importar / Actualizar', icon: '📂', adminOnly: true },
-  { section: 'Admin',      to: '/config/apis', label: 'Config APIs',           icon: '⚙️', adminOnly: true },
+  { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
+  { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
+  { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
+  { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
+  { section: 'Inventario', to: '/inventario',    label: 'Inventario',            icon: '🛞' },
+  { section: 'Admin',      to: '/admin/stock',   label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
+  { section: 'Admin',      to: '/importar',      label: 'Importar / Actualizar', icon: '📂', adminOnly: true },
+  { section: 'Admin',      to: '/config/apis',   label: 'Config APIs',           icon: '⚙️', adminOnly: true },
 ];
 
 export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollapse, drawerOpen, onClose }) {

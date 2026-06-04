@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { leadsApi } from '../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { leadsApi, cotizacionesApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 const PASO_LABEL = {
@@ -33,7 +35,32 @@ const pill  = (color) => ({ display: 'inline-block', padding: '3px 10px', border
 
 /* ─── Modal / Drawer detalle ──────────────────────────────────── */
 function LeadDetalle({ lead, onClose, isMobile }) {
+  const navigate = useNavigate();
   if (!lead) return null;
+
+  const crearCotizacion = async () => {
+    try {
+      const data = await cotizacionesApi.crear({
+        leadId:          lead.id,
+        telefonoCliente: lead.telefono,
+        nombreCliente:   lead.nombreCliente,
+        dniCe:           lead.dniCe,
+        marcaAuto:       lead.marcaAuto,
+        modeloAuto:      lead.modeloAuto,
+        anioAuto:        lead.anioAuto,
+        medidaLlanta:    lead.medidaDetectada,
+        marcaLlanta:     lead.marcaLlanta,
+        modeloLlanta:    lead.modeloLlanta,
+        cantidad:        lead.cantidadLlantas || 4,
+        precioUnit:      lead.precioLlanta || '',
+      });
+      toast.success(`Cotización ${data.numero} creada`);
+      onClose();
+      navigate('/cotizaciones');
+    } catch (e) {
+      toast.error(e?.error || 'Error al crear cotización');
+    }
+  };
   const local = lead.localInstalacion || lead.localAsignado;
   const localNombre = local?.Nombre || local?.nombre || '—';
 
@@ -110,6 +137,16 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <Field label="Local asignado" value={localNombre} />
             <Field label="Fecha cita" value={lead.fechaCita} />
             <Field label="Logística" value={lead.estadoLogistica} />
+          </div>
+
+          {/* Botones acción */}
+          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+            <button onClick={crearCotizacion} style={{ flex:1, padding:'11px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:14, fontWeight:800, cursor:'pointer' }}>
+              📋 Crear Cotización
+            </button>
+            <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'11px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              Ver cotizaciones →
+            </button>
           </div>
 
           {/* Historial */}
