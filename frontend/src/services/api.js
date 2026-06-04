@@ -58,9 +58,10 @@ export const stockApi = {
 };
 
 export const sedesApi = {
-  listar: () => api.get('/sedes'),
-  crear: (data) => api.post('/sedes', data),
-  actualizar: (id, data) => api.put(`/sedes/${id}`, data),
+  listar:    ()         => api.get('/sedes'),
+  obtener:   (id)       => api.get(`/sedes/${id}`),
+  crear:     (data)     => api.post('/sedes', data),
+  actualizar:(id, data) => api.put(`/sedes/${id}`, data),
 };
 
 export const cotizacionesApi = {

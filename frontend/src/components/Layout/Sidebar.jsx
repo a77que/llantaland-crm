@@ -8,6 +8,7 @@ const NAV = [
   { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
   { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
   { section: 'Inventario', to: '/inventario',    label: 'Inventario',            icon: '🛞' },
+  { section: 'Inventario', to: '/almacenes',     label: 'Almacenes',             icon: '🏪' },
   { section: 'Admin',      to: '/admin/stock',   label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
   { section: 'Admin',      to: '/importar',      label: 'Importar / Actualizar', icon: '📂', adminOnly: true },
   { section: 'Admin',      to: '/config/apis',   label: 'Config APIs',           icon: '⚙️', adminOnly: true },

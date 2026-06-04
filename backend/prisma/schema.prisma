@@ -155,6 +155,12 @@ model Sede {
   tipo        TipoSede @default(TIENDA)
   distrito    String?
   direccion   String?
+  telefono    String?
+  email       String?
+  horario     String?
+  encargado   String?
+  latitud     String?
+  longitud    String?
   activo      Boolean  @default(true)
 
   stocks          Stock[]
@@ -179,10 +185,13 @@ model Producto {
   precioRegular   Decimal      @db.Decimal(10, 2)
   precioOferta    Decimal?     @db.Decimal(10, 2) // null = sin oferta
   imagenUrl       String?                        // URL imagen en sheet PRECIOS
-  // Ficha técnica (opcional)
+  // Ficha técnica
   indice_carga    String?
   velocidad_max   String?
   garantia        String?
+  descuentoMaximo Decimal?     @db.Decimal(5, 2)   // % máximo de descuento permitido
+  fichaTecnica    String?      @db.Text             // URL o descripción técnica
+  camposExtra     Json?                             // campos personalizados dinámicos
   activo          Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt

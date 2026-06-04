@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventario from './pages/Inventario';
 import InventarioDetalle from './pages/InventarioDetalle';
+import Almacenes from './pages/Almacenes';
 import Leads from './pages/Leads';
 import Cotizaciones from './pages/Cotizaciones';
 import Ventas from './pages/Ventas';
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="ventas/:id" element={<VentaDetalle />} />
             <Route path="inventario" element={<Inventario />} />
             <Route path="inventario/:id" element={<InventarioDetalle />} />
+            <Route path="almacenes" element={<Almacenes />} />
             <Route path="facturacion" element={<Facturacion />} />
 
             <Route element={<AdminRoute />}>

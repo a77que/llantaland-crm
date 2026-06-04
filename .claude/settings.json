@@ -33,7 +33,18 @@
       "Bash(curl -s -X GET http://161.97.102.3:3000/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzJhMTllNS1mMjg4LTRmMDEtYjAzMy1mOWY1MWJlZjJlMmEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzdmYTI0ZWYtYjE3MS00NGFmLTgzMDItYzNlMGQ0MWJhYTA0IiwiaWF0IjoxNzgwNTgyODc4fQ.onkbkdR4Tzic39xYxhp-RoQ26mGVYrKx1iRQXhM3SKg')",
       "Bash(curl -s -X GET https://llantaland-n8n.vqoynm.easypanel.host/api/v1/workflows -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzJhMTllNS1mMjg4LTRmMDEtYjAzMy1mOWY1MWJlZjJlMmEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzdmYTI0ZWYtYjE3MS00NGFmLTgzMDItYzNlMGQ0MWJhYTA0IiwiaWF0IjoxNzgwNTgyODc4fQ.onkbkdR4Tzic39xYxhp-RoQ26mGVYrKx1iRQXhM3SKg')",
       "Bash(curl -s https://llantaland-n8n.vqoynm.easypanel.host/api/v1/workflows?limit=50 -H 'X-N8N-API-KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzJhMTllNS1mMjg4LTRmMDEtYjAzMy1mOWY1MWJlZjJlMmEiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzdmYTI0ZWYtYjE3MS00NGFmLTgzMDItYzNlMGQ0MWJhYTA0IiwiaWF0IjoxNzgwNTgyODc4fQ.onkbkdR4Tzic39xYxhp-RoQ26mGVYrKx1iRQXhM3SKg')",
-      "Bash(python3 upload_to_n8n.py)"
+      "Bash(python3 upload_to_n8n.py)",
+      "Bash(curl -s \"http://localhost:3001/api/productos?limit=3\" -H \"Authorization: Bearer test\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\), '| data count:', len\\(d.get\\('data',[]\\)\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"admin@llantaland.com\",\"password\":\"Llantaland2024!\"}')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('error',''\\)[:400]\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('error',''\\)[400:800]\\)\")",
+      "Bash(docker-compose -f \"d:/Visual Code Studio Project/Llantaland CRM/docker-compose.yml\" restart backend)",
+      "Bash(curl -s -X POST \"http://localhost:3001/api/auth/login\" -H \"Content-Type: application/json\" -d '{\"email\":\"admin@llantaland.com\",\"password\":\"Llantaland2024!\"}')",
+      "Bash(python3 -c \"import json,sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); [print\\(' -', p['marca'], p['medida']\\) for p in d.get\\('data',[]\\)]\")",
+      "Bash(docker cp *)",
+      "Bash(docker restart *)",
+      "Bash(python3 -c \"import json,sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(sys.stdin\\); print\\('total:', d.get\\('total'\\)\\); [print\\(' -', p['marca'], p['medida'], '| S/', p['precioRegular']\\) for p in d.get\\('data',[]\\)]\")"
     ],
     "additionalDirectories": [
       "d:\\Visual Code Studio Project\\N8n Proyecto"
