@@ -21,8 +21,20 @@ const { errorHandler } = require('./middleware/errorHandler');
 const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  process.env.CORS_EXTRA_ORIGIN,
+  'http://localhost',
+  'http://localhost:5173',
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, cb) => {
+    // Permitir requests sin origin (n8n server-side, curl, etc.)
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    cb(null, true); // En VPS propio, aceptar todo; ajustar en prod
+  },
   credentials: true,
 }));
 app.use(morgan('dev'));

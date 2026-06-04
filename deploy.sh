@@ -1,54 +1,34 @@
 #!/bin/bash
-# deploy.sh — script de deploy en el VPS
-# Ejecutar: bash deploy.sh
+# deploy.sh — actualizar Llantaland CRM en el VPS
+# Uso: bash deploy.sh
 
 set -e
-
 APP_DIR="/opt/llantaland-crm"
-REPO_URL="https://github.com/TU_USUARIO/llantaland-crm.git"  # <-- cambia esto
 
-echo "🚀 Iniciando deploy Llantaland CRM..."
-echo "📅 $(date '+%Y-%m-%d %H:%M:%S')"
+echo "🚀 Deploy Llantaland CRM — $(date '+%Y-%m-%d %H:%M:%S')"
 
-# Si el directorio no existe, clonar; si existe, hacer pull
-if [ ! -d "$APP_DIR" ]; then
-  echo "📦 Clonando repositorio..."
-  git clone "$REPO_URL" "$APP_DIR"
-  cd "$APP_DIR"
-else
-  echo "🔄 Actualizando código..."
-  cd "$APP_DIR"
-  git pull origin main
-fi
+cd "$APP_DIR"
 
-# Verificar que existe el .env
-if [ ! -f ".env" ]; then
-  echo "⚠️  ATENCIÓN: No existe el archivo .env"
-  echo "   Copia el .env.example y configura tus variables:"
-  echo "   cp backend/.env.example .env && nano .env"
-  exit 1
-fi
+echo "🔄 Bajando cambios de GitHub..."
+git pull origin main
 
-# Rebuild y restart de contenedores
-echo "🐳 Rebuildeando contenedores Docker..."
-docker-compose down --remove-orphans
-docker-compose up --build -d
+echo "🐳 Rebuildeando contenedores..."
+docker-compose up --build -d --remove-orphans
 
-# Esperar que el backend esté listo
-echo "⏳ Esperando que el backend arranque..."
-sleep 10
+echo "⏳ Esperando que arranquen los servicios..."
+sleep 8
 
-# Verificar salud
-echo "🔍 Verificando estado..."
+echo "📊 Estado de contenedores:"
 docker ps --format "  {{.Names}}: {{.Status}}"
 
-# Verificar que la API responda
-if curl -s http://localhost:3001/api/health | grep -q "ok"; then
-  echo "✅ API respondiendo correctamente"
+# Verificar API
+if curl -sf http://localhost:3001/api/health > /dev/null; then
+  echo "✅ API OK"
 else
-  echo "❌ La API no responde — revisa los logs:"
-  echo "   docker logs llantaland_api --tail 30"
+  echo "❌ API no responde — revisando logs..."
+  docker logs llantaland_api --tail 20
 fi
 
 echo ""
-echo "✅ Deploy completado — CRM disponible en http://$(hostname -I | awk '{print $1}')"
+echo "✅ CRM disponible en: http://161.97.102.3"
+echo "   n8n sigue en:      http://161.97.102.3:3000"
