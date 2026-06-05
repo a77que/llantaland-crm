@@ -282,22 +282,31 @@ export default function Leads() {
   const sortDir = searchParams.get('sortDir') || 'desc';
 
   const [selectedId, setSelectedId] = useState(null);
-  const [nuevosIds, setNuevosIds] = useState(new Set()); // IDs de leads nuevos (no vistos)
-  const seenIdsRef = useRef(null); // Set de IDs ya vistos — persiste sin re-render
+  const [nuevosIds, setNuevosIds] = useState(new Set());
+  const seenIdsRef = useRef(null); // IDs ya notificados (no volver a sonar)
 
-  // Inicializar seenIds desde localStorage
+  // Dos claves separadas:
+  //   leads_seen_ids  → IDs que ya sonaron (no re-notificar)
+  //   leads_unread_ids → IDs con badge amarillo (persiste hasta que el vendedor haga clic)
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('leads_seen_ids') || '[]');
-      seenIdsRef.current = new Set(saved);
+      const seen   = JSON.parse(localStorage.getItem('leads_seen_ids')   || '[]');
+      const unread = JSON.parse(localStorage.getItem('leads_unread_ids') || '[]');
+      seenIdsRef.current = new Set(seen);
+      if (unread.length > 0) setNuevosIds(new Set(unread));
     } catch {
       seenIdsRef.current = new Set();
     }
   }, []);
 
-  // Marcar un lead como visto (clic en él) — solo quita el badge visual
+  // Al hacer clic: quita el badge Y lo borra de localStorage unread
   const marcarVisto = useCallback((id) => {
-    setNuevosIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    setNuevosIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      localStorage.setItem('leads_unread_ids', JSON.stringify([...next]));
+      return next;
+    });
   }, []);
 
   const setParam = (key, val) => setSearchParams(prev => {
@@ -344,15 +353,18 @@ export default function Leads() {
 
     const nuevosArr = currentIds.filter(id => !seenIdsRef.current.has(id));
     if (nuevosArr.length > 0) {
-      // Agregar a seenIdsRef inmediatamente para que el próximo poll no los re-detecte
+      // Marcar como notificados → no volver a sonar en próximos polls
       nuevosArr.forEach(id => seenIdsRef.current.add(id));
       localStorage.setItem('leads_seen_ids', JSON.stringify([...seenIdsRef.current].slice(-1000)));
 
+      // Agregar a unread → badge amarillo persiste hasta que el vendedor haga clic
       setNuevosIds(prev => {
         const next = new Set(prev);
         nuevosArr.forEach(id => next.add(id));
+        localStorage.setItem('leads_unread_ids', JSON.stringify([...next]));
         return next;
       });
+
       if (document.visibilityState !== 'hidden') {
         playNotificationSound();
         toast(`📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de WhatsApp`, {
