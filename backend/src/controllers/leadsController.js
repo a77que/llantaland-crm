@@ -143,17 +143,36 @@ const obtenerPorTelefono = async (req, res, next) => {
   }
 };
 
+// Campos que puede editar un vendedor (todos los que muestra el formulario)
+const CAMPOS_VENDEDOR = [
+  'pasoActual', 'nombreCliente', 'dniCe',
+  'marcaAuto', 'modeloAuto', 'anioAuto',
+  'medidaDetectada', 'marcaLlanta', 'modeloLlanta', 'cantidadLlantas',
+  'distritoCliente', 'provinciaDestino',
+  'fechaCita', 'estadoLogistica',
+  'ranking', 'tipoServicio',
+];
+
+// Campos enum que Prisma no acepta como string vacío
+const ENUM_FIELDS = new Set(['pasoActual', 'ranking', 'tipoDoc', 'caso', 'rankingLead']);
+
 const actualizar = async (req, res, next) => {
   try {
-    // Vendedor solo puede actualizar campos no sensibles
     const isAdmin = req.usuario?.rol === 'ADMIN';
-    const CAMPOS_VENDEDOR = ['pasoActual', 'nombreCliente', 'marcaAuto', 'modeloAuto', 'anioAuto', 'fechaCita', 'estadoLogistica', 'notas'];
-
-    const data = isAdmin
+    const raw = isAdmin
       ? req.body
       : Object.fromEntries(Object.entries(req.body).filter(([k]) => CAMPOS_VENDEDOR.includes(k)));
 
-    if (Object.keys(data).length === 0) return res.status(403).json({ error: 'Sin campos permitidos para actualizar' });
+    if (Object.keys(raw).length === 0) return res.status(403).json({ error: 'Sin campos permitidos para actualizar' });
+
+    // Convertir strings vacíos a null (especialmente para enums)
+    const data = Object.fromEntries(
+      Object.entries(raw).map(([k, v]) => [k, (v === '' || v === undefined) ? null : v])
+    );
+
+    // anioAuto debe ser número o null
+    if (data.anioAuto !== null) data.anioAuto = parseInt(data.anioAuto) || null;
+    if (data.cantidadLlantas !== null) data.cantidadLlantas = parseInt(data.cantidadLlantas) || null;
 
     const lead = await prisma.leadCRM.update({ where: { id: req.params.id }, data });
     res.json(lead);

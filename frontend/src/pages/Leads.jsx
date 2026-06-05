@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { leadsApi, cotizacionesApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
+
+// Columnas ordenables en Leads
+const SORTABLE_LEADS = {
+  telefono:'telefono', nombreCliente:'nombreCliente', medidaDetectada:'medidaDetectada',
+  pasoActual:'pasoActual', ranking:'ranking', fechaCita:'fechaCita', updatedAt:'updatedAt',
+};
 
 const PASO_LABEL = {
   nuevo: 'Nuevo',
@@ -236,15 +242,42 @@ function LeadCard({ lead, onClick }) {
 /* ─── Página principal ─────────────────────────────────────────── */
 export default function Leads() {
   const isMobile = useIsMobile();
-  const [q, setQ] = useState('');
-  const [paso, setPaso] = useState('');
-  const [ranking, setRanking] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const q       = searchParams.get('q')       || '';
+  const paso    = searchParams.get('paso')    || '';
+  const ranking = searchParams.get('ranking') || '';
+  const page    = parseInt(searchParams.get('page')    || '1');
+  const sortBy  = searchParams.get('sortBy')  || 'updatedAt';
+  const sortDir = searchParams.get('sortDir') || 'desc';
+
   const [selectedId, setSelectedId] = useState(null);
-  const [page, setPage] = useState(1);
+
+  const setParam = (key, val) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    if (val) next.set(key, val); else next.delete(key);
+    if (key !== 'page') next.set('page', '1');
+    return next;
+  }, { replace: true });
+
+  const handleSort = (colKey) => {
+    const field = SORTABLE_LEADS[colKey];
+    if (!field) return;
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (sortBy === field) {
+        next.set('sortDir', sortDir === 'asc' ? 'desc' : 'asc');
+      } else {
+        next.set('sortBy', field);
+        next.set('sortDir', 'desc');
+      }
+      next.set('page', '1');
+      return next;
+    }, { replace: true });
+  };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', { q, paso, ranking, page }],
-    queryFn: () => leadsApi.listar({ q, paso, ranking, page, limit: 50 }),
+    queryKey: ['leads', { q, paso, ranking, page, sortBy, sortDir }],
+    queryFn: () => leadsApi.listar({ q, paso, ranking, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     keepPreviousData: true,
   });
 
@@ -314,7 +347,7 @@ export default function Leads() {
           }}
           placeholder="Buscar teléfono, nombre..."
           value={q}
-          onChange={e => { setQ(e.target.value); setPage(1); }}
+          onChange={e => setParam('q', e.target.value)}
         />
         <select
           style={{
@@ -323,7 +356,7 @@ export default function Leads() {
             background: 'var(--color-surface)', color: 'var(--color-text)',
           }}
           value={paso}
-          onChange={e => { setPaso(e.target.value); setPage(1); }}
+          onChange={e => setParam('paso', e.target.value)}
         >
           <option value="">Todos los pasos</option>
           {Object.entries(PASO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -335,7 +368,7 @@ export default function Leads() {
             background: 'var(--color-surface)', color: 'var(--color-text)',
           }}
           value={ranking}
-          onChange={e => { setRanking(e.target.value); setPage(1); }}
+          onChange={e => setParam('ranking', e.target.value)}
         >
           <option value="">Ranking</option>
           <option value="caliente">🔥 Caliente</option>
@@ -368,9 +401,35 @@ export default function Leads() {
           <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
             <thead>
               <tr>
-                {['Teléfono', 'Cliente', 'Medida', 'Paso', 'Ranking', 'Local', 'Cita', 'Actualizado'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg)', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
+                {[
+                  { k:'telefono',       label:'Teléfono' },
+                  { k:'nombreCliente',  label:'Cliente' },
+                  { k:'medidaDetectada',label:'Medida' },
+                  { k:'pasoActual',     label:'Paso' },
+                  { k:'ranking',        label:'Ranking' },
+                  { k:null,             label:'Local' },
+                  { k:'fechaCita',      label:'Cita' },
+                  { k:'updatedAt',      label:'Actualizado' },
+                ].map(({ k, label }) => {
+                  const field = k ? SORTABLE_LEADS[k] : null;
+                  const isActive = field && sortBy === field;
+                  const icon = field ? (isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅') : '';
+                  return (
+                    <th key={label}
+                      onClick={() => k && handleSort(k)}
+                      style={{
+                        padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700,
+                        color: isActive ? '#f5c400' : 'var(--color-text-muted)',
+                        textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)',
+                        background: isActive ? '#fffbeb' : 'var(--color-bg)',
+                        whiteSpace: 'nowrap', cursor: field ? 'pointer' : 'default', userSelect: 'none',
+                      }}
+                      title={field ? `Ordenar por ${label}` : undefined}
+                    >
+                      {label}<span style={{ opacity: isActive ? 1 : 0.4, fontSize: 10 }}>{icon}</span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -399,9 +458,9 @@ export default function Leads() {
       {/* Paginación */}
       {total > 50 && (
         <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'center' }}>
-          <button style={{ padding: '8px 18px', border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', fontSize: 13, fontWeight: 600 }} onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>← Anterior</button>
+          <button style={{ padding: '8px 18px', border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', fontSize: 13, fontWeight: 600 }} onClick={() => setSearchParams(p => { const n=new URLSearchParams(p); n.set('page',String(Math.max(1,page-1))); return n; }, {replace:true})} disabled={page === 1}>← Anterior</button>
           <span style={{ padding: '8px 14px', fontSize: 13, color: 'var(--color-text-muted)' }}>Pág {page}</span>
-          <button style={{ padding: '8px 18px', border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', fontSize: 13, fontWeight: 600 }} onClick={() => setPage(p => p + 1)} disabled={leads.length < 50}>Siguiente →</button>
+          <button style={{ padding: '8px 18px', border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', fontSize: 13, fontWeight: 600 }} onClick={() => setSearchParams(p => { const n=new URLSearchParams(p); n.set('page',String(page+1)); return n; }, {replace:true})} disabled={leads.length < 50}>Siguiente →</button>
         </div>
       )}
 
