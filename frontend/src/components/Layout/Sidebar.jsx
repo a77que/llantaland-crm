@@ -8,7 +8,7 @@ const NAV = [
   { section: 'WhatsApp',   to: '/clientes',      label: 'Clientes',              icon: '👥' },
   { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
   { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
-  { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: null, imgIcon: 'https://llantaland.com/OsoLogoSVG.svg' },
+  { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: null, imgIcon: '/OsoLogoSVG.svg' },
   { section: 'Inventario', to: '/almacenes',     label: 'Almacenes',             icon: '🏪' },
   { section: 'Admin',      to: '/admin/stock',   label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
   { section: 'Admin',      to: '/importar',      label: 'Importar / Actualizar', icon: '📂', adminOnly: true },
@@ -69,7 +69,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
         {(!collapsed || isMobile) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img
-              src="https://llantaland.com/OsoLogoSVG.svg"
+              src="/OsoLogoSVG.svg"
               alt="logo"
               style={{ height: 30 }}
               onError={e => { e.target.style.display = 'none'; }}
@@ -87,7 +87,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
 
         {/* Ícono colapsado */}
         {collapsed && !isMobile && (
-          <img src="https://llantaland.com/OsoLogoSVG.svg" alt="logo" style={{ height: 28 }}
+          <img src="/OsoLogoSVG.svg" alt="logo" style={{ height: 28 }}
             onError={e => { e.target.style.display = 'none'; }} />
         )}
 

@@ -56,7 +56,7 @@ export default function Login() {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <img
-            src="https://llantaland.com/OsoLogoSVG.svg"
+            src="/OsoLogoSVG.svg"
             alt="Llantaland"
             style={{ height: 56, marginBottom: 12 }}
             onError={e => { e.target.style.display = 'none'; }}
