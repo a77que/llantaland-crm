@@ -53,10 +53,8 @@ const listar = async (req, res, next) => {
     const [leads, total] = await Promise.all([
       prisma.leadCRM.findMany({
         where,
-        orderBy: { updatedAt: 'desc' },
         skip,
         take,
-        // Admin ve todo; vendedor ve campos filtrados
         orderBy: { [sortField]: sortDir },
         ...(isAdmin ? {
           include: { humanTakeover: true, _count: { select: { historial: true } } },
@@ -156,6 +154,9 @@ const CAMPOS_VENDEDOR = [
 // Campos enum que Prisma no acepta como string vacío
 const ENUM_FIELDS = new Set(['pasoActual', 'ranking', 'tipoDoc', 'caso', 'rankingLead']);
 
+// Campos requeridos (no pueden ser null en la DB)
+const CAMPOS_REQUERIDOS = new Set(['pasoActual', 'cantidadLlantas', 'intentosMedida', 'emailSeguimientoEnviado']);
+
 const actualizar = async (req, res, next) => {
   try {
     const isAdmin = req.usuario?.rol === 'ADMIN';
@@ -165,19 +166,31 @@ const actualizar = async (req, res, next) => {
 
     if (Object.keys(raw).length === 0) return res.status(403).json({ error: 'Sin campos permitidos para actualizar' });
 
-    // Convertir strings vacíos a null (especialmente para enums)
-    const data = Object.fromEntries(
-      Object.entries(raw).map(([k, v]) => [k, (v === '' || v === undefined) ? null : v])
-    );
+    // Construir el objeto de datos para Prisma
+    const data = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v === undefined) continue;
 
-    // anioAuto debe ser número o null
-    if (data.anioAuto !== null) data.anioAuto = parseInt(data.anioAuto) || null;
-    if (data.cantidadLlantas !== null) data.cantidadLlantas = parseInt(data.cantidadLlantas) || null;
+      if (v === '' || v === null) {
+        // Campos requeridos: no enviar null (mantener valor actual en DB)
+        if (CAMPOS_REQUERIDOS.has(k)) continue;
+        data[k] = null;
+      } else if (k === 'anioAuto' || k === 'cantidadLlantas' || k === 'intentosMedida') {
+        const num = parseInt(v);
+        if (!isNaN(num)) data[k] = num;
+      } else {
+        data[k] = v;
+      }
+    }
+
+    if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Sin datos válidos para actualizar' });
 
     const lead = await prisma.leadCRM.update({ where: { id: req.params.id }, data });
     res.json(lead);
   } catch (err) {
-    next(err);
+    // Mostrar mensaje de error específico para facilitar debugging
+    const msg = err.message?.includes('Argument') ? 'Error de validación: ' + err.message.slice(0, 200) : undefined;
+    next(msg ? { status: 400, message: msg } : err);
   }
 };
 
