@@ -1,6 +1,19 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Campos permitidos para ordenar
+const SORT_FIELDS = {
+  nombreCliente:   'nombreCliente',
+  telefono:        'telefono',
+  medidaDetectada: 'medidaDetectada',
+  marcaAuto:       'marcaAuto',
+  pasoActual:      'pasoActual',
+  ranking:         'ranking',
+  updatedAt:       'updatedAt',
+  timestamp:       'timestamp',
+  fechaCita:       'fechaCita',
+};
+
 // Campos seguros para VENDEDOR (sin historial completo)
 const LEAD_SELECT_VENDEDOR = {
   id: true, telefono: true, timestamp: true, updatedAt: true,
@@ -17,12 +30,14 @@ const LEAD_SELECT_VENDEDOR = {
 
 const listar = async (req, res, next) => {
   try {
-    const { paso, ranking, q, page = 1, limit = 50 } = req.query;
+    const { paso, ranking, q, page = 1, limit = 50, orderBy, orderDir } = req.query;
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
-    // Forzar máximo 100 registros para evitar extracción masiva
     const take = Math.min(parseInt(limit) || 50, 100);
     const skip = (parseInt(page) - 1) * take;
+
+    const sortField = SORT_FIELDS[orderBy] || 'updatedAt';
+    const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
 
     const where = {};
     if (paso) where.pasoActual = paso;
@@ -42,6 +57,7 @@ const listar = async (req, res, next) => {
         skip,
         take,
         // Admin ve todo; vendedor ve campos filtrados
+        orderBy: { [sortField]: sortDir },
         ...(isAdmin ? {
           include: { humanTakeover: true, _count: { select: { historial: true } } },
         } : {

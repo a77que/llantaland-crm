@@ -22,23 +22,40 @@ const leerCRM = async (req, res, next) => {
   }
 };
 
-/** CRM | Crear Fila Nueva */
+/** CRM | Crear Fila Nueva — captura TODOS los datos disponibles del primer mensaje */
 const crearCRM = async (req, res, next) => {
   try {
-    const { Telefono, telefono, texto_mensaje, Mensaje_Cliente } = req.body;
-    const tel = Telefono || telefono;
+    const b = req.body;
+    const tel = b.Telefono || b.telefono || b.telefono_cliente;
     if (!tel) return res.status(400).json({ error: 'Telefono requerido' });
+
+    // Capturar todos los campos del webhook que estén disponibles
+    const mensajeInicial = b.texto_mensaje || b.Mensaje_Cliente || b.mensaje || null;
+    const tipoMensaje    = b.tipo_mensaje  || b.Tipo_Mensaje   || null;
+
+    // Mapear campos adicionales si vienen del webhook
+    const camposExtra = mapSheetToLead(b);
 
     const lead = await prisma.leadCRM.upsert({
       where: { telefono: tel },
-      update: { mensajeCliente: texto_mensaje || Mensaje_Cliente || undefined },
+      update: {
+        // En actualización solo actualizamos si hay datos nuevos útiles
+        mensajeCliente: mensajeInicial || undefined,
+        ...camposExtra,
+      },
       create: {
         telefono: tel,
-        pasoActual: 'nuevo',
-        mensajeCliente: texto_mensaje || Mensaje_Cliente || null,
+        pasoActual: camposExtra.pasoActual || 'nuevo',
+        mensajeCliente: mensajeInicial,
         emailSeguimientoEnviado: false,
+        timestamp: new Date(),
+        // Campos del webhook
+        ...camposExtra,
+        // Aseguramos que pasoActual siempre tenga un valor inicial
+        ...(camposExtra.pasoActual ? {} : { pasoActual: 'nuevo' }),
       },
     });
+
     res.json(mapLeadToSheet(lead));
   } catch (err) {
     next(err);
