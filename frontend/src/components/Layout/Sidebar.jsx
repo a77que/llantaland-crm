@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 const NAV = [
   { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
   { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
+  { section: 'WhatsApp',   to: '/clientes',      label: 'Clientes',              icon: '👥' },
   { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
   { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
   { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: null, imgIcon: 'https://llantaland.com/OsoLogoSVG.svg' },

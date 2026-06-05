@@ -65,22 +65,23 @@ const obtener = async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         humanTakeover: true,
-        // Historial solo para admin (datos completos de conversación)
-        ...(isAdmin ? {
-          historial: { orderBy: { timestamp: 'asc' }, take: 200 },
-        } : {
-          historial: {
-            orderBy: { timestamp: 'asc' },
-            take: 50,
-            select: { id: true, rol: true, mensaje: true, timestamp: true, pasoActual: true },
-          },
-        }),
-        ventas: { orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, numero: true, estado: true, precioTotal: true, createdAt: true } },
+        historial: isAdmin
+          ? { orderBy: { timestamp: 'asc' }, take: 200 }
+          : { orderBy: { timestamp: 'asc' }, take: 50, select: { id: true, rol: true, mensaje: true, timestamp: true, pasoActual: true } },
+        // Historial completo de cotizaciones del cliente
+        cotizaciones: {
+          orderBy: { createdAt: 'desc' },
+          include: { usuario: { select: { nombre: true } }, venta: { select: { id: true, numero: true, estado: true } } },
+        },
+        // Historial completo de ventas del cliente
+        ventas: {
+          orderBy: { createdAt: 'desc' },
+          include: { usuario: { select: { nombre: true } } },
+        },
       },
     });
-    if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+    if (!lead) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    // Ocultar campos sensibles para vendedor
     if (!isAdmin) {
       delete lead.dniCe;
       delete lead.estadoFlujo;
