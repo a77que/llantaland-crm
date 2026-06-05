@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { productosApi, sedesApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -274,29 +274,74 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef }) {
   );
 }
 
+// ── Columnas que se pueden ordenar y su campo API ──────────────────────────────
+const SORTABLE = {
+  medida: 'medida', marca: 'marca', nombreComercial: 'nombreComercial',
+  grupo: 'grupo', precioRegular: 'precioRegular', precioOferta: 'precioOferta',
+  descuentoMaximo: 'descuentoMaximo', garantia: 'garantia', sku: 'sku', tipo: 'tipo',
+};
+
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function Inventario() {
   const isMobile = useIsMobile();
   const qc = useQueryClient();
-  const [q, setQ] = useState('');
-  const [tipo, setTipo] = useState('');
-  const [page, setPage] = useState(1);
+
+  // Estado en URL — preserva búsqueda al volver desde detalle
+  const [searchParams, setSearchParams] = useSearchParams();
+  const q      = searchParams.get('q')      || '';
+  const tipo   = searchParams.get('tipo')   || '';
+  const page   = parseInt(searchParams.get('page')  || '1');
+  const sortBy = searchParams.get('sortBy') || '';
+  const sortDir= searchParams.get('sortDir')|| 'asc';
+
+  const setParam = (key, val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (val) next.set(key, val); else next.delete(key);
+      if (key !== 'page') next.set('page', '1'); // reset page on filter change
+      return next;
+    }, { replace: true });
+  };
+
   const [visibles, setVisibles] = useState(defaultVisible);
   const [customCols, setCustomCols] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM_KEY) || '[]'); } catch { return []; }
   });
   const [showGestor, setShowGestor] = useState(false);
   // Edición masiva
-  const [modoEdicion, setModoEdicion] = useState(false);   // hoja editable
-  const [seleccionados, setSeleccionados] = useState([]);   // IDs seleccionados
-  const [cambiosMasivos, setCambiosMasivos] = useState({}); // { prodId: { campo: valor } }
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState([]);
+  const [cambiosMasivos, setCambiosMasivos] = useState({});
   const [guardandoMasivo, setGuardandoMasivo] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['productos', { q, tipo, page }],
-    queryFn: () => productosApi.listar({ q, tipo, page, limit: 50 }),
+    queryKey: ['productos', { q, tipo, page, sortBy, sortDir }],
+    queryFn: () => productosApi.listar({ q, tipo, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     keepPreviousData: true,
   });
+
+  // Función para ordenar al hacer clic en cabecera
+  const handleSort = (colKey) => {
+    const apiField = SORTABLE[colKey];
+    if (!apiField) return; // columnas no ordenables (stock, custom)
+    if (sortBy === apiField) {
+      // Mismo campo → alternar dirección
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.set('sortDir', sortDir === 'asc' ? 'desc' : 'asc');
+        next.set('page', '1');
+        return next;
+      }, { replace: true });
+    } else {
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.set('sortBy', apiField);
+        next.set('sortDir', 'asc');
+        next.set('page', '1');
+        return next;
+      }, { replace: true });
+    }
+  };
 
   const productos = data?.data || [];
   const total = data?.total || 0;
@@ -399,11 +444,11 @@ export default function Inventario() {
         <input
           style={{ flex:'1 1 180px', padding:'9px 14px', fontSize:14, border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)', minWidth:0 }}
           placeholder="Medida, marca, SKU..."
-          value={q} onChange={e => { setQ(e.target.value); setPage(1); }}
+          value={q} onChange={e => setParam('q', e.target.value)}
         />
         <select
           style={{ padding:'9px 12px', fontSize:13, border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)' }}
-          value={tipo} onChange={e => { setTipo(e.target.value); setPage(1); }}
+          value={tipo} onChange={e => setParam('tipo', e.target.value)}
         >
           <option value="">Todos</option>
           <option value="AUTO">Auto</option>
@@ -434,11 +479,31 @@ export default function Inventario() {
                     />
                   ) : 'Acciones'}
                 </th>
-                {columnasVisibles.map(col => (
-                  <th key={col.key} style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'rgba(255,255,255,.85)', whiteSpace:'nowrap', textTransform:'uppercase', letterSpacing:.5, borderLeft:'1px solid rgba(255,255,255,.1)' }}>
-                    {col.label}
-                  </th>
-                ))}
+                {columnasVisibles.map(col => {
+                  const isSortable = !!SORTABLE[col.key];
+                  const isActive   = sortBy === SORTABLE[col.key];
+                  const icon = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : (isSortable ? ' ⇅' : '');
+                  return (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      style={{
+                        padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700,
+                        color: isActive ? '#f5c400' : 'rgba(255,255,255,.85)',
+                        whiteSpace:'nowrap', textTransform:'uppercase', letterSpacing:.5,
+                        borderLeft:'1px solid rgba(255,255,255,.1)',
+                        cursor: isSortable ? 'pointer' : 'default',
+                        userSelect:'none',
+                        background: isActive ? 'rgba(245,196,0,.15)' : undefined,
+                        transition:'background .15s',
+                      }}
+                      title={isSortable ? `Ordenar por ${col.label}` : undefined}
+                    >
+                      {col.label}
+                      <span style={{ opacity: isActive ? 1 : 0.4, fontSize:10 }}>{icon}</span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -510,9 +575,9 @@ export default function Inventario() {
       {/* Paginación */}
       {total > 50 && (
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:16 }}>
-          <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{ padding:'8px 18px', borderRadius:8, border:'1.5px solid var(--color-border)', background:'var(--color-surface)', fontSize:13, fontWeight:600 }}>← Anterior</button>
+          <button onClick={() => setSearchParams(p => { const n=new URLSearchParams(p); n.set('page', String(Math.max(1,page-1))); return n; }, {replace:true})} disabled={page===1} style={{ padding:'8px 18px', borderRadius:8, border:'1.5px solid var(--color-border)', background:'var(--color-surface)', fontSize:13, fontWeight:600 }}>← Anterior</button>
           <span style={{ padding:'8px 14px', fontSize:13, color:'var(--color-text-muted)' }}>Pág. {page}</span>
-          <button onClick={()=>setPage(p=>p+1)} disabled={productos.length<50} style={{ padding:'8px 18px', borderRadius:8, border:'1.5px solid var(--color-border)', background:'var(--color-surface)', fontSize:13, fontWeight:600 }}>Siguiente →</button>
+          <button onClick={() => setSearchParams(p => { const n=new URLSearchParams(p); n.set('page', String(page+1)); return n; }, {replace:true})} disabled={productos.length<50} style={{ padding:'8px 18px', borderRadius:8, border:'1.5px solid var(--color-border)', background:'var(--color-surface)', fontSize:13, fontWeight:600 }}>Siguiente →</button>
         </div>
       )}
 

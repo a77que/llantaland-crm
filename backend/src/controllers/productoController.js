@@ -4,32 +4,41 @@ const { paginar } = require('../utils/helpers');
 
 const prisma = new PrismaClient();
 
+// Campos permitidos para ordenar (evita injection)
+const SORT_FIELDS = {
+  medida: 'medida', marca: 'marca', nombreComercial: 'nombreComercial',
+  grupo: 'grupo', precioRegular: 'precioRegular', precioOferta: 'precioOferta',
+  descuentoMaximo: 'descuentoMaximo', garantia: 'garantia',
+  sku: 'sku', tipo: 'tipo', createdAt: 'createdAt',
+};
+
 const listar = async (req, res, next) => {
   try {
-    const { medida, marca, tipo, sedeId, q, page, limit } = req.query;
+    const { medida, marca, tipo, sedeId, q, page, limit, orderBy, orderDir } = req.query;
     const { skip, take } = paginar(page, limit);
     const where = { activo: true };
 
     if (medida) where.medida = { contains: medida, mode: 'insensitive' };
-    if (marca) where.marca = { contains: marca, mode: 'insensitive' };
-    if (tipo) where.tipo = tipo;
+    if (marca)  where.marca  = { contains: marca,  mode: 'insensitive' };
+    if (tipo)   where.tipo   = tipo;
     if (q) {
       where.OR = [
-        { sku: { contains: q, mode: 'insensitive' } },
-        { medida: { contains: q, mode: 'insensitive' } },
-        { marca: { contains: q, mode: 'insensitive' } },
-        { nombreComercial: { contains: q, mode: 'insensitive' } },
-        { grupo: { contains: q, mode: 'insensitive' } },
+        { sku:            { contains: q, mode: 'insensitive' } },
+        { medida:         { contains: q, mode: 'insensitive' } },
+        { marca:          { contains: q, mode: 'insensitive' } },
+        { nombreComercial:{ contains: q, mode: 'insensitive' } },
+        { grupo:          { contains: q, mode: 'insensitive' } },
       ];
     }
+
+    const sortField = SORT_FIELDS[orderBy] || 'createdAt';
+    const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
 
     const [total, productos] = await Promise.all([
       prisma.producto.count({ where }),
       prisma.producto.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
+        where, skip, take,
+        orderBy: { [sortField]: sortDir },
         include: {
           stocks: sedeId
             ? { where: { sedeId }, include: { sede: true } }
@@ -49,7 +58,7 @@ const obtener = async (req, res, next) => {
     const producto = await prisma.producto.findUnique({
       where: { id: req.params.id },
       include: {
-        stocks: { include: { sede: true }, orderBy: { sede: { codigoLocal: 'asc' } } },
+        stocks: { include: { sede: { orderBy: { codigoLocal: 'asc' } } } },
       },
     });
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
