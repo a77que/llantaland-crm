@@ -339,16 +339,25 @@ export default function Leads() {
   // Detectar leads nuevos cada vez que llegan datos frescos (onSuccess fue eliminado en RQ v5)
   useEffect(() => {
     if (!data || !seenIdsRef.current) return;
-    const nuevos = (data.leads || []).filter(l => !seenIdsRef.current.has(l.id));
-    if (nuevos.length > 0) {
+    const currentIds = (data.leads || []).map(l => l.id);
+
+    // Primera visita (localStorage vacío) → tomar todos como línea base, sin marcar NUEVO
+    if (seenIdsRef.current.size === 0 && currentIds.length > 0) {
+      currentIds.forEach(id => seenIdsRef.current.add(id));
+      localStorage.setItem('leads_seen_ids', JSON.stringify(currentIds.slice(-1000)));
+      return;
+    }
+
+    const nuevosArr = currentIds.filter(id => !seenIdsRef.current.has(id));
+    if (nuevosArr.length > 0) {
       setNuevosIds(prev => {
         const next = new Set(prev);
-        nuevos.forEach(l => next.add(l.id));
+        nuevosArr.forEach(id => next.add(id));
         return next;
       });
-      if (seenIdsRef.current.size > 0 && document.visibilityState !== 'hidden') {
+      if (document.visibilityState !== 'hidden') {
         playNotificationSound();
-        toast(`📱 ${nuevos.length} nuevo${nuevos.length > 1 ? 's' : ''} lead${nuevos.length > 1 ? 's' : ''} de WhatsApp`, {
+        toast(`📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de WhatsApp`, {
           icon: '🔔', duration: 4000,
           style: { background: '#0f0f0f', color: '#f5c400', border: '1px solid #f5c400', fontWeight: 700 },
         });
