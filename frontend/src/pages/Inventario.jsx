@@ -178,8 +178,8 @@ function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, o
   );
 }
 
-const GRUPO_OPCIONES = ['Excelente', 'Muy buena', 'Buena'];
-const GRUPO_COLOR = { 'Excelente': '#16a34a', 'Muy buena': '#3b82f6', 'Buena': '#f59e0b' };
+const GRUPO_OPCIONES = ['Excelente', 'Muy Buena', 'Buena'];  // debe coincidir con n8n
+const GRUPO_COLOR = { 'Excelente': '#16a34a', 'Muy Buena': '#3b82f6', 'Buena': '#f59e0b' };
 
 // ── Celda editable inline ─────────────────────────────────────────────────────
 function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef }) {
