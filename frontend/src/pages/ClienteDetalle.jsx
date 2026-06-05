@@ -71,7 +71,17 @@ function FormEditar({ cliente, onGuardado, onCancel }) {
   const inp = { width:'100%', padding:'9px 12px', fontSize:14, border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)' };
   const lbl = (txt) => <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{txt}</label>;
   const G2 = ({ children }) => <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 16px', marginBottom:16 }}>{children}</div>;
-  const F = ({ l, k, type='text', opts }) => <div>{lbl(l)}{opts?<select style={inp} value={form[k]} onChange={set(k)}>{opts.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select>:<input style={inp} type={type} value={form[k]} onChange={set(k)} /></div>;
+  const F = ({ l, k, type='text', opts }) => (
+    <div>
+      {lbl(l)}
+      {opts
+        ? <select style={inp} value={form[k]} onChange={set(k)}>
+            {opts.map(([v,t]) => <option key={v} value={v}>{t}</option>)}
+          </select>
+        : <input style={inp} type={type} value={form[k]} onChange={set(k)} />
+      }
+    </div>
+  );
 
   return (
     <div>
