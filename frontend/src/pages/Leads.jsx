@@ -1,9 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { leadsApi, cotizacionesApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
+
+// ── Sonido de notificación con Web Audio API ──────────────────────────────────
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Acorde de dos tonos: primera nota + segunda nota
+    const notas = [
+      { freq: 880, start: 0,   dur: 0.15 },
+      { freq: 1320, start: 0.15, dur: 0.2  },
+    ];
+    notas.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.05);
+    });
+  } catch { /* silencia si el navegador no soporta AudioContext */ }
+}
 
 // Columnas ordenables en Leads
 const SORTABLE_LEADS = {
@@ -185,7 +210,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
 }
 
 /* ─── Card individual para lista móvil ────────────────────────── */
-function LeadCard({ lead, onClick }) {
+function LeadCard({ lead, onClick, isNuevo }) {
   const local = lead.localInstalacion || lead.localAsignado;
   const localNombre = local?.Nombre || local?.nombre;
   const color = PASO_COLOR[lead.pasoActual] || '#64748b';
@@ -194,20 +219,26 @@ function LeadCard({ lead, onClick }) {
     <div
       onClick={onClick}
       style={{
-        background: 'var(--color-surface)',
+        background: isNuevo ? '#fff8e1' : 'var(--color-surface)',
         borderRadius: 12,
         padding: '14px 16px',
-        border: '1px solid var(--color-border)',
-        borderLeft: `4px solid ${color}`,
+        border: isNuevo ? '2px solid #f5c400' : '1px solid var(--color-border)',
+        borderLeft: `4px solid ${isNuevo ? '#f5c400' : color}`,
         cursor: 'pointer',
         WebkitTapHighlightColor: 'transparent',
         transition: 'box-shadow .15s',
         marginBottom: 10,
+        boxShadow: isNuevo ? '0 0 12px rgba(245,196,0,.35)' : undefined,
       }}
     >
-      {/* Fila 1: teléfono + ranking + paso */}
+      {/* Fila 1: teléfono + ranking + paso + badge NUEVO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isNuevo && (
+            <span style={{ background: '#f5c400', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 10, letterSpacing: 1, textTransform: 'uppercase', animation: 'pulse 1.5s infinite' }}>
+              🔔 NUEVO
+            </span>
+          )}
           <span style={{ fontWeight: 700, fontSize: 15 }}>{lead.nombreCliente || lead.telefono}</span>
           {lead.ranking && <span style={{ fontSize: 15 }}>{RANKING_ICON[lead.ranking]}</span>}
         </div>
@@ -251,6 +282,29 @@ export default function Leads() {
   const sortDir = searchParams.get('sortDir') || 'desc';
 
   const [selectedId, setSelectedId] = useState(null);
+  const [nuevosIds, setNuevosIds] = useState(new Set()); // IDs de leads nuevos (no vistos)
+  const seenIdsRef = useRef(null); // Set de IDs ya vistos — persiste sin re-render
+
+  // Inicializar seenIds desde localStorage
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('leads_seen_ids') || '[]');
+      seenIdsRef.current = new Set(saved);
+    } catch {
+      seenIdsRef.current = new Set();
+    }
+  }, []);
+
+  // Marcar un lead como visto (clic en él)
+  const marcarVisto = useCallback((id) => {
+    if (seenIdsRef.current) {
+      seenIdsRef.current.add(id);
+      // Guardar en localStorage (máx 1000 IDs para no crecer indefinidamente)
+      const arr = [...seenIdsRef.current].slice(-1000);
+      localStorage.setItem('leads_seen_ids', JSON.stringify(arr));
+    }
+    setNuevosIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+  }, []);
 
   const setParam = (key, val) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
@@ -279,12 +333,32 @@ export default function Leads() {
     queryKey: ['leads', { q, paso, ranking, page, sortBy, sortDir }],
     queryFn: () => leadsApi.listar({ q, paso, ranking, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     keepPreviousData: true,
+    refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
+    onSuccess: (newData) => {
+      if (!seenIdsRef.current) return;
+      const nuevos = (newData?.leads || []).filter(l => !seenIdsRef.current.has(l.id));
+      if (nuevos.length > 0) {
+        setNuevosIds(prev => {
+          const next = new Set(prev);
+          nuevos.forEach(l => next.add(l.id));
+          return next;
+        });
+        // Solo sonar si la página está visible y hay leads realmente nuevos (no primera carga)
+        if (seenIdsRef.current.size > 0 && document.visibilityState !== 'hidden') {
+          playNotificationSound();
+          toast(`📱 ${nuevos.length} nuevo${nuevos.length > 1 ? 's' : ''} lead${nuevos.length > 1 ? 's' : ''} de WhatsApp`, {
+            icon: '🔔', duration: 4000,
+            style: { background: '#0f0f0f', color: '#f5c400', border: '1px solid #f5c400', fontWeight: 700 },
+          });
+        }
+      }
+    },
   });
 
   const { data: resumen } = useQuery({
     queryKey: ['leads-resumen'],
     queryFn: leadsApi.resumen,
-    refetchInterval: 30_000,
+    refetchInterval: 20_000,
   });
 
   const { data: leadDetalle } = useQuery({
@@ -392,7 +466,7 @@ export default function Leads() {
         /* Vista cards en móvil */
         <div>
           {leads.map(lead => (
-            <LeadCard key={lead.id} lead={lead} onClick={() => setSelectedId(lead.id)} />
+            <LeadCard key={lead.id} lead={lead} isNuevo={nuevosIds.has(lead.id)} onClick={() => { setSelectedId(lead.id); marcarVisto(lead.id); }} />
           ))}
         </div>
       ) : (
@@ -435,11 +509,17 @@ export default function Leads() {
             <tbody>
               {leads.map(lead => {
                 const local = lead.localInstalacion || lead.localAsignado;
+                const isNuevo = nuevosIds.has(lead.id);
                 return (
-                  <tr key={lead.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedId(lead.id)}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg)'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}>
-                    <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.telefono}</td>
+                  <tr key={lead.id}
+                    style={{ cursor: 'pointer', background: isNuevo ? '#fff8e1' : '', outline: isNuevo ? '2px solid #f5c400' : 'none', outlineOffset: '-1px' }}
+                    onClick={() => { setSelectedId(lead.id); marcarVisto(lead.id); }}
+                    onMouseEnter={e => { if (!isNuevo) e.currentTarget.style.background = 'var(--color-bg)'; }}
+                    onMouseLeave={e => { if (!isNuevo) e.currentTarget.style.background = ''; }}>
+                    <td style={{ padding: '11px 14px', fontSize: 13 }}>
+                      {isNuevo && <span style={{ background: '#f5c400', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 8, marginRight: 6, letterSpacing: 1 }}>🔔 NUEVO</span>}
+                      {lead.telefono}
+                    </td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.nombreCliente || <span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.medidaDetectada || '—'}</td>
                     <td style={{ padding: '11px 14px' }}><span style={badge(PASO_COLOR[lead.pasoActual] || '#64748b')}>{PASO_LABEL[lead.pasoActual] || lead.pasoActual}</span></td>
