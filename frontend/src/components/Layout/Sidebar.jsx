@@ -7,7 +7,7 @@ const NAV = [
   { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
   { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
   { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
-  { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: '🛞' },
+  { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: null, imgIcon: 'https://llantaland.com/OsoLogoSVG.svg' },
   { section: 'Inventario', to: '/almacenes',     label: 'Almacenes',             icon: '🏪' },
   { section: 'Admin',      to: '/admin/stock',   label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
   { section: 'Admin',      to: '/importar',      label: 'Importar / Actualizar', icon: '📂', adminOnly: true },
@@ -140,7 +140,16 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
                   overflow: 'hidden',
                 })}
               >
-                <span style={{ fontSize: collapsed && !isMobile ? 20 : 16, flexShrink: 0 }}>{l.icon}</span>
+                {l.imgIcon ? (
+                  <img
+                    src={l.imgIcon}
+                    alt=""
+                    style={{ width: collapsed && !isMobile ? 22 : 18, height: collapsed && !isMobile ? 22 : 18, flexShrink: 0, filter: isActive ? 'brightness(0) saturate(100%) invert(82%) sepia(60%) saturate(500%) hue-rotate(360deg) brightness(105%)' : 'brightness(0) invert(1) opacity(0.75)' }}
+                    onError={e => { e.target.style.display='none'; }}
+                  />
+                ) : (
+                  <span style={{ fontSize: collapsed && !isMobile ? 20 : 16, flexShrink: 0 }}>{l.icon}</span>
+                )}
                 {(!collapsed || isMobile) && <span>{l.label}</span>}
               </NavLink>
             ))}
