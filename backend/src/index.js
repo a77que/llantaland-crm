@@ -41,8 +41,11 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   process.env.CORS_EXTRA_ORIGIN,
+  'https://crm.llantaland.com',    // dominio de producción
+  'http://crm.llantaland.com',
   'http://localhost',
   'http://localhost:5173',
+  `http://${process.env.VPS_IP || '161.97.102.3'}`,
 ].filter(Boolean);
 
 app.use(cors({
