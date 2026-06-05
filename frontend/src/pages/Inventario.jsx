@@ -281,6 +281,77 @@ const SORTABLE = {
   descuentoMaximo: 'descuentoMaximo', garantia: 'garantia', sku: 'sku', tipo: 'tipo',
 };
 
+// ── Aplicar valor masivo con input inteligente según campo ────────────────────
+function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambiosMasivos }) {
+  const [campo, setCampo] = useState('grupo');
+  const [valor, setValor] = useState('');
+
+  const editableCols = columnasVisibles.filter(c =>
+    !['medida','marca','stockTotal'].includes(c.key) && !c.key.startsWith('stock_')
+  );
+
+  const colDef = customCols.find(c => c.key === campo);
+  const isGrupo = campo === 'grupo';
+  const isSelectCustom = colDef?.tipo === 'select' && colDef?.opciones?.length > 0;
+  const isBool = colDef?.tipo === 'booleano';
+  const isNum  = colDef?.tipo === 'numero' || ['precioRegular','precioOferta','descuentoMaximo'].includes(campo);
+  const isFecha = colDef?.tipo === 'fecha';
+
+  const aplicar = () => {
+    if (!campo || (!valor && !isBool)) return;
+    setCambiosMasivos(prev => {
+      const next = { ...prev };
+      seleccionados.forEach(id => { next[id] = { ...(next[id]||{}), [campo]: valor }; });
+      return next;
+    });
+    toast.success(`Aplicado a ${seleccionados.length} llantas`);
+    setValor('');
+  };
+
+  const inp = { padding:'6px 10px', borderRadius:6, fontSize:12, border:'1px solid #555', background:'#1a1a1a', color:'#f0ede8' };
+
+  return (
+    <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+      <select value={campo} onChange={e => { setCampo(e.target.value); setValor(''); }} style={{ ...inp }}>
+        {editableCols.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+      </select>
+
+      {/* Input inteligente según el tipo de campo */}
+      {isGrupo ? (
+        <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
+          <option value="">— Elegir —</option>
+          {GRUPO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : isSelectCustom ? (
+        <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
+          <option value="">— Elegir —</option>
+          {colDef.opciones.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : isBool ? (
+        <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:100 }}>
+          <option value="">— Elegir —</option>
+          <option value="Sí">✅ Sí</option>
+          <option value="No">❌ No</option>
+        </select>
+      ) : (
+        <input
+          value={valor} onChange={e => setValor(e.target.value)}
+          type={isNum ? 'number' : isFecha ? 'date' : 'text'}
+          placeholder="Nuevo valor..."
+          style={{ ...inp, width:130 }}
+          onKeyDown={e => { if (e.key === 'Enter') aplicar(); }}
+        />
+      )}
+
+      <button
+        onClick={aplicar}
+        disabled={!campo || (!valor && !isBool)}
+        style={{ padding:'6px 12px', background:'#f5c400', color:'#000', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}
+      >Aplicar</button>
+    </div>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function Inventario() {
   const isMobile = useIsMobile();
@@ -612,30 +683,12 @@ export default function Inventario() {
           </div>
 
           {/* Aplicar campo a seleccionados */}
-          {seleccionados.length > 0 && (
-            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-              <select id="campoMasivo" style={{ padding:'6px 10px', borderRadius:6, fontSize:12, border:'1px solid #555', background:'#1a1a1a', color:'#f0ede8' }}>
-                {columnasVisibles.filter(c => !['medida','marca','stockTotal'].includes(c.key) && !c.key.startsWith('stock_')).map(c => (
-                  <option key={c.key} value={c.key}>{c.label}</option>
-                ))}
-              </select>
-              <input id="valorMasivo" placeholder="Nuevo valor..." style={{ padding:'6px 10px', borderRadius:6, fontSize:12, border:'1px solid #555', background:'#1a1a1a', color:'#f0ede8', width:130 }} />
-              <button
-                onClick={() => {
-                  const campo = document.getElementById('campoMasivo').value;
-                  const valor = document.getElementById('valorMasivo').value;
-                  if (!campo || !valor) return;
-                  setCambiosMasivos(prev => {
-                    const next = { ...prev };
-                    seleccionados.forEach(id => { next[id] = { ...(next[id]||{}), [campo]: valor }; });
-                    return next;
-                  });
-                  toast.success(`"${valor}" aplicado a ${seleccionados.length} llantas`);
-                }}
-                style={{ padding:'6px 12px', background:'#f5c400', color:'#000', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}
-              >Aplicar</button>
-            </div>
-          )}
+          {seleccionados.length > 0 && <MassBulkApply
+            columnasVisibles={columnasVisibles}
+            customCols={customCols}
+            seleccionados={seleccionados}
+            setCambiosMasivos={setCambiosMasivos}
+          />}
 
           {Object.keys(cambiosMasivos).length > 0 && (
             <button

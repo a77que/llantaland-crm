@@ -90,13 +90,24 @@ const listarPrecios = async (req, res, next) => {
       orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
     });
 
+    // Nombres exactos que usa el flujo n8n en MOD | Cruzar Distrito y Stock
+    const STOCK_KEY_MAP = {
+      'L0': 'Stock_L0_Almacen',
+      'L1': 'Stock_L1_SantaAnita',
+      'L2': 'Stock_L2_Surco',
+      'L3': 'Stock_L3_Surquillo',
+      'L4': 'Stock_L4_Miraflores',
+      'L5': 'Stock_L5_PuebloLibre',
+    };
+
     const filas = productos.map(p => {
       const stockPorLocal = {};
       p.stocks.forEach(s => {
-        stockPorLocal[`Stock_${s.sede.codigoLocal}_${s.sede.nombre.replace(/\s+/g, '_')}`] = s.cantidad;
-        // También nombre corto que usa el flujo
-        const key = `Stock_${s.sede.codigoLocal}`;
-        stockPorLocal[key] = s.cantidad;
+        const codigo = s.sede?.codigoLocal || '';
+        const keyN8n = STOCK_KEY_MAP[codigo];
+        if (keyN8n) stockPorLocal[keyN8n] = s.cantidad;
+        // Clave corta por si acaso: Stock_L0, Stock_L1, etc.
+        stockPorLocal[`Stock_${codigo}`] = s.cantidad;
       });
       return {
         SKU: p.sku,
