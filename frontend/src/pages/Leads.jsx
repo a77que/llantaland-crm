@@ -295,14 +295,8 @@ export default function Leads() {
     }
   }, []);
 
-  // Marcar un lead como visto (clic en él)
+  // Marcar un lead como visto (clic en él) — solo quita el badge visual
   const marcarVisto = useCallback((id) => {
-    if (seenIdsRef.current) {
-      seenIdsRef.current.add(id);
-      // Guardar en localStorage (máx 1000 IDs para no crecer indefinidamente)
-      const arr = [...seenIdsRef.current].slice(-1000);
-      localStorage.setItem('leads_seen_ids', JSON.stringify(arr));
-    }
     setNuevosIds(prev => { const next = new Set(prev); next.delete(id); return next; });
   }, []);
 
@@ -350,6 +344,10 @@ export default function Leads() {
 
     const nuevosArr = currentIds.filter(id => !seenIdsRef.current.has(id));
     if (nuevosArr.length > 0) {
+      // Agregar a seenIdsRef inmediatamente para que el próximo poll no los re-detecte
+      nuevosArr.forEach(id => seenIdsRef.current.add(id));
+      localStorage.setItem('leads_seen_ids', JSON.stringify([...seenIdsRef.current].slice(-1000)));
+
       setNuevosIds(prev => {
         const next = new Set(prev);
         nuevosArr.forEach(id => next.add(id));
