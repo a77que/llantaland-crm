@@ -33,11 +33,12 @@ export const authApi = {
 };
 
 export const leadsApi = {
-  listar: (params) => api.get('/leads', { params }),
-  resumen: () => api.get('/leads/resumen'),
-  obtener: (id) => api.get(`/leads/${id}`),
-  obtenerPorTelefono: (tel) => api.get(`/leads/tel/${tel}`),
-  actualizar: (id, data) => api.put(`/leads/${id}`, data),
+  listar:            (params)   => api.get('/leads', { params }),
+  resumen:           ()         => api.get('/leads/resumen'),
+  obtener:           (id)       => api.get(`/leads/${id}`),
+  obtenerPorTelefono:(tel)      => api.get(`/leads/tel/${tel}`),
+  actualizar:        (id, data) => api.put(`/leads/${id}`, data),
+  eliminar:          (id)       => api.delete(`/leads/${id}`),
 };
 
 export const productosApi = {

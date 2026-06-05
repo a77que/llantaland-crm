@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { leadsApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useAuth } from '../hooks/useAuth';
 
 const PASO_OPCIONES = [
   'nuevo','esperando_medida','esperando_version_auto','info_tecnica',
@@ -121,6 +122,7 @@ export default function ClienteDetalle() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const isMobile = useIsMobile();
+  const { isAdmin } = useAuth();
   const [tab, setTab] = useState('info');
   const [editando, setEditando] = useState(false);
 
@@ -134,6 +136,22 @@ export default function ClienteDetalle() {
     onSuccess: () => { toast.success('Cliente actualizado'); setEditando(false); qc.invalidateQueries(['cliente', id]); qc.invalidateQueries(['clientes-lista']); },
     onError: (e) => toast.error(e?.error || 'Error al guardar'),
   });
+
+  const eliminarMut = useMutation({
+    mutationFn: () => leadsApi.eliminar(id),
+    onSuccess: (resp) => {
+      toast.success(resp?.mensaje || 'Cliente eliminado');
+      navigate('/clientes');
+    },
+    onError: (e) => toast.error(e?.error || 'Error al eliminar'),
+  });
+
+  const confirmarEliminar = () => {
+    const nombre = c?.nombreCliente || c?.telefono;
+    if (window.confirm(`⚠️ ¿Eliminar a "${nombre}"?\n\nSus ventas y cotizaciones quedarán sin cliente asignado.\n\nEsta acción no se puede deshacer.`)) {
+      eliminarMut.mutate();
+    }
+  };
 
   if (isLoading) return <div style={{ padding:24, textAlign:'center', color:'var(--color-text-muted)' }}>⏳ Cargando...</div>;
   if (!c)        return <div style={{ padding:24 }}>Cliente no encontrado</div>;
@@ -168,9 +186,21 @@ export default function ClienteDetalle() {
           </div>
         </div>
         {!editando && (
-          <button onClick={()=>setEditando(true)} style={{ padding:'8px 16px', border:'1.5px solid #f5c400', borderRadius:8, background:'#fffbeb', color:'#d4a900', fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0 }}>
-            ✏️ Editar
-          </button>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={()=>setEditando(true)} style={{ padding:'8px 16px', border:'1.5px solid #f5c400', borderRadius:8, background:'#fffbeb', color:'#d4a900', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+              ✏️ Editar
+            </button>
+            {isAdmin && (
+              <button
+                onClick={confirmarEliminar}
+                disabled={eliminarMut.isPending}
+                style={{ padding:'8px 14px', border:'1px solid #fecaca', borderRadius:8, background:'#fef2f2', color:'#dc2626', fontSize:13, fontWeight:700, cursor:'pointer' }}
+                title="Eliminar cliente"
+              >
+                {eliminarMut.isPending ? '⏳' : '🗑️ Eliminar'}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

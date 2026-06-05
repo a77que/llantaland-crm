@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { leadsApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useAuth } from '../hooks/useAuth';
 
 const PASO_LABEL = {
   nuevo:'Nuevo', esperando_medida:'Esperando medida', esperando_version_auto:'Versión auto',
@@ -154,6 +155,8 @@ export default function Clientes() {
     queryFn: leadsApi.resumen,
   });
 
+  const { isAdmin } = useAuth();
+
   const actualizarMut = useMutation({
     mutationFn: ({ id, data }) => leadsApi.actualizar(id, data),
     onSuccess: () => {
@@ -164,6 +167,23 @@ export default function Clientes() {
     },
     onError: (e) => toast.error(e?.error || 'Error al guardar'),
   });
+
+  const eliminarMut = useMutation({
+    mutationFn: (id) => leadsApi.eliminar(id),
+    onSuccess: (resp) => {
+      toast.success(resp?.mensaje || 'Cliente eliminado');
+      qc.invalidateQueries(['clientes-lista']);
+      qc.invalidateQueries(['leads-resumen']);
+    },
+    onError: (e) => toast.error(e?.error || 'Error al eliminar'),
+  });
+
+  const confirmarEliminar = (cliente) => {
+    const nombre = cliente.nombreCliente || cliente.telefono;
+    if (window.confirm(`⚠️ ¿Eliminar a "${nombre}"?\n\nSus ventas y cotizaciones quedarán sin cliente asignado.\n\nEsta acción no se puede deshacer.`)) {
+      eliminarMut.mutate(cliente.id);
+    }
+  };
 
   const clientes = data?.leads || [];
   const total    = data?.total || 0;
@@ -259,7 +279,10 @@ export default function Clientes() {
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => setEditCliente(c)} style={{ flex:1, padding:'6px', border:'1.5px solid #f5c400', borderRadius:7, background:'#fffbeb', color:'#d4a900', fontSize:12, fontWeight:700, cursor:'pointer' }}>✏️ Editar</button>
-                <Link to={`/clientes/${c.id}`} style={{ flex:1, padding:'6px', border:'1px solid var(--color-border)', borderRadius:7, background:'#0f0f0f', color:'#f5c400', fontSize:12, fontWeight:700, textAlign:'center' }}>Ver ficha →</Link>
+                <Link to={`/clientes/${c.id}`} style={{ flex:1, padding:'6px', border:'1px solid var(--color-border)', borderRadius:7, background:'#0f0f0f', color:'#f5c400', fontSize:12, fontWeight:700, textAlign:'center' }}>Ver →</Link>
+                {isAdmin && (
+                  <button onClick={() => confirmarEliminar(c)} style={{ padding:'6px 10px', border:'1px solid #fecaca', borderRadius:7, background:'#fef2f2', color:'#dc2626', fontSize:12, fontWeight:700, cursor:'pointer' }}>🗑️</button>
+                )}
               </div>
             </div>
           ))}
@@ -299,7 +322,10 @@ export default function Clientes() {
                       onClick={() => setEditCliente(c)}
                       style={{ padding:'4px 12px', border:'1.5px solid #f5c400', borderRadius:6, background:'#fffbeb', color:'#d4a900', fontSize:11, fontWeight:700, cursor:'pointer', marginRight:6 }}
                     >✏️ Editar</button>
-                    <Link to={`/clientes/${c.id}`} style={{ padding:'4px 12px', background:'#0f0f0f', color:'#f5c400', borderRadius:6, fontSize:11, fontWeight:700, border:'1px solid #f5c40040' }}>Ver →</Link>
+                    <Link to={`/clientes/${c.id}`} style={{ padding:'4px 12px', background:'#0f0f0f', color:'#f5c400', borderRadius:6, fontSize:11, fontWeight:700, border:'1px solid #f5c40040', marginRight: isAdmin ? 6 : 0 }}>Ver →</Link>
+                    {isAdmin && (
+                      <button onClick={() => confirmarEliminar(c)} style={{ padding:'4px 10px', border:'1px solid #fecaca', borderRadius:6, background:'#fef2f2', color:'#dc2626', fontSize:11, fontWeight:700, cursor:'pointer' }} title="Eliminar cliente">🗑️</button>
+                    )}
                   </td>
                 </tr>
               ))}

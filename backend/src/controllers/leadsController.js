@@ -208,4 +208,31 @@ const resumen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, obtenerPorTelefono, actualizar, resumen };
+const eliminar = async (req, res, next) => {
+  try {
+    const lead = await prisma.leadCRM.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, telefono: true, nombreCliente: true,
+        _count: { select: { ventas: true, cotizaciones: true } } },
+    });
+    if (!lead) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    // Advertir si tiene ventas o cotizaciones
+    const totalRegistros = lead._count.ventas + lead._count.cotizaciones;
+    if (totalRegistros > 0) {
+      // Desvincular ventas y cotizaciones antes de eliminar (SetNull por schema)
+      // El onDelete: SetNull en Venta y Cotizacion ya lo maneja Prisma automáticamente
+    }
+
+    await prisma.leadCRM.delete({ where: { id: req.params.id } });
+    res.json({
+      ok: true,
+      mensaje: `Cliente ${lead.nombreCliente || lead.telefono} eliminado`,
+      registrosAfectados: totalRegistros,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen };
