@@ -144,7 +144,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
                   <img
                     src={l.imgIcon}
                     alt=""
-                    style={{ width: collapsed && !isMobile ? 22 : 18, height: collapsed && !isMobile ? 22 : 18, flexShrink: 0, filter: isActive ? 'brightness(0) saturate(100%) invert(82%) sepia(60%) saturate(500%) hue-rotate(360deg) brightness(105%)' : 'brightness(0) invert(1) opacity(0.75)' }}
+                    style={{ width: collapsed && !isMobile ? 22 : 18, height: collapsed && !isMobile ? 22 : 18, flexShrink: 0, filter: 'brightness(0) invert(1) opacity(0.8)' }}
                     onError={e => { e.target.style.display='none'; }}
                   />
                 ) : (
