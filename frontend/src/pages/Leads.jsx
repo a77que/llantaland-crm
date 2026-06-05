@@ -332,28 +332,29 @@ export default function Leads() {
   const { data, isLoading } = useQuery({
     queryKey: ['leads', { q, paso, ranking, page, sortBy, sortDir }],
     queryFn: () => leadsApi.listar({ q, paso, ranking, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
-    keepPreviousData: true,
+    placeholderData: (prev) => prev,
     refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
-    onSuccess: (newData) => {
-      if (!seenIdsRef.current) return;
-      const nuevos = (newData?.leads || []).filter(l => !seenIdsRef.current.has(l.id));
-      if (nuevos.length > 0) {
-        setNuevosIds(prev => {
-          const next = new Set(prev);
-          nuevos.forEach(l => next.add(l.id));
-          return next;
-        });
-        // Solo sonar si la página está visible y hay leads realmente nuevos (no primera carga)
-        if (seenIdsRef.current.size > 0 && document.visibilityState !== 'hidden') {
-          playNotificationSound();
-          toast(`📱 ${nuevos.length} nuevo${nuevos.length > 1 ? 's' : ''} lead${nuevos.length > 1 ? 's' : ''} de WhatsApp`, {
-            icon: '🔔', duration: 4000,
-            style: { background: '#0f0f0f', color: '#f5c400', border: '1px solid #f5c400', fontWeight: 700 },
-          });
-        }
-      }
-    },
   });
+
+  // Detectar leads nuevos cada vez que llegan datos frescos (onSuccess fue eliminado en RQ v5)
+  useEffect(() => {
+    if (!data || !seenIdsRef.current) return;
+    const nuevos = (data.leads || []).filter(l => !seenIdsRef.current.has(l.id));
+    if (nuevos.length > 0) {
+      setNuevosIds(prev => {
+        const next = new Set(prev);
+        nuevos.forEach(l => next.add(l.id));
+        return next;
+      });
+      if (seenIdsRef.current.size > 0 && document.visibilityState !== 'hidden') {
+        playNotificationSound();
+        toast(`📱 ${nuevos.length} nuevo${nuevos.length > 1 ? 's' : ''} lead${nuevos.length > 1 ? 's' : ''} de WhatsApp`, {
+          icon: '🔔', duration: 4000,
+          style: { background: '#0f0f0f', color: '#f5c400', border: '1px solid #f5c400', fontWeight: 700 },
+        });
+      }
+    }
+  }, [data]);
 
   const { data: resumen } = useQuery({
     queryKey: ['leads-resumen'],
