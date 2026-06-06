@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import BottomNav from './BottomNav';
 import { useIsMobile, useIsTablet } from '../../hooks/useIsMobile';
+import { LeadsNotificationProvider } from '../../context/LeadsNotificationContext';
 
 const PAGE_TITLES = {
   '/': 'Dashboard',
@@ -30,56 +31,58 @@ export default function Layout() {
   const sidebarWidth = isMobile ? 0 : (sidebarCollapsed ? 56 : 240);
 
   return (
-    <div style={{ display: 'flex', minHeight: '100dvh' }}>
+    <LeadsNotificationProvider>
+      <div style={{ display: 'flex', minHeight: '100dvh' }}>
 
-      {/* Overlay drawer móvil */}
-      {isMobile && drawerOpen && (
-        <div
-          onClick={() => setDrawerOpen(false)}
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)',
-            zIndex: 200, backdropFilter: 'blur(2px)',
-          }}
-        />
-      )}
+        {/* Overlay drawer móvil */}
+        {isMobile && drawerOpen && (
+          <div
+            onClick={() => setDrawerOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)',
+              zIndex: 200, backdropFilter: 'blur(2px)',
+            }}
+          />
+        )}
 
-      <Sidebar
-        isMobile={isMobile}
-        isTablet={isTablet && !isMobile}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(c => !c)}
-        drawerOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
-
-      <div style={{
-        marginLeft: isMobile ? 0 : sidebarWidth,
-        flex: 1, display: 'flex', flexDirection: 'column',
-        minWidth: 0,
-        transition: 'margin-left .25s ease',
-      }}>
-        <Topbar
-          title={title}
+        <Sidebar
           isMobile={isMobile}
           isTablet={isTablet && !isMobile}
-          onMenuClick={() => isMobile ? setDrawerOpen(true) : setSidebarCollapsed(c => !c)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+          drawerOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
         />
 
-        <main style={{
-          flex: 1,
-          padding: isMobile ? '14px 12px' : isTablet ? '18px 16px' : '24px',
-          paddingBottom: isMobile
-            ? `calc(var(--bottom-nav-height) + var(--safe-bottom) + 14px)`
-            : '24px',
-          background: 'var(--color-bg)',
-          overflowX: 'hidden',
+        <div style={{
+          marginLeft: isMobile ? 0 : sidebarWidth,
+          flex: 1, display: 'flex', flexDirection: 'column',
+          minWidth: 0,
+          transition: 'margin-left .25s ease',
         }}>
-          <Outlet />
-        </main>
-      </div>
+          <Topbar
+            title={title}
+            isMobile={isMobile}
+            isTablet={isTablet && !isMobile}
+            onMenuClick={() => isMobile ? setDrawerOpen(true) : setSidebarCollapsed(c => !c)}
+          />
 
-      {/* Bottom nav solo en móvil */}
-      {isMobile && <BottomNav />}
-    </div>
+          <main style={{
+            flex: 1,
+            padding: isMobile ? '14px 12px' : isTablet ? '18px 16px' : '24px',
+            paddingBottom: isMobile
+              ? `calc(var(--bottom-nav-height) + var(--safe-bottom) + 14px)`
+              : '24px',
+            background: 'var(--color-bg)',
+            overflowX: 'hidden',
+          }}>
+            <Outlet />
+          </main>
+        </div>
+
+        {/* Bottom nav solo en móvil */}
+        {isMobile && <BottomNav />}
+      </div>
+    </LeadsNotificationProvider>
   );
 }

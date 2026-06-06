@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useLeadsNotification } from '../../context/LeadsNotificationContext';
 
 const NAV = [
   { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
@@ -18,6 +19,7 @@ const NAV = [
 export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollapse, drawerOpen, onClose }) {
   const { usuario, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { count: leadsCount } = useLeadsNotification();
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const links = isAdmin ? NAV : NAV.filter(l => !l.adminOnly);
@@ -149,9 +151,39 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
                     onError={e => { e.target.style.display='none'; }}
                   />
                 ) : (
-                  <span style={{ fontSize: collapsed && !isMobile ? 20 : 16, flexShrink: 0 }}>{l.icon}</span>
+                  <span style={{ position: 'relative', fontSize: collapsed && !isMobile ? 20 : 16, flexShrink: 0 }}>
+                    {l.icon}
+                    {l.to === '/leads' && leadsCount > 0 && collapsed && !isMobile && (
+                      <span style={{
+                        position: 'absolute', top: -5, right: -8,
+                        background: '#ef4444', color: '#fff',
+                        borderRadius: '50%', minWidth: 15, height: 15,
+                        fontSize: 9, fontWeight: 800, lineHeight: 1,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        animation: 'pulse 1.5s infinite',
+                      }}>
+                        {leadsCount > 9 ? '9+' : leadsCount}
+                      </span>
+                    )}
+                  </span>
                 )}
-                {(!collapsed || isMobile) && <span>{l.label}</span>}
+                {(!collapsed || isMobile) && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.label}</span>
+                    {l.to === '/leads' && leadsCount > 0 && (
+                      <span style={{
+                        background: '#ef4444', color: '#fff',
+                        borderRadius: 10, minWidth: 18, height: 18,
+                        fontSize: 10, fontWeight: 800, lineHeight: 1,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '0 4px', flexShrink: 0,
+                        animation: 'pulse 1.5s infinite',
+                      }}>
+                        {leadsCount}
+                      </span>
+                    )}
+                  </span>
+                )}
               </NavLink>
             ))}
           </div>

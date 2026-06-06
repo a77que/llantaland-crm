@@ -1,34 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { leadsApi, cotizacionesApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
-
-// ── Sonido de notificación con Web Audio API ──────────────────────────────────
-function playNotificationSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Acorde de dos tonos: primera nota + segunda nota
-    const notas = [
-      { freq: 880, start: 0,   dur: 0.15 },
-      { freq: 1320, start: 0.15, dur: 0.2  },
-    ];
-    notas.forEach(({ freq, start, dur }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-      gain.gain.setValueAtTime(0, ctx.currentTime + start);
-      gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur + 0.05);
-    });
-  } catch { /* silencia si el navegador no soporta AudioContext */ }
-}
+import { useLeadsNotification } from '../context/LeadsNotificationContext';
 
 // Columnas ordenables en Leads
 const SORTABLE_LEADS = {
@@ -284,33 +260,8 @@ export default function Leads() {
 
   const [selectedId, setSelectedId] = useState(null);
 
-  // Inicialización síncrona desde localStorage — evita race condition con React Query
-  const [nuevosIds, setNuevosIds] = useState(() => {
-    try {
-      const unread = JSON.parse(localStorage.getItem('leads_unread_ids') || '[]');
-      return new Set(unread);
-    } catch { return new Set(); }
-  });
-
-  // seenIds inicializado síncronamente — si data llega antes del useEffect no hay null
-  const seenIdsRef = useRef(
-    (() => {
-      try {
-        const seen = JSON.parse(localStorage.getItem('leads_seen_ids') || '[]');
-        return new Set(seen);
-      } catch { return new Set(); }
-    })()
-  );
-
-  // Al hacer clic: quita el badge Y lo borra de localStorage unread
-  const marcarVisto = useCallback((id) => {
-    setNuevosIds(prev => {
-      const next = new Set(prev);
-      next.delete(id);
-      localStorage.setItem('leads_unread_ids', JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
+  // Notificaciones globales — estado compartido con Sidebar y BottomNav
+  const { nuevosIds, marcarVisto } = useLeadsNotification();
 
   const setParam = (key, val) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
@@ -341,42 +292,6 @@ export default function Leads() {
     placeholderData: (prev) => prev,
     refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
   });
-
-  // Detectar leads nuevos cada vez que llegan datos frescos (onSuccess fue eliminado en RQ v5)
-  useEffect(() => {
-    if (!data || !seenIdsRef.current) return;
-    const currentIds = (data.leads || []).map(l => l.id);
-
-    // Primera visita (localStorage vacío) → tomar todos como línea base, sin marcar NUEVO
-    if (seenIdsRef.current.size === 0 && currentIds.length > 0) {
-      currentIds.forEach(id => seenIdsRef.current.add(id));
-      localStorage.setItem('leads_seen_ids', JSON.stringify(currentIds.slice(-1000)));
-      return;
-    }
-
-    const nuevosArr = currentIds.filter(id => !seenIdsRef.current.has(id));
-    if (nuevosArr.length > 0) {
-      // Marcar como notificados → no volver a sonar en próximos polls
-      nuevosArr.forEach(id => seenIdsRef.current.add(id));
-      localStorage.setItem('leads_seen_ids', JSON.stringify([...seenIdsRef.current].slice(-1000)));
-
-      // Agregar a unread → badge amarillo persiste hasta que el vendedor haga clic
-      setNuevosIds(prev => {
-        const next = new Set(prev);
-        nuevosArr.forEach(id => next.add(id));
-        localStorage.setItem('leads_unread_ids', JSON.stringify([...next]));
-        return next;
-      });
-
-      if (document.visibilityState !== 'hidden') {
-        playNotificationSound();
-        toast(`📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de WhatsApp`, {
-          icon: '🔔', duration: 4000,
-          style: { background: '#0f0f0f', color: '#f5c400', border: '1px solid #f5c400', fontWeight: 700 },
-        });
-      }
-    }
-  }, [data]);
 
   const { data: resumen } = useQuery({
     queryKey: ['leads-resumen'],
