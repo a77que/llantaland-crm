@@ -110,7 +110,7 @@ export function CitasNotificationProvider({ children }) {
 
     if (document.hidden && Notification.permission === 'granted') {
       try {
-        new Notification('📅 Nueva cita WhatsApp', {
+        new Notification('📅 Nueva cita registrada', {
           body: `${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} registrada${nuevasArr.length > 1 ? 's' : ''}`,
           icon: '/OsoLogoSVG.svg',
           tag: 'cita-nueva',

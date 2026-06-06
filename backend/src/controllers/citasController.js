@@ -3,17 +3,16 @@ const prisma = new PrismaClient();
 
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
 const CITAS_PASOS = [
-  'lima_lista',            // eligió Lima, viendo lista de locales
-  'esperando_datos_cliente', // ya eligió local o provincia, dando sus datos
-  'esperando_confirmacion',  // datos dados, esperando confirmación final
-  'completado',              // flujo completo
+  'lima_lista',
+  'esperando_datos_cliente',
+  'esperando_confirmacion',
+  'completado',
 ];
 
-// Calcular stock en el local elegido a partir de los JSON del lead
 function stockEnLocalElegido(lead) {
   const local =
     (lead.localInstalacion && typeof lead.localInstalacion === 'object' ? lead.localInstalacion : null) ||
-    (lead.localAsignado   && typeof lead.localAsignado   === 'object' ? lead.localAsignado   : null);
+    (lead.localAsignado    && typeof lead.localAsignado    === 'object' ? lead.localAsignado    : null);
 
   const codigo = local?.codigoLocal || local?.codigo_local || local?.local_codigo || null;
   if (!codigo || !lead.stockMap || typeof lead.stockMap !== 'object') return null;
@@ -62,28 +61,56 @@ const listar = async (req, res, next) => {
           localInstalacion: true, localAsignado: true, stockMap: true,
           tipoServicio: true, fechaCita: true,
           marcaAuto: true, modeloAuto: true, anioAuto: true,
+          _count: { select: { cotizaciones: true, ventas: true } },
+          cotizaciones: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true, numero: true, estado: true,
+              precioUnit: true, precioTotal: true, cantidad: true,
+              medidaLlanta: true, marcaLlanta: true, modeloLlanta: true,
+              nombreCliente: true, dniCe: true,
+              createdAt: true,
+            },
+          },
         },
       }),
       prisma.leadCRM.count({ where }),
     ]);
 
-    // Añadir info de stock en local elegido
-    const citasConStock = leads.map(l => ({
-      ...l,
-      stockEnLocal: stockEnLocalElegido(l),
-      localElegido:
-        (l.localInstalacion && typeof l.localInstalacion === 'object' ? l.localInstalacion : null) ||
-        (l.localAsignado   && typeof l.localAsignado   === 'object' ? l.localAsignado   : null) ||
-        null,
-    }));
+    const citasConInfo = leads.map(l => {
+      const cotReciente = l.cotizaciones?.[0] || null;
+      const tieneCot    = (l._count?.cotizaciones || 0) > 0;
 
-    res.json({ citas: citasConStock, total, page: parseInt(page), limit: take });
+      const localElegido =
+        (l.localInstalacion && typeof l.localInstalacion === 'object' ? l.localInstalacion : null) ||
+        (l.localAsignado    && typeof l.localAsignado    === 'object' ? l.localAsignado    : null) ||
+        null;
+
+      // Precio: desde cotización si existe, si no desde el lead
+      const precioUnit  = cotReciente ? parseFloat(cotReciente.precioUnit  || 0) : (l.precioLlanta  ? parseFloat(l.precioLlanta) : null);
+      const cantidad    = cotReciente ? (cotReciente.cantidad  || 1)              : (l.cantidadLlantas || 1);
+      const precioTotal = cotReciente ? parseFloat(cotReciente.precioTotal || 0)  : (precioUnit ? precioUnit * cantidad : null);
+
+      return {
+        ...l,
+        stockEnLocal: stockEnLocalElegido(l),
+        localElegido,
+        tipoVenta: tieneCot ? 'CRM' : 'WhatsApp',
+        cotizacion: cotReciente,
+        precioUnitCalc:  precioUnit,
+        cantidadCalc:    cantidad,
+        precioTotalCalc: precioTotal,
+      };
+    });
+
+    res.json({ citas: citasConInfo, total, page: parseInt(page), limit: take });
   } catch (err) {
     next(err);
   }
 };
 
-// Para el polling de notificaciones: sólo IDs y timestamps
+// Polling ligero para notificaciones
 const poll = async (req, res, next) => {
   try {
     const citas = await prisma.leadCRM.findMany({

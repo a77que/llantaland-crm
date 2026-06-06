@@ -10,6 +10,7 @@ import { CitasNotificationProvider } from '../../context/CitasNotificationContex
 const PAGE_TITLES = {
   '/': 'Dashboard',
   '/leads': 'Leads WhatsApp',
+  '/citas': 'Citas',
   '/inventario': 'Inventario',
   '/ventas': 'Ventas',
   '/facturacion': 'Facturación',

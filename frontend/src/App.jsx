@@ -16,6 +16,7 @@ import Citas from './pages/Citas';
 import Clientes from './pages/Clientes';
 import ClienteDetalle from './pages/ClienteDetalle';
 import Cotizaciones from './pages/Cotizaciones';
+import CotizacionDetalle from './pages/CotizacionDetalle';
 import Ventas from './pages/Ventas';
 import VentaDetalle from './pages/VentaDetalle';
 import Facturacion from './pages/Facturacion';
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="clientes" element={<Clientes />} />
             <Route path="clientes/:id" element={<ClienteDetalle />} />
             <Route path="cotizaciones" element={<Cotizaciones />} />
+            <Route path="cotizaciones/:id" element={<CotizacionDetalle />} />
             <Route path="ventas" element={<Ventas />} />
             <Route path="ventas/:id" element={<VentaDetalle />} />
             <Route path="inventario" element={<Inventario />} />

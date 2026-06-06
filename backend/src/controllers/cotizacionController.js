@@ -88,28 +88,61 @@ const crear = async (req, res, next) => {
       };
     }
 
-    const cot = await prisma.cotizacion.create({
-      data: {
-        numero,
-        leadId:          leadId || null,
-        usuarioId:       req.usuario.id,
-        nombreCliente:   nombreCliente   || leadData.nombreCliente   || null,
-        dniCe:           dniCe           || leadData.dniCe           || null,
-        telefonoCliente: telefonoCliente || leadData.telefonoCliente || null,
-        marcaAuto:       marcaAuto       || leadData.marcaAuto       || null,
-        modeloAuto:      modeloAuto      || leadData.modeloAuto      || null,
-        anioAuto:        anioAuto ? parseInt(anioAuto) : (leadData.anioAuto || null),
-        medidaLlanta:    medidaLlanta    || leadData.medidaLlanta    || null,
-        marcaLlanta:     marcaLlanta     || leadData.marcaLlanta     || null,
-        modeloLlanta:    modeloLlanta    || leadData.modeloLlanta    || null,
-        cantidad: qty, precioUnit: pUnit,
-        descuento: desc > 0 ? desc : null,
-        precioTotal: total,
-        notas: notas || null,
-        estado: 'BORRADOR',
-      },
-      include: { usuario: { select: { nombre: true } } },
+    const finalNombre    = nombreCliente   || leadData.nombreCliente   || null;
+    const finalDni       = dniCe           || leadData.dniCe           || null;
+    const finalTelefono  = telefonoCliente || leadData.telefonoCliente || null;
+    const finalMarcaAuto = marcaAuto       || leadData.marcaAuto       || null;
+    const finalModeloAuto= modeloAuto      || leadData.modeloAuto      || null;
+    const finalAnioAuto  = anioAuto ? parseInt(anioAuto) : (leadData.anioAuto || null);
+    const finalMedida    = medidaLlanta    || leadData.medidaLlanta    || null;
+    const finalMarca     = marcaLlanta     || leadData.marcaLlanta     || null;
+    const finalModelo    = modeloLlanta    || leadData.modeloLlanta    || null;
+
+    const cot = await prisma.$transaction(async (tx) => {
+      const c = await tx.cotizacion.create({
+        data: {
+          numero,
+          leadId:          leadId || null,
+          usuarioId:       req.usuario.id,
+          nombreCliente:   finalNombre,
+          dniCe:           finalDni,
+          telefonoCliente: finalTelefono,
+          marcaAuto:       finalMarcaAuto,
+          modeloAuto:      finalModeloAuto,
+          anioAuto:        finalAnioAuto,
+          medidaLlanta:    finalMedida,
+          marcaLlanta:     finalMarca,
+          modeloLlanta:    finalModelo,
+          cantidad: qty, precioUnit: pUnit,
+          descuento: desc > 0 ? desc : null,
+          precioTotal: total,
+          notas: notas || null,
+          estado: 'BORRADOR',
+        },
+        include: { usuario: { select: { nombre: true } } },
+      });
+
+      // Sincronizar datos al lead cuando la cotización viene de un lead de WhatsApp
+      if (leadId) {
+        const updateData = {};
+        if (finalNombre)     updateData.nombreCliente   = finalNombre;
+        if (finalDni)        updateData.dniCe           = finalDni;
+        if (finalMarcaAuto)  updateData.marcaAuto       = finalMarcaAuto;
+        if (finalModeloAuto) updateData.modeloAuto      = finalModeloAuto;
+        if (finalAnioAuto)   updateData.anioAuto        = finalAnioAuto;
+        if (finalMedida)     updateData.medidaDetectada = finalMedida;
+        if (finalMarca)      updateData.marcaLlanta     = finalMarca;
+        if (finalModelo)     updateData.modeloLlanta    = finalModelo;
+        if (pUnit > 0)       updateData.precioLlanta    = pUnit;
+        if (qty > 0)         updateData.cantidadLlantas = qty;
+        if (Object.keys(updateData).length > 0) {
+          await tx.leadCRM.update({ where: { id: leadId }, data: updateData });
+        }
+      }
+
+      return c;
     });
+
     res.status(201).json(cot);
   } catch (err) { next(err); }
 };
@@ -118,19 +151,48 @@ const actualizar = async (req, res, next) => {
   try {
     const { cantidad, precioUnit, descuento, ...rest } = req.body;
     const data = { ...rest };
-    if (cantidad !== undefined) data.cantidad = parseInt(cantidad);
+    if (cantidad   !== undefined) data.cantidad   = parseInt(cantidad);
     if (precioUnit !== undefined) data.precioUnit = parseFloat(precioUnit);
-    if (descuento !== undefined) data.descuento = parseFloat(descuento) || null;
-    // Recalcular total si cambian precio/cantidad
-    const cot = await prisma.cotizacion.findUnique({ where: { id: req.params.id }, select: { cantidad: true, precioUnit: true, descuento: true } });
+    if (descuento  !== undefined) data.descuento  = parseFloat(descuento) || null;
+
+    const cot = await prisma.cotizacion.findUnique({
+      where: { id: req.params.id },
+      select: { cantidad: true, precioUnit: true, descuento: true, leadId: true,
+                medidaLlanta: true, marcaLlanta: true, modeloLlanta: true,
+                nombreCliente: true, dniCe: true, marcaAuto: true, modeloAuto: true, anioAuto: true },
+    });
     if (cot) {
-      const qty  = data.cantidad   ?? cot.cantidad;
+      const qty   = data.cantidad   ?? cot.cantidad;
       const pUnit = data.precioUnit ?? parseFloat(cot.precioUnit);
       const disc  = data.descuento  ?? (cot.descuento ? parseFloat(cot.descuento) : 0);
       data.precioTotal = Math.max(0, pUnit * qty - disc);
     }
 
     const updated = await prisma.cotizacion.update({ where: { id: req.params.id }, data });
+
+    // Cuando se confirma/acepta una cotización vinculada a un lead: sincronizar datos
+    if (cot?.leadId && (data.estado === 'ACEPTADA' || data.estado === 'ENVIADA')) {
+      const syncData = {};
+      const medida = data.medidaLlanta || cot.medidaLlanta;
+      const marca  = data.marcaLlanta  || cot.marcaLlanta;
+      const modelo = data.modeloLlanta || cot.modeloLlanta;
+      const nombre = data.nombreCliente|| cot.nombreCliente;
+      const dni    = data.dniCe        || cot.dniCe;
+      const pUnit  = parseFloat(data.precioUnit ?? cot.precioUnit ?? 0);
+      const qty    = parseInt(data.cantidad ?? cot.cantidad ?? 1);
+      if (medida) syncData.medidaDetectada = medida;
+      if (marca)  syncData.marcaLlanta     = marca;
+      if (modelo) syncData.modeloLlanta    = modelo;
+      if (nombre) syncData.nombreCliente   = nombre;
+      if (dni)    syncData.dniCe           = dni;
+      if (pUnit > 0) syncData.precioLlanta    = pUnit;
+      if (qty > 0)   syncData.cantidadLlantas = qty;
+      if (data.estado === 'ACEPTADA') syncData.ranking = 'caliente';
+      if (Object.keys(syncData).length > 0) {
+        await prisma.leadCRM.update({ where: { id: cot.leadId }, data: syncData });
+      }
+    }
+
     res.json(updated);
   } catch (err) { next(err); }
 };
