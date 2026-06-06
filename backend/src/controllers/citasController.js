@@ -4,20 +4,30 @@ const prisma = new PrismaClient();
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
 const CITAS_PASOS = [
   'lima_lista',
+  'esperando_eleccion_b',
+  'esperando_local_destino',
   'esperando_datos_cliente',
   'esperando_confirmacion',
   'completado',
 ];
 
+function parseJsonField(v) {
+  if (!v) return null;
+  if (typeof v === 'object') return v;
+  try { return JSON.parse(v); } catch { return null; }
+}
+
 function stockEnLocalElegido(lead) {
   const local =
-    (lead.localInstalacion && typeof lead.localInstalacion === 'object' ? lead.localInstalacion : null) ||
-    (lead.localAsignado    && typeof lead.localAsignado    === 'object' ? lead.localAsignado    : null);
+    parseJsonField(lead.localInstalacion) ||
+    parseJsonField(lead.localAsignado);
 
-  const codigo = local?.codigoLocal || local?.codigo_local || local?.local_codigo || null;
+  // listarLocales devuelve { ID, Nombre, ... } — probar 'ID' primero, luego variantes camelCase
+  const codigo = local?.ID || local?.codigoLocal || local?.codigo_local || local?.local_codigo || null;
   if (!codigo || !lead.stockMap || typeof lead.stockMap !== 'object') return null;
 
-  const qty = lead.stockMap[codigo];
+  // listarPrecios guarda Stock_L1_SantaAnita y también Stock_L1 (clave corta)
+  const qty = lead.stockMap[`Stock_${codigo}`] ?? lead.stockMap[codigo];
   return qty !== undefined ? Number(qty) : null;
 }
 
@@ -82,10 +92,7 @@ const listar = async (req, res, next) => {
       const cotReciente = l.cotizaciones?.[0] || null;
       const tieneCot    = (l._count?.cotizaciones || 0) > 0;
 
-      const localElegido =
-        (l.localInstalacion && typeof l.localInstalacion === 'object' ? l.localInstalacion : null) ||
-        (l.localAsignado    && typeof l.localAsignado    === 'object' ? l.localAsignado    : null) ||
-        null;
+      const localElegido = parseJsonField(l.localInstalacion) || parseJsonField(l.localAsignado) || null;
 
       // Precio: desde cotización si existe, si no desde el lead
       const precioUnit  = cotReciente ? parseFloat(cotReciente.precioUnit  || 0) : (l.precioLlanta  ? parseFloat(l.precioLlanta) : null);

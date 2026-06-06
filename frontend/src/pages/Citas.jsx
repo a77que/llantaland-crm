@@ -299,8 +299,8 @@ export default function Citas() {
             <tbody>
               {citas.map((c, i) => {
                 const esNueva      = nuevasIds.has(c.id);
-                const localNombre  = c.localElegido?.nombre || c.localElegido?.nombre_local || null;
-                const localDir     = c.localElegido?.direccion || c.localElegido?.direccion_local || null;
+                const localNombre  = c.localElegido?.Nombre || c.localElegido?.nombre || c.localElegido?.nombre_local || null;
+                const localDir     = c.localElegido?.Direccion || c.localElegido?.direccion || c.localElegido?.direccion_local || null;
                 const rk           = RANKING_STYLE[c.ranking];
 
                 return (
