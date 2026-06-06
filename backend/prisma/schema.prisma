@@ -90,6 +90,7 @@ enum PasoLead {
   esperando_version_auto
   info_tecnica
   esperando_datos_cliente
+  esperando_eleccion_marca
   esperando_eleccion_llanta
   esperando_distrito
   esperando_eleccion_b
@@ -97,6 +98,7 @@ enum PasoLead {
   esperando_confirmacion
   completado
   opt_out
+  sin_stock
 }
 
 // Ranking de lead (calidad de la oportunidad)
