@@ -539,8 +539,8 @@ export default function Inventario() {
         <div style={{ overflowX:'auto', borderRadius:10, boxShadow:'var(--shadow)', border:'1px solid var(--color-border)' }}>
           <table style={{ borderCollapse:'collapse', background:'var(--color-surface)', fontSize:12.5, minWidth: columnasVisibles.length * 110 }}>
             <thead>
-              <tr style={{ background:'var(--color-primary)' }}>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'#f5c400', whiteSpace:'nowrap', position:'sticky', left:0, background:'var(--color-primary)', zIndex:2, minWidth: modoEdicion ? 50 : 100 }}>
+              <tr style={{ background:'#1a2234' }}>
+                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'#f5c400', whiteSpace:'nowrap', position:'sticky', left:0, background:'#1a2234', zIndex:2, minWidth: modoEdicion ? 50 : 100, letterSpacing:.5, textTransform:'uppercase' }}>
                   {modoEdicion ? (
                     <input type="checkbox"
                       checked={seleccionados.length === productos.length && productos.length > 0}
@@ -554,24 +554,26 @@ export default function Inventario() {
                   const isSortable = !!SORTABLE[col.key];
                   const isActive   = sortBy === SORTABLE[col.key];
                   const icon = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : (isSortable ? ' ⇅' : '');
+                  const groupColors = { Precios:'#34d399', Técnico:'#a78bfa', Stock:'#60a5fa', Producto:'rgba(255,255,255,.75)', Personalizado:'#fb923c' };
+                  const groupColor = groupColors[col.group] || 'rgba(255,255,255,.75)';
                   return (
                     <th
                       key={col.key}
                       onClick={() => handleSort(col.key)}
                       style={{
                         padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700,
-                        color: isActive ? '#f5c400' : 'rgba(255,255,255,.85)',
+                        color: isActive ? '#f5c400' : groupColor,
                         whiteSpace:'nowrap', textTransform:'uppercase', letterSpacing:.5,
-                        borderLeft:'1px solid rgba(255,255,255,.1)',
+                        borderLeft:'1px solid rgba(255,255,255,.08)',
                         cursor: isSortable ? 'pointer' : 'default',
                         userSelect:'none',
-                        background: isActive ? 'rgba(245,196,0,.15)' : undefined,
+                        background: isActive ? 'rgba(245,196,0,.12)' : undefined,
                         transition:'background .15s',
                       }}
-                      title={isSortable ? `Ordenar por ${col.label}` : undefined}
+                      title={isSortable ? `Ordenar por ${col.label}` : col.group}
                     >
                       {col.label}
-                      <span style={{ opacity: isActive ? 1 : 0.4, fontSize:10 }}>{icon}</span>
+                      <span style={{ opacity: isActive ? 1 : 0.5, fontSize:10 }}>{icon}</span>
                     </th>
                   );
                 })}
@@ -591,7 +593,7 @@ export default function Inventario() {
                           style={{ width:16, height:16, accentColor:'#f5c400', cursor:'pointer' }}
                         />
                       ) : (
-                        <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'4px 10px', background:'#0f0f0f', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c40050' }}>
+                        <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'4px 10px', background:'#1a2234', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c400', display:'inline-block' }}>
                           Ver →
                         </Link>
                       )}
