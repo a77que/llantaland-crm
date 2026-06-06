@@ -78,6 +78,23 @@ export function LeadsNotificationProvider({ children }) {
   useEffect(() => {
     if (!data || !seenIdsRef.current) return;
     const currentIds = (data.leads || []).map(l => l.id);
+    const currentSet = new Set(currentIds);
+    const pasoMap    = new Map((data.leads || []).map(l => [l.id, l.pasoActual]));
+
+    // Auto-reconciliar: quitar badge de leads que ya no están en paso "nuevo"
+    // (fueron atendidos) o que ya no aparecen en los resultados (eliminados/viejos)
+    setNuevosIds(prev => {
+      if (prev.size === 0) return prev;
+      const reconciled = new Set([...prev].filter(id => {
+        if (!currentSet.has(id)) return false;        // no existe en resultados → limpiar
+        return pasoMap.get(id) === 'nuevo';           // atendido → limpiar
+      }));
+      if (reconciled.size !== prev.size) {
+        localStorage.setItem('leads_unread_ids', JSON.stringify([...reconciled]));
+        return reconciled;
+      }
+      return prev;
+    });
 
     // Primera visita: tomar todos como línea base sin notificar
     if (seenIdsRef.current.size === 0 && currentIds.length > 0) {
