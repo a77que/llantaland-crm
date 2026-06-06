@@ -83,24 +83,6 @@ enum OrigenWebhook {
   API_EXTERNA
 }
 
-// Pasos del flujo WhatsApp (replica Paso_Actual del sheet CRM)
-enum PasoLead {
-  nuevo
-  esperando_medida
-  esperando_version_auto
-  info_tecnica
-  esperando_datos_cliente
-  esperando_eleccion_marca
-  esperando_eleccion_llanta
-  esperando_distrito
-  esperando_eleccion_b
-  esperando_local_destino
-  esperando_confirmacion
-  completado
-  opt_out
-  sin_stock
-}
-
 // Ranking de lead (calidad de la oportunidad)
 enum RankingLead {
   caliente
@@ -259,7 +241,7 @@ model LeadCRM {
   anioAuto               Int?
 
   // Estado del flujo
-  pasoActual             PasoLead    @default(nuevo)
+  pasoActual             String      @default("nuevo")
   intentosMedida         Int         @default(0)
   emailSeguimientoEnviado Boolean    @default(false)
   hashMensaje            String?     // deduplicación
