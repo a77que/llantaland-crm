@@ -136,6 +136,9 @@ const listarPrecios = async (req, res, next) => {
         Precio_Oferta: p.precioOferta ? parseFloat(p.precioOferta) : null,
         Stock: p.stocks.reduce((sum, s) => sum + s.cantidad, 0),
         Imagen: p.imagenUrl || '',
+        Ficha_Tecnica: p.fichaTecnica || '',
+        Garantia: p.garantia || '',
+        Descuento_Maximo: p.descuentoMaximo ? parseFloat(p.descuentoMaximo) : 0,
         ...stockPorLocal,
       };
     });
