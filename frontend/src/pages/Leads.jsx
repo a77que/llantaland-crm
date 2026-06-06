@@ -283,22 +283,24 @@ export default function Leads() {
   const sortDir = searchParams.get('sortDir') || 'desc';
 
   const [selectedId, setSelectedId] = useState(null);
-  const [nuevosIds, setNuevosIds] = useState(new Set());
-  const seenIdsRef = useRef(null); // IDs ya notificados (no volver a sonar)
 
-  // Dos claves separadas:
-  //   leads_seen_ids  → IDs que ya sonaron (no re-notificar)
-  //   leads_unread_ids → IDs con badge amarillo (persiste hasta que el vendedor haga clic)
-  useEffect(() => {
+  // Inicialización síncrona desde localStorage — evita race condition con React Query
+  const [nuevosIds, setNuevosIds] = useState(() => {
     try {
-      const seen   = JSON.parse(localStorage.getItem('leads_seen_ids')   || '[]');
       const unread = JSON.parse(localStorage.getItem('leads_unread_ids') || '[]');
-      seenIdsRef.current = new Set(seen);
-      if (unread.length > 0) setNuevosIds(new Set(unread));
-    } catch {
-      seenIdsRef.current = new Set();
-    }
-  }, []);
+      return new Set(unread);
+    } catch { return new Set(); }
+  });
+
+  // seenIds inicializado síncronamente — si data llega antes del useEffect no hay null
+  const seenIdsRef = useRef(
+    (() => {
+      try {
+        const seen = JSON.parse(localStorage.getItem('leads_seen_ids') || '[]');
+        return new Set(seen);
+      } catch { return new Set(); }
+    })()
+  );
 
   // Al hacer clic: quita el badge Y lo borra de localStorage unread
   const marcarVisto = useCallback((id) => {
