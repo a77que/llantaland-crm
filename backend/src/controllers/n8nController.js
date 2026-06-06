@@ -457,7 +457,7 @@ function mapSheetToLead(body) {
   if (body.Paso_Actual !== undefined) data.pasoActual = body.Paso_Actual;
   if (body.Medida_Detectada !== undefined) data.medidaDetectada = body.Medida_Detectada;
   if (body.Precio !== undefined) data.precioLlanta = body.Precio ? parseFloat(body.Precio) : null;
-  if (body.Ranking !== undefined) data.ranking = body.Ranking;
+  if (body.Ranking !== undefined) data.ranking = body.Ranking || null;
   if (body.Tipo_Servicio !== undefined) data.tipoServicio = body.Tipo_Servicio;
   if (body.Local_Asignado !== undefined) data.localAsignado = parseJson(body.Local_Asignado);
   if (body.Local_Instalacion !== undefined) data.localInstalacion = parseJson(body.Local_Instalacion);
