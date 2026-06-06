@@ -2,10 +2,12 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useLeadsNotification } from '../../context/LeadsNotificationContext';
+import { useCitasNotification } from '../../context/CitasNotificationContext';
 
 const NAV = [
   { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
   { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
+  { section: 'WhatsApp',   to: '/citas',         label: 'Citas',                 icon: '📅' },
   { section: 'WhatsApp',   to: '/clientes',      label: 'Clientes',              icon: '👥' },
   { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
   { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
@@ -20,6 +22,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
   const { usuario, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { count: leadsCount } = useLeadsNotification();
+  const { count: citasCount } = useCitasNotification();
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const links = isAdmin ? NAV : NAV.filter(l => !l.adminOnly);
@@ -165,6 +168,18 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
                         {leadsCount > 9 ? '9+' : leadsCount}
                       </span>
                     )}
+                    {l.to === '/citas' && citasCount > 0 && collapsed && !isMobile && (
+                      <span style={{
+                        position: 'absolute', top: -5, right: -8,
+                        background: '#22c55e', color: '#000',
+                        borderRadius: '50%', minWidth: 15, height: 15,
+                        fontSize: 9, fontWeight: 800, lineHeight: 1,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        animation: 'pulse 1.5s infinite',
+                      }}>
+                        {citasCount > 9 ? '9+' : citasCount}
+                      </span>
+                    )}
                   </span>
                 )}
                 {(!collapsed || isMobile) && (
@@ -180,6 +195,18 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
                         animation: 'pulse 1.5s infinite',
                       }}>
                         {leadsCount}
+                      </span>
+                    )}
+                    {l.to === '/citas' && citasCount > 0 && (
+                      <span style={{
+                        background: '#22c55e', color: '#000',
+                        borderRadius: 10, minWidth: 18, height: 18,
+                        fontSize: 10, fontWeight: 800, lineHeight: 1,
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '0 4px', flexShrink: 0,
+                        animation: 'pulse 1.5s infinite',
+                      }}>
+                        {citasCount}
                       </span>
                     )}
                   </span>

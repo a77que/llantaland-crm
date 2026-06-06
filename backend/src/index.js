@@ -32,6 +32,7 @@ const sunatRoutes = require('./routes/sunat');
 const adminRoutes = require('./routes/admin');
 const n8nRoutes = require('./routes/n8n');
 const leadsRoutes = require('./routes/leads');
+const citasRoutes = require('./routes/citas');
 const importarRoutes = require('./routes/importar');
 const { errorHandler } = require('./middleware/errorHandler');
 
@@ -76,6 +77,7 @@ app.use('/api/sunat', sunatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/n8n', n8nRoutes);
 app.use('/api/leads', leadsRoutes);
+app.use('/api/citas', citasRoutes);
 app.use('/api/importar', importarRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));

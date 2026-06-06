@@ -5,6 +5,7 @@ import Topbar from './Topbar';
 import BottomNav from './BottomNav';
 import { useIsMobile, useIsTablet } from '../../hooks/useIsMobile';
 import { LeadsNotificationProvider } from '../../context/LeadsNotificationContext';
+import { CitasNotificationProvider } from '../../context/CitasNotificationContext';
 
 const PAGE_TITLES = {
   '/': 'Dashboard',
@@ -32,6 +33,7 @@ export default function Layout() {
 
   return (
     <LeadsNotificationProvider>
+    <CitasNotificationProvider>
       <div style={{ display: 'flex', minHeight: '100dvh' }}>
 
         {/* Overlay drawer móvil */}
@@ -83,6 +85,7 @@ export default function Layout() {
         {/* Bottom nav solo en móvil */}
         {isMobile && <BottomNav />}
       </div>
+    </CitasNotificationProvider>
     </LeadsNotificationProvider>
   );
 }

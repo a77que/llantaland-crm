@@ -2,18 +2,20 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useLeadsNotification } from '../../context/LeadsNotificationContext';
+import { useCitasNotification } from '../../context/CitasNotificationContext';
 
 const TABS = [
   { to: '/',             icon: '📊', label: 'Inicio',  exact: true },
   { to: '/leads',        icon: '📱', label: 'Leads'           },
+  { to: '/citas',        icon: '📅', label: 'Citas'           },
   { to: '/cotizaciones', icon: '📋', label: 'Cotiz.'          },
   { to: '/ventas',       icon: '💰', label: 'Ventas'          },
-  { to: '/inventario',   icon: '🛞', label: 'Stock'           },
 ];
 
 export default function BottomNav() {
   const { isAdmin } = useAuth();
   const { count: leadsCount } = useLeadsNotification();
+  const { count: citasCount } = useCitasNotification();
   const tabs = isAdmin ? TABS : TABS.filter(t => !t.adminOnly);
 
   return (
@@ -77,6 +79,19 @@ export default function BottomNav() {
                     animation: 'pulse 1.5s infinite',
                   }}>
                     {leadsCount > 9 ? '9+' : leadsCount}
+                  </span>
+                )}
+                {tab.to === '/citas' && citasCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -4, right: -8,
+                    background: '#22c55e', color: '#000',
+                    borderRadius: 10, minWidth: 16, height: 16,
+                    fontSize: 9, fontWeight: 800, lineHeight: 1,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 3px',
+                    animation: 'pulse 1.5s infinite',
+                  }}>
+                    {citasCount > 9 ? '9+' : citasCount}
                   </span>
                 )}
               </span>

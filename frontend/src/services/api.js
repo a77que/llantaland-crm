@@ -95,6 +95,11 @@ export const adminApi = {
   resumen: (params) => api.get('/admin/resumen', { params }),
 };
 
+export const citasApi = {
+  listar: (params) => api.get('/citas', { params }),
+  poll:   ()       => api.get('/citas/poll'),
+};
+
 export const importarApi = {
   preview: (formData) => api.post('/importar/preview', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
