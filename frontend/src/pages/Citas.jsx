@@ -257,10 +257,10 @@ export default function Citas() {
           <button onClick={() => refetch()} style={{ marginTop: 12, padding: '8px 16px', background: '#f5c400', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>Reintentar</button>
         </div>
       ) : citas.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: 60, color: '#000' }}>
           <div style={{ fontSize: 44 }}>📅</div>
           <div style={{ marginTop: 12, fontWeight: 600, fontSize: 15 }}>No hay citas registradas aún</div>
-          <div style={{ fontSize: 12, marginTop: 6 }}>Aparecerán cuando un cliente elija un local en Lima o indique una provincia.</div>
+          <div style={{ fontSize: 12, marginTop: 6, color: '#444' }}>Aparecerán cuando un cliente elija un local en Lima o indique una provincia.</div>
         </div>
       ) : (
 
