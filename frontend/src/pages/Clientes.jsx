@@ -9,13 +9,13 @@ import { useAuth } from '../hooks/useAuth';
 const PASO_LABEL = {
   nuevo:'Nuevo', esperando_medida:'Esperando medida', esperando_version_auto:'Versión auto',
   info_tecnica:'Info técnica', esperando_datos_cliente:'Datos cliente',
-  esperando_eleccion_llanta:'Eligiendo llanta', esperando_distrito:'Eligiendo distrito',
+  esperando_eleccion_marca:'Eligiendo marca', esperando_eleccion_llanta:'Eligiendo llanta', esperando_distrito:'Eligiendo distrito',
   esperando_eleccion_b:'Eligiendo local', esperando_local_destino:'Local destino',
   esperando_confirmacion:'Confirmando', completado:'Completado', opt_out:'Opt-out',
 };
 const PASO_COLOR = {
   nuevo:'#64748b', esperando_medida:'#f59e0b', esperando_version_auto:'#f59e0b',
-  info_tecnica:'#f59e0b', esperando_datos_cliente:'#3b82f6', esperando_eleccion_llanta:'#3b82f6',
+  info_tecnica:'#f59e0b', esperando_datos_cliente:'#3b82f6', esperando_eleccion_marca:'#3b82f6', esperando_eleccion_llanta:'#3b82f6',
   esperando_distrito:'#8b5cf6', esperando_eleccion_b:'#8b5cf6', esperando_local_destino:'#8b5cf6',
   esperando_confirmacion:'#f97316', completado:'#22c55e', opt_out:'#ef4444',
 };

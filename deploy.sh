@@ -30,5 +30,5 @@ else
 fi
 
 echo ""
-echo "✅ CRM disponible en: http://161.97.102.3"
+echo "✅ CRM disponible en: https://crm.llantaland.com"
 echo "   n8n sigue en:      http://161.97.102.3:3000"
