@@ -254,6 +254,7 @@ export default function Leads() {
   const q       = searchParams.get('q')       || '';
   const paso    = searchParams.get('paso')    || '';
   const ranking = searchParams.get('ranking') || '';
+  const hoy     = searchParams.get('hoy') === '1';
   const page    = parseInt(searchParams.get('page')    || '1');
   const sortBy  = searchParams.get('sortBy')  || 'updatedAt';
   const sortDir = searchParams.get('sortDir') || 'desc';
@@ -286,9 +287,36 @@ export default function Leads() {
     }, { replace: true });
   };
 
+  // Filtro rápido por tarjeta de contador (Total/Hoy/Tibio/Caliente/Frío/Completados).
+  // Reutiliza los mismos params de la URL (q/paso/ranking/hoy) para que el filtrado
+  // sea exacto en todas las páginas, sin tocar la lógica existente de búsqueda/orden.
+  const tarjetaActiva =
+    hoy ? 'hoy'
+    : (ranking === 'caliente' || ranking === 'tibio' || ranking === 'frio') ? ranking
+    : paso === 'completado' ? 'completados'
+    : null;
+
+  const seleccionarTarjeta = (key) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    next.delete('q'); next.delete('paso'); next.delete('ranking'); next.delete('hoy');
+    if (key === 'hoy') next.set('hoy', '1');
+    else if (key === 'caliente' || key === 'tibio' || key === 'frio') next.set('ranking', key);
+    else if (key === 'completados') next.set('paso', 'completado');
+    // 'total' no agrega ningún filtro: deja la lista completa
+    next.set('page', '1');
+    return next;
+  }, { replace: true });
+
+  const limpiarFiltroTarjeta = () => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    next.delete('q'); next.delete('paso'); next.delete('ranking'); next.delete('hoy');
+    next.set('page', '1');
+    return next;
+  }, { replace: true });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', { q, paso, ranking, page, sortBy, sortDir }],
-    queryFn: () => leadsApi.listar({ q, paso, ranking, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
+    queryKey: ['leads', { q, paso, ranking, hoy, page, sortBy, sortDir }],
+    queryFn: () => leadsApi.listar({ q, paso, ranking, hoy: hoy ? '1' : undefined, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     placeholderData: (prev) => prev,
     refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
   });
@@ -318,7 +346,7 @@ export default function Leads() {
         </div>
       </div>
 
-      {/* Stats — scroll horizontal en móvil */}
+      {/* Stats — scroll horizontal en móvil. Click filtra la lista por esa categoría */}
       {resumen && (
         <div style={{
           display: 'flex', gap: 10, marginBottom: 16,
@@ -326,25 +354,72 @@ export default function Leads() {
           scrollbarWidth: 'none',
         }}>
           {[
-            { num: resumen.total, label: 'Total', color: 'var(--color-primary)' },
-            { num: resumen.hoy,   label: 'Hoy',   color: '#3b82f6' },
+            { num: resumen.total, label: 'Total', color: 'var(--color-primary)', key: 'total' },
+            { num: resumen.hoy,   label: 'Hoy',   color: '#3b82f6', key: 'hoy' },
             ...(resumen.porRanking || []).filter(r => r.ranking).map(r => ({
-              num: r._count, label: `${RANKING_ICON[r.ranking]} ${r.ranking}`, color: RANKING_COLOR[r.ranking],
+              num: r._count, label: `${RANKING_ICON[r.ranking]} ${r.ranking}`, color: RANKING_COLOR[r.ranking], key: r.ranking,
             })),
             ...(resumen.porPaso || []).filter(p => p.pasoActual === 'completado').map(p => ({
-              num: p._count, label: 'Completados', color: '#22c55e',
+              num: p._count, label: 'Completados', color: '#22c55e', key: 'completados',
             })),
-          ].map((s, i) => (
-            <div key={i} style={{
-              flexShrink: 0,
-              background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-              borderRadius: 10, padding: isMobile ? '10px 14px' : '12px 18px', textAlign: 'center',
-              minWidth: isMobile ? 80 : 100,
-            }}>
-              <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: s.color }}>{s.num}</div>
-              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
+          ].map((s, i) => {
+            const activa = tarjetaActiva === s.key;
+            return (
+              <div key={i}
+                onClick={() => seleccionarTarjeta(s.key)}
+                title={activa ? 'Filtro activo — clic en la ✕ para quitarlo' : `Filtrar lista por: ${s.label}`}
+                style={{
+                  position: 'relative',
+                  flexShrink: 0,
+                  background: activa ? (s.color + '1a') : 'var(--color-surface)',
+                  border: activa ? `1.5px solid ${s.color}` : '1px solid var(--color-border)',
+                  boxShadow: activa ? `0 0 0 3px ${s.color}30` : undefined,
+                  borderRadius: 10, padding: isMobile ? '10px 14px' : '12px 18px', textAlign: 'center',
+                  minWidth: isMobile ? 80 : 100,
+                  cursor: 'pointer',
+                  transition: 'box-shadow .15s, border-color .15s, background .15s',
+                }}
+              >
+                {activa && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); limpiarFiltroTarjeta(); }}
+                    title="Quitar filtro"
+                    style={{
+                      position: 'absolute', top: -7, right: -7,
+                      width: 20, height: 20, borderRadius: '50%',
+                      background: s.color, color: '#fff', border: '2px solid var(--color-surface)',
+                      fontSize: 10, fontWeight: 900, lineHeight: 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: 0, cursor: 'pointer',
+                    }}
+                  >✕</button>
+                )}
+                <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: s.color }}>{s.num}</div>
+                <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>{s.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Aviso de filtro activo por tarjeta */}
+      {tarjetaActiva && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--color-bg)', border: '1px dashed var(--color-border)',
+          borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12.5,
+          color: 'var(--color-text-muted)',
+        }}>
+          <span>🔎 Mostrando solo: <strong style={{ color: 'var(--color-text)' }}>
+            {tarjetaActiva === 'hoy' ? 'Hoy'
+              : tarjetaActiva === 'completados' ? 'Completados'
+              : `${RANKING_ICON[tarjetaActiva] || ''} ${tarjetaActiva}`}
+          </strong></span>
+          <button onClick={limpiarFiltroTarjeta} style={{
+            marginLeft: 'auto', background: 'none', border: '1px solid var(--color-border)',
+            borderRadius: 6, fontSize: 11, fontWeight: 700, padding: '3px 9px',
+            color: 'var(--color-text-muted)', cursor: 'pointer',
+          }}>✕ Quitar filtro</button>
         </div>
       )}
 

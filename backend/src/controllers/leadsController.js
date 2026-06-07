@@ -30,7 +30,7 @@ const LEAD_SELECT_VENDEDOR = {
 
 const listar = async (req, res, next) => {
   try {
-    const { paso, ranking, q, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { paso, ranking, q, hoy, page = 1, limit = 50, orderBy, orderDir } = req.query;
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const take = Math.min(parseInt(limit) || 50, 100);
@@ -42,6 +42,9 @@ const listar = async (req, res, next) => {
     const where = {};
     if (paso) where.pasoActual = paso;
     if (ranking) where.ranking = ranking;
+    if (hoy === '1' || hoy === 'true') {
+      where.timestamp = { gte: new Date(new Date().setHours(0, 0, 0, 0)) };
+    }
     if (q) {
       where.OR = [
         { telefono: { contains: q } },
