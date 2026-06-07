@@ -10,7 +10,7 @@ echo "🚀 Deploy Llantaland CRM — $(date '+%Y-%m-%d %H:%M:%S')"
 cd "$APP_DIR"
 
 echo "🔄 Bajando cambios de GitHub..."
-git pull origin main
+git pull origin master
 
 echo "🐳 Rebuildeando contenedores..."
 docker-compose up --build -d --remove-orphans
