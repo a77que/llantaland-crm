@@ -63,6 +63,7 @@ app.use(express.json({ limit: process.env.MAX_FILE_SIZE || '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/media', express.static(path.join(__dirname, '..', 'media')));
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
 app.use('/api/', limiter);
