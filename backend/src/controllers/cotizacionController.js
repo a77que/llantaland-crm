@@ -85,6 +85,11 @@ const crear = async (req, res, next) => {
         medidaLlanta:    medidaLlanta || lead.medidaDetectada,
         marcaLlanta:     marcaLlanta  || lead.marcaLlanta,
         modeloLlanta:    modeloLlanta || lead.modeloLlanta,
+        // Datos de cita
+        fechaCita:        lead.fechaCita        || null,
+        localInstalacion: lead.localInstalacion || lead.localAsignado || null,
+        provinciaDestino: lead.provinciaDestino || null,
+        esTraslado:       !!(lead.localOrigenTraslado),
       };
     }
 
@@ -97,6 +102,10 @@ const crear = async (req, res, next) => {
     const finalMedida    = medidaLlanta    || leadData.medidaLlanta    || null;
     const finalMarca     = marcaLlanta     || leadData.marcaLlanta     || null;
     const finalModelo    = modeloLlanta    || leadData.modeloLlanta    || null;
+    const finalFechaCita        = leadData.fechaCita        || null;
+    const finalLocalInstalacion = leadData.localInstalacion || null;
+    const finalProvinciaDestino = leadData.provinciaDestino || null;
+    const finalEsTraslado       = leadData.esTraslado       || false;
 
     const cot = await prisma.$transaction(async (tx) => {
       const c = await tx.cotizacion.create({
@@ -116,6 +125,10 @@ const crear = async (req, res, next) => {
           cantidad: qty, precioUnit: pUnit,
           descuento: desc > 0 ? desc : null,
           precioTotal: total,
+          fechaCita:        finalFechaCita,
+          localInstalacion: finalLocalInstalacion,
+          provinciaDestino: finalProvinciaDestino,
+          esTraslado:       finalEsTraslado,
           notas: notas || null,
           estado: 'BORRADOR',
         },
@@ -225,8 +238,13 @@ const convertirAVenta = async (req, res, next) => {
           cantidad:        cot.cantidad,
           precioUnit:      cot.precioUnit,
           precioTotal:     cot.precioTotal,
-          tipoVenta:       cot.leadId ? 'whatsapp' : 'tienda',
-          estado:          'PENDIENTE',
+          // Datos de la cita (propagados desde la cotización)
+          fechaCita:        cot.fechaCita        || null,
+          localInstalacion: cot.localInstalacion || null,
+          provinciaDestino: cot.provinciaDestino || null,
+          esTraslado:       cot.esTraslado       || false,
+          tipoVenta:        cot.leadId ? 'whatsapp' : 'tienda',
+          estado:           'PENDIENTE',
         },
       });
       await tx.cotizacion.update({ where: { id: cot.id }, data: { estado: 'CONVERTIDA' } });

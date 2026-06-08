@@ -1,6 +1,22 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// Límites de fecha para los filtros rápidos "Hoy" / "Ayer"
+const inicioHoy  = () => new Date(new Date().setHours(0, 0, 0, 0));
+const inicioAyer = () => { const d = inicioHoy(); d.setDate(d.getDate() - 1); return d; };
+
+// Condiciones Prisma para cada tarjeta de contador seleccionable en /leads.
+// Se combinan entre sí con OR (selección múltiple: ej. "ayer" + "caliente"
+// muestra los leads de ayer junto con todos los calientes).
+const CARD_FILTROS = {
+  hoy:         () => ({ timestamp: { gte: inicioHoy() } }),
+  ayer:        () => ({ timestamp: { gte: inicioAyer(), lt: inicioHoy() } }),
+  caliente:    () => ({ ranking: 'caliente' }),
+  tibio:       () => ({ ranking: 'tibio' }),
+  frio:        () => ({ ranking: 'frio' }),
+  completados: () => ({ pasoActual: 'completado' }),
+};
+
 // Campos permitidos para ordenar
 const SORT_FIELDS = {
   nombreCliente:   'nombreCliente',
@@ -30,7 +46,7 @@ const LEAD_SELECT_VENDEDOR = {
 
 const listar = async (req, res, next) => {
   try {
-    const { paso, ranking, q, hoy, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { paso, ranking, q, hoy, cards, page = 1, limit = 50, orderBy, orderDir } = req.query;
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const take = Math.min(parseInt(limit) || 50, 100);
@@ -40,18 +56,29 @@ const listar = async (req, res, next) => {
     const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
 
     const where = {};
+    const condicionesAnd = [];
+
     if (paso) where.pasoActual = paso;
     if (ranking) where.ranking = ranking;
     if (hoy === '1' || hoy === 'true') {
-      where.timestamp = { gte: new Date(new Date().setHours(0, 0, 0, 0)) };
+      where.timestamp = { gte: inicioHoy() };
+    }
+    // Tarjetas de contador seleccionadas (selección múltiple, combinadas con OR)
+    if (cards) {
+      const grupo = String(cards).split(',').map(s => s.trim())
+        .map(k => CARD_FILTROS[k]?.()).filter(Boolean);
+      if (grupo.length) condicionesAnd.push({ OR: grupo });
     }
     if (q) {
-      where.OR = [
-        { telefono: { contains: q } },
-        { nombreCliente: { contains: q, mode: 'insensitive' } },
-        { medidaDetectada: { contains: q, mode: 'insensitive' } },
-      ];
+      condicionesAnd.push({
+        OR: [
+          { telefono: { contains: q } },
+          { nombreCliente: { contains: q, mode: 'insensitive' } },
+          { medidaDetectada: { contains: q, mode: 'insensitive' } },
+        ],
+      });
     }
+    if (condicionesAnd.length) where.AND = condicionesAnd;
 
     const [leads, total] = await Promise.all([
       prisma.leadCRM.findMany({
@@ -199,13 +226,16 @@ const actualizar = async (req, res, next) => {
 
 const resumen = async (req, res, next) => {
   try {
-    const [porPaso, porRanking, total, hoy] = await Promise.all([
+    const hoyInicio  = inicioHoy();
+    const ayerInicio = inicioAyer();
+    const [porPaso, porRanking, total, hoy, ayer] = await Promise.all([
       prisma.leadCRM.groupBy({ by: ['pasoActual'], _count: true }),
       prisma.leadCRM.groupBy({ by: ['ranking'], _count: true }),
       prisma.leadCRM.count(),
-      prisma.leadCRM.count({ where: { timestamp: { gte: new Date(new Date().setHours(0,0,0,0)) } } }),
+      prisma.leadCRM.count({ where: { timestamp: { gte: hoyInicio } } }),
+      prisma.leadCRM.count({ where: { timestamp: { gte: ayerInicio, lt: hoyInicio } } }),
     ]);
-    res.json({ porPaso, porRanking, total, hoy });
+    res.json({ porPaso, porRanking, total, hoy, ayer });
   } catch (err) {
     next(err);
   }

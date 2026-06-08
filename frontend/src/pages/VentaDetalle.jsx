@@ -46,7 +46,7 @@ export default function VentaDetalle() {
     mutationFn: () => ventasApi.generarPdf(id),
     onSuccess: (data) => {
       toast.success('PDF generado');
-      if (data?.pdfUrl) window.open(`http://161.97.102.3:3001${data.pdfUrl}`, '_blank');
+      if (data?.pdfUrl) window.open(data.pdfUrl, '_blank');
     },
     onError: (e) => toast.error(e?.error || 'Error al generar PDF'),
   });

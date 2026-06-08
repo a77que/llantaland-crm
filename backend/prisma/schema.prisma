@@ -382,6 +382,13 @@ model Cotizacion {
   descuento       Decimal?         @db.Decimal(10, 2)
   precioTotal     Decimal          @db.Decimal(10, 2) @default(0)
 
+  // Datos de la cita (snapshot del lead)
+  fechaCita        String?
+  localInstalacion Json?
+  provinciaDestino String?
+  caso             CasoFlujo?
+  esTraslado       Boolean          @default(false)
+
   // Estado y notas
   estado          EstadoCotizacion @default(BORRADOR)
   notas           String?          @db.Text

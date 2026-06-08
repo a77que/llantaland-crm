@@ -4,6 +4,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads');
+const LOGO_OSO    = path.join(__dirname, '..', 'assets', 'logo-oso.png');
 
 const EMPRESA = {
   nombre: 'LLANTALAND S.A.C.',
@@ -36,16 +37,22 @@ async function generarVenta(venta) {
       doc.pipe(stream);
 
       // ── Header negro con acento amarillo ──
-      doc.rect(0, 0, doc.page.width, 90).fill(C.negro);
-      doc.rect(0, 88, doc.page.width, 3).fill(C.amarillo);
+      doc.rect(0, 0, doc.page.width, 96).fill(C.negro);
+      doc.rect(0, 94, doc.page.width, 3).fill(C.amarillo);
 
-      doc.fontSize(20).font('Helvetica-Bold').fillColor(C.amarillo)
-        .text('LLANTALAND', 50, 22);
+      // Logo oso
+      if (fs.existsSync(LOGO_OSO)) {
+        doc.image(LOGO_OSO, 14, 12, { width: 72, height: 72 });
+      }
+
+      // Texto logo "LLANTALAND"
+      doc.fontSize(22).font('Helvetica-Bold').fillColor(C.amarillo)
+        .text('LLANTALAND', 94, 18);
       doc.fontSize(8).font('Helvetica').fillColor('#999')
-        .text(`RUC ${EMPRESA.ruc}  •  ${EMPRESA.web}  •  ${EMPRESA.telefono}`, 50, 46);
+        .text(`RUC ${EMPRESA.ruc}  •  ${EMPRESA.web}  •  ${EMPRESA.telefono}`, 94, 46);
 
       doc.fontSize(10).font('Helvetica-Bold').fillColor(C.amarillo)
-        .text('COMPROBANTE DE VENTA', 340, 20, { align: 'right', width: 210 });
+        .text('COMPROBANTE DE VENTA', 340, 18, { align: 'right', width: 210 });
       doc.fontSize(14).font('Helvetica-Bold').fillColor('white')
         .text(`N° ${venta.numero}`, 340, 36, { align: 'right', width: 210 });
       doc.fontSize(8).font('Helvetica').fillColor('#999')
@@ -55,7 +62,7 @@ async function generarVenta(venta) {
           .text(venta.estado, 340, 70, { align: 'right', width: 210 });
       }
 
-      let y = 110;
+      let y = 116;
 
       // ── Sección cliente ──
       doc.rect(50, y, doc.page.width - 100, 70).fill(C.grisClaro).stroke(C.grisClaro);
@@ -165,13 +172,20 @@ async function generarCotizacion(cot) {
       doc.pipe(stream);
 
       // Header
-      doc.rect(0, 0, doc.page.width, 90).fill(C.negro);
-      doc.rect(0, 88, doc.page.width, 3).fill(C.amarillo);
-      doc.fontSize(20).font('Helvetica-Bold').fillColor(C.amarillo).text('LLANTALAND', 50, 22);
+      doc.rect(0, 0, doc.page.width, 96).fill(C.negro);
+      doc.rect(0, 94, doc.page.width, 3).fill(C.amarillo);
+
+      // Logo oso
+      if (fs.existsSync(LOGO_OSO)) {
+        doc.image(LOGO_OSO, 14, 12, { width: 72, height: 72 });
+      }
+
+      // Texto logo "LLANTALAND"
+      doc.fontSize(22).font('Helvetica-Bold').fillColor(C.amarillo).text('LLANTALAND', 94, 18);
       doc.fontSize(8).font('Helvetica').fillColor('#999')
-        .text(`RUC ${EMPRESA.ruc}  •  ${EMPRESA.web}  •  ${EMPRESA.telefono}`, 50, 46);
+        .text(`RUC ${EMPRESA.ruc}  •  ${EMPRESA.web}  •  ${EMPRESA.telefono}`, 94, 46);
       doc.fontSize(10).font('Helvetica-Bold').fillColor(C.amarillo)
-        .text('COTIZACIÓN', 340, 20, { align: 'right', width: 210 });
+        .text('COTIZACIÓN', 340, 18, { align: 'right', width: 210 });
       doc.fontSize(14).font('Helvetica-Bold').fillColor('white')
         .text(`N° ${cot.numero}`, 340, 36, { align: 'right', width: 210 });
       doc.fontSize(8).font('Helvetica').fillColor('#999')
@@ -180,7 +194,7 @@ async function generarCotizacion(cot) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor(estadoColor[cot.estado] || '#888')
         .text(cot.estado, 340, 70, { align: 'right', width: 210 });
 
-      let y = 110;
+      let y = 116;
 
       // Cliente
       doc.rect(50, y, doc.page.width - 100, 70).fill(C.grisClaro);
@@ -225,6 +239,27 @@ async function generarCotizacion(cot) {
       doc.fontSize(14).font('Helvetica-Bold').fillColor(C.amarillo)
         .text(fmt(cot.precioTotal), 375, y + 7, { width: 165, align: 'right' });
       y += 44;
+
+      // ── Instalación (si hay datos de cita) ──
+      const localCot = cot.localInstalacion;
+      if (localCot || cot.fechaCita) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('INSTALACIÓN:', 50, y);
+        y += 14;
+        if (localCot?.Nombre || localCot?.nombre) {
+          doc.fontSize(9).font('Helvetica').fillColor(C.texto)
+            .text(`Local: ${localCot.Nombre || localCot.nombre}  —  ${localCot.Direccion || localCot.direccion || localCot.Distrito || ''}`, 50, y);
+          y += 14;
+        }
+        if (cot.fechaCita) {
+          doc.fontSize(9).fillColor(C.texto).text(`Fecha de cita: ${cot.fechaCita}`, 50, y);
+          y += 14;
+        }
+        if (cot.provinciaDestino) {
+          doc.fontSize(9).fillColor(C.texto).text(`Provincia destino: ${cot.provinciaDestino}`, 50, y);
+          y += 14;
+        }
+        y += 4;
+      }
 
       if (cot.notas) {
         doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('NOTAS:', 50, y);

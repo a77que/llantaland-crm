@@ -38,6 +38,13 @@ const PASO_COLOR = {
 const RANKING_COLOR = { caliente: '#ef4444', tibio: '#f59e0b', frio: '#3b82f6' };
 const RANKING_ICON  = { caliente: '🔥', tibio: '🌡️', frio: '❄️' };
 
+// Etiqueta legible de cada tarjeta de contador, para el aviso de filtros activos
+const etiquetaTarjeta = (key) =>
+  key === 'hoy' ? 'Hoy'
+  : key === 'ayer' ? 'Ayer'
+  : key === 'completados' ? 'Completados'
+  : RANKING_ICON[key] ? `${RANKING_ICON[key]} ${key}` : key;
+
 const badge = (color) => ({ display: 'inline-block', padding: '2px 9px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: color + '22', color });
 const pill  = (color) => ({ display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: color + '18', color, border: `1px solid ${color}40` });
 
@@ -147,6 +154,50 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <Field label="Logística" value={lead.estadoLogistica} />
           </div>
 
+          {/* Flujo del cliente */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+              Flujo del cliente
+            </div>
+            {/* Paso actual destacado */}
+            <div style={{
+              background: (PASO_COLOR[lead.pasoActual] || '#64748b') + '15',
+              border: `1.5px solid ${PASO_COLOR[lead.pasoActual] || '#64748b'}`,
+              borderRadius: 10, padding: '10px 14px', marginBottom: 10,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 3 }}>PASO ACTUAL</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: PASO_COLOR[lead.pasoActual] || '#64748b' }}>
+                {PASO_LABEL[lead.pasoActual] || lead.pasoActual || '—'}
+              </div>
+            </div>
+            {/* Timeline de transiciones de paso */}
+            {lead.historial?.length > 0 && (() => {
+              const pasoHist = lead.historial.reduce((acc, m) => {
+                if (!m.pasoActual) return acc;
+                const last = acc[acc.length - 1];
+                if (!last || last.paso !== m.pasoActual) acc.push({ paso: m.pasoActual, ts: m.timestamp });
+                return acc;
+              }, []);
+              return pasoHist.length > 0 && (
+                <div style={{ borderLeft: '2px solid var(--color-border)', paddingLeft: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pasoHist.map((p, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: PASO_COLOR[p.paso] || '#64748b', flexShrink: 0, marginTop: 5 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: PASO_COLOR[p.paso] || 'var(--color-text)' }}>
+                          {PASO_LABEL[p.paso] || p.paso}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          {new Date(p.ts).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Botones acción */}
           <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
             <button onClick={crearCotizacion} style={{ flex:1, padding:'11px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:14, fontWeight:800, cursor:'pointer' }}>
@@ -240,7 +291,7 @@ function LeadCard({ lead, onClick, isNuevo }) {
           : <span />
         }
         <span style={{ color: 'var(--color-text-muted)' }}>
-          {new Date(lead.updatedAt).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+          {new Date(lead.timestamp).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
     </div>
@@ -255,6 +306,7 @@ export default function Leads() {
   const paso    = searchParams.get('paso')    || '';
   const ranking = searchParams.get('ranking') || '';
   const hoy     = searchParams.get('hoy') === '1';
+  const cardsParam = searchParams.get('cards') || '';
   const page    = parseInt(searchParams.get('page')    || '1');
   const sortBy  = searchParams.get('sortBy')  || 'updatedAt';
   const sortDir = searchParams.get('sortDir') || 'desc';
@@ -287,36 +339,36 @@ export default function Leads() {
     }, { replace: true });
   };
 
-  // Filtro rápido por tarjeta de contador (Total/Hoy/Tibio/Caliente/Frío/Completados).
-  // Reutiliza los mismos params de la URL (q/paso/ranking/hoy) para que el filtrado
-  // sea exacto en todas las páginas, sin tocar la lógica existente de búsqueda/orden.
-  const tarjetaActiva =
-    hoy ? 'hoy'
-    : (ranking === 'caliente' || ranking === 'tibio' || ranking === 'frio') ? ranking
-    : paso === 'completado' ? 'completados'
-    : null;
+  // Filtro rápido por tarjetas de contador (Total/Hoy/Ayer/Tibio/Caliente/Frío/Completados).
+  // Selección MÚLTIPLE: cada tarjeta activa viaja en el param `cards` (lista separada
+  // por comas) y el backend las combina entre sí con OR — ej. "ayer" + "caliente"
+  // muestra juntos los leads de ayer Y todos los calientes, sin importar la fecha.
+  const tarjetasActivas = new Set(cardsParam.split(',').map(s => s.trim()).filter(Boolean));
 
-  const seleccionarTarjeta = (key) => setSearchParams(prev => {
+  const alternarTarjeta = (key) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
-    next.delete('q'); next.delete('paso'); next.delete('ranking'); next.delete('hoy');
-    if (key === 'hoy') next.set('hoy', '1');
-    else if (key === 'caliente' || key === 'tibio' || key === 'frio') next.set('ranking', key);
-    else if (key === 'completados') next.set('paso', 'completado');
-    // 'total' no agrega ningún filtro: deja la lista completa
+    if (key === 'total') {
+      // 'Total' = sin filtro de tarjetas: quita cualquier selección previa
+      next.delete('cards');
+    } else {
+      const activas = new Set(tarjetasActivas);
+      if (activas.has(key)) activas.delete(key); else activas.add(key);
+      if (activas.size) next.set('cards', Array.from(activas).join(',')); else next.delete('cards');
+    }
     next.set('page', '1');
     return next;
   }, { replace: true });
 
-  const limpiarFiltroTarjeta = () => setSearchParams(prev => {
+  const limpiarTarjetas = () => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
-    next.delete('q'); next.delete('paso'); next.delete('ranking'); next.delete('hoy');
+    next.delete('cards');
     next.set('page', '1');
     return next;
   }, { replace: true });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', { q, paso, ranking, hoy, page, sortBy, sortDir }],
-    queryFn: () => leadsApi.listar({ q, paso, ranking, hoy: hoy ? '1' : undefined, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
+    queryKey: ['leads', { q, paso, ranking, hoy, cards: cardsParam, page, sortBy, sortDir }],
+    queryFn: () => leadsApi.listar({ q, paso, ranking, hoy: hoy ? '1' : undefined, cards: cardsParam || undefined, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     placeholderData: (prev) => prev,
     refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
   });
@@ -356,6 +408,7 @@ export default function Leads() {
           {[
             { num: resumen.total, label: 'Total', color: 'var(--color-primary)', key: 'total' },
             { num: resumen.hoy,   label: 'Hoy',   color: '#3b82f6', key: 'hoy' },
+            { num: resumen.ayer,  label: 'Ayer',  color: '#6366f1', key: 'ayer' },
             ...(resumen.porRanking || []).filter(r => r.ranking).map(r => ({
               num: r._count, label: `${RANKING_ICON[r.ranking]} ${r.ranking}`, color: RANKING_COLOR[r.ranking], key: r.ranking,
             })),
@@ -363,11 +416,11 @@ export default function Leads() {
               num: p._count, label: 'Completados', color: '#22c55e', key: 'completados',
             })),
           ].map((s, i) => {
-            const activa = tarjetaActiva === s.key;
+            const activa = s.key !== 'total' && tarjetasActivas.has(s.key);
             return (
               <div key={i}
-                onClick={() => seleccionarTarjeta(s.key)}
-                title={activa ? 'Filtro activo — clic en la ✕ para quitarlo' : `Filtrar lista por: ${s.label}`}
+                onClick={() => alternarTarjeta(s.key)}
+                title={activa ? 'Filtro activo — clic para quitarlo, clic en otra tarjeta para combinar' : `Filtrar lista por: ${s.label} (se puede combinar con otras tarjetas)`}
                 style={{
                   position: 'relative',
                   flexShrink: 0,
@@ -382,8 +435,8 @@ export default function Leads() {
               >
                 {activa && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); limpiarFiltroTarjeta(); }}
-                    title="Quitar filtro"
+                    onClick={(e) => { e.stopPropagation(); alternarTarjeta(s.key); }}
+                    title="Quitar esta tarjeta del filtro"
                     style={{
                       position: 'absolute', top: -7, right: -7,
                       width: 20, height: 20, borderRadius: '50%',
@@ -402,24 +455,22 @@ export default function Leads() {
         </div>
       )}
 
-      {/* Aviso de filtro activo por tarjeta */}
-      {tarjetaActiva && (
+      {/* Aviso de filtros activos por tarjetas (selección múltiple → combinadas con OR) */}
+      {tarjetasActivas.size > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           background: 'var(--color-bg)', border: '1px dashed var(--color-border)',
           borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 12.5,
           color: 'var(--color-text-muted)',
         }}>
-          <span>🔎 Mostrando solo: <strong style={{ color: 'var(--color-text)' }}>
-            {tarjetaActiva === 'hoy' ? 'Hoy'
-              : tarjetaActiva === 'completados' ? 'Completados'
-              : `${RANKING_ICON[tarjetaActiva] || ''} ${tarjetaActiva}`}
+          <span>🔎 Mostrando: <strong style={{ color: 'var(--color-text)' }}>
+            {Array.from(tarjetasActivas).map(etiquetaTarjeta).join('  +  ')}
           </strong></span>
-          <button onClick={limpiarFiltroTarjeta} style={{
+          <button onClick={limpiarTarjetas} style={{
             marginLeft: 'auto', background: 'none', border: '1px solid var(--color-border)',
             borderRadius: 6, fontSize: 11, fontWeight: 700, padding: '3px 9px',
             color: 'var(--color-text-muted)', cursor: 'pointer',
-          }}>✕ Quitar filtro</button>
+          }}>✕ Quitar filtros</button>
         </div>
       )}
 
@@ -496,7 +547,7 @@ export default function Leads() {
                   { k:'ranking',        label:'Ranking' },
                   { k:null,             label:'Local' },
                   { k:'fechaCita',      label:'Cita' },
-                  { k:'updatedAt',      label:'Actualizado' },
+                  { k:null,             label:'1er mensaje' },
                 ].map(({ k, label }) => {
                   const field = k ? SORTABLE_LEADS[k] : null;
                   const isActive = field && sortBy === field;
@@ -539,7 +590,7 @@ export default function Leads() {
                     <td style={{ padding: '11px 14px' }}>{lead.ranking ? <span style={pill(RANKING_COLOR[lead.ranking])}>{RANKING_ICON[lead.ranking]} {lead.ranking}</span> : '—'}</td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>{local?.Nombre || local?.nombre || '—'}</td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.fechaCita || '—'}</td>
-                    <td style={{ padding: '11px 14px', fontSize: 12, color: 'var(--color-text-muted)' }}>{new Date(lead.updatedAt).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td style={{ padding: '11px 14px', fontSize: 12, color: 'var(--color-text-muted)' }}>{new Date(lead.timestamp).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                   </tr>
                 );
               })}

@@ -29,8 +29,8 @@ export default function CotizacionDetalle() {
   });
 
   const convertirMutation = useMutation({
-    mutationFn: () => cotizacionesApi.convertir(id),
-    onSuccess: (data) => { toast.success('Convertida a venta'); navigate(`/ventas/${data.id}`); },
+    mutationFn: () => cotizacionesApi.convertirAVenta(id),
+    onSuccess: (data) => { toast.success('Convertida a venta'); navigate(`/ventas/${data.ventaId}`); },
     onError: (e) => toast.error(e?.error || 'Error'),
   });
 

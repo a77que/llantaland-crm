@@ -101,8 +101,8 @@ export default function Dashboard() {
           </div>
           <div style={gridStyle}>
             <MetricCard icon="📱" value={leadsResumen.hoy}         label="Leads hoy"     link="/leads"  color="#8b5cf6" />
-            <MetricCard icon="🔥" value={leadsResumen.leads?.calientes ?? leadsResumen.porRanking?.find(r => r.ranking === 'caliente')?._count ?? 0} label="Calientes" link="/leads?ranking=caliente" color="#ef4444" />
-            <MetricCard icon="✅" value={leadsResumen.leads?.completados ?? leadsResumen.porPaso?.find(p => p.pasoActual === 'completado')?._count ?? 0} label="Completados" link="/leads?paso=completado" color="#16a34a" />
+            <MetricCard icon="🔥" value={leadsResumen.leads?.calientes ?? leadsResumen.porRanking?.find(r => r.ranking === 'caliente')?._count ?? 0} label="Calientes" link="/leads?cards=caliente" color="#ef4444" />
+            <MetricCard icon="✅" value={leadsResumen.leads?.completados ?? leadsResumen.porPaso?.find(p => p.pasoActual === 'completado')?._count ?? 0} label="Completados" link="/leads?cards=completados" color="#16a34a" />
             <MetricCard icon="⏳" value={leadsResumen.porPaso?.find(p => p.pasoActual === 'esperando_confirmacion')?._count ?? 0} label="Confirmando" link="/leads?paso=esperando_confirmacion" color="#f97316" />
           </div>
         </>
