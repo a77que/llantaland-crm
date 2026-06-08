@@ -478,6 +478,8 @@ function mapSheetToLead(body) {
   if (body.Email_Seguimiento_Enviado !== undefined) data.emailSeguimientoEnviado = body.Email_Seguimiento_Enviado === 'si' || body.Email_Seguimiento_enviado === true;
   if (body.Nombre_Cliente !== undefined) data.nombreCliente = body.Nombre_Cliente;
   if (body.DNI_CE !== undefined) data.dniCe = body.DNI_CE;
+  if (body.Marca_Llanta !== undefined) data.marcaLlanta = body.Marca_Llanta || null;
+  if (body.Modelo_Llanta !== undefined) data.modeloLlanta = body.Modelo_Llanta || null;
   if (body.Marca_Auto !== undefined) data.marcaAuto = body.Marca_Auto;
   if (body.Modelo_Auto !== undefined) data.modeloAuto = body.Modelo_Auto;
   if (body.Anio_Auto !== undefined) data.anioAuto = body.Anio_Auto ? parseInt(body.Anio_Auto) : null;
@@ -496,6 +498,8 @@ function mapLeadToSheet(lead) {
     Paso_Actual:                lead.pasoActual,
     Nombre_Cliente:             lead.nombreCliente || '',
     DNI_CE:                     lead.dniCe || '',           // necesario para registro de venta
+    Marca_Llanta:               lead.marcaLlanta || '',
+    Modelo_Llanta:              lead.modeloLlanta || '',
     Marca_Auto:                 lead.marcaAuto || '',
     Modelo_Auto:                lead.modeloAuto || '',
     Anio_Auto:                  lead.anioAuto || '',
