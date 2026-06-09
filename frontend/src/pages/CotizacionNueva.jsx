@@ -3,11 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { clientesApi, productosApi, sedesApi, cotizacionesApi } from '../services/api';
+import { useIsMobileOrTablet } from '../hooks/useIsMobile';
 import DocLookup from '../components/DocLookup/DocLookup';
 import FichaLlanta from '../components/FichaLlanta/FichaLlanta';
 
 const S = {
-  layout: { display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, alignItems: 'start' },
+  layout: null, // se define dinámicamente según isMobile
   card: { background: '#fff', borderRadius: 10, padding: 20, boxShadow: 'var(--shadow)', border: '1px solid var(--color-border)', marginBottom: 16 },
   cardTitle: { fontSize: 13, fontWeight: 700, color: 'var(--color-primary)', marginBottom: 16, textTransform: 'uppercase' },
   input: { width: '100%', padding: '9px 12px', border: '1.5px solid var(--color-border)', borderRadius: 8, fontSize: 13 },
@@ -36,6 +37,7 @@ function ItemRow({ item, onRemove, onQtyChange }) {
 export default function CotizacionNueva() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobileOrTablet();
   const [clienteId, setClienteId] = useState(location.state?.clienteId || '');
   const [clienteInfo, setClienteInfo] = useState(null);
   const [clienteQuery, setClienteQuery] = useState('');
@@ -105,7 +107,10 @@ export default function CotizacionNueva() {
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>Nueva Cotización</h1>
       </div>
 
-      <div style={S.layout}>
+      <div style={isMobile
+        ? { display: 'flex', flexDirection: 'column', gap: 0 }
+        : { display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20, alignItems: 'start' }
+      }>
         {/* Columna principal */}
         <div>
           {/* Cliente */}
@@ -139,13 +144,13 @@ export default function CotizacionNueva() {
           {/* Llantas */}
           <div style={S.card}>
             <div style={S.cardTitle}>2. Seleccionar llantas</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px auto', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 160px auto', gap: 8, marginBottom: 12 }}>
               <input style={S.input} value={productoQuery} onChange={(e) => setProductoQuery(e.target.value)} placeholder="Buscar llanta por medida, marca, SKU..." />
               <select style={S.select} value={selectedSede} onChange={(e) => setSelectedSede(e.target.value)}>
                 <option value="">Sede...</option>
                 {sedes?.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
-              <button onClick={addItem} disabled={!selectedProd || !selectedSede} style={{ padding: '9px 16px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+              <button onClick={addItem} disabled={!selectedProd || !selectedSede} style={{ padding: '9px 16px', background: 'var(--color-primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer', gridColumn: isMobile ? '1 / -1' : undefined }}>
                 + Agregar
               </button>
             </div>
@@ -178,7 +183,7 @@ export default function CotizacionNueva() {
           {/* Descuento */}
           <div style={S.card}>
             <div style={S.cardTitle}>3. Descuento (opcional)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1.5fr', gap: 12 }}>
               <div style={S.group}>
                 <label style={S.label}>Tipo</label>
                 <select style={S.select} value={descTipo} onChange={(e) => setDescTipo(e.target.value)}>
@@ -191,7 +196,7 @@ export default function CotizacionNueva() {
                 <label style={S.label}>Valor</label>
                 <input style={S.input} type="number" min={0} value={descValor} onChange={(e) => setDescValor(e.target.value)} disabled={!descTipo} placeholder="0" />
               </div>
-              <div style={S.group}>
+              <div style={{ ...S.group, gridColumn: isMobile ? '1 / -1' : undefined }}>
                 <label style={S.label}>Motivo</label>
                 <input style={S.input} value={descMotivo} onChange={(e) => setDescMotivo(e.target.value)} disabled={!descTipo} placeholder="Cliente frecuente..." />
               </div>
@@ -200,7 +205,7 @@ export default function CotizacionNueva() {
         </div>
 
         {/* Panel resumen */}
-        <div style={{ position: 'sticky', top: 80 }}>
+        <div style={isMobile ? { marginTop: 0 } : { position: 'sticky', top: 80 }}>
           <div style={S.card}>
             <div style={S.cardTitle}>Resumen</div>
             <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: 12, marginBottom: 12 }}>

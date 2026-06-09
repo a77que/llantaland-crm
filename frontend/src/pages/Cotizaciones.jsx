@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { cotizacionesApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsMobileOrTablet } from '../hooks/useIsMobile';
 
 const ESTADO_COLOR = {
   BORRADOR: '#64748b', ENVIADA: '#3b82f6', ACEPTADA: '#16a34a',
@@ -14,6 +15,7 @@ const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
 const badge = (color) => ({ display:'inline-block', padding:'3px 10px', borderRadius:10, fontSize:11, fontWeight:700, background:color+'20', color });
 
 function ModalNuevaCotizacion({ onClose, onCreada, leadData }) {
+  const isMobile = useIsMobileOrTablet();
   const [form, setForm] = useState({
     nombreCliente: leadData?.nombreCliente || '',
     telefonoCliente: leadData?.telefono || '',
@@ -39,15 +41,37 @@ function ModalNuevaCotizacion({ onClose, onCreada, leadData }) {
   const totalCalc = Math.max(0, parseFloat(form.precioUnit||0) * parseInt(form.cantidad||1) - parseFloat(form.descuento||0));
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
-      <div style={{ background:'var(--color-surface)', borderRadius:14, width:'100%', maxWidth:560, maxHeight:'92dvh', overflowY:'auto', padding:28 }} onClick={e=>e.stopPropagation()}>
+    <div
+      style={{
+        position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:500, display:'flex',
+        ...(isMobile ? { alignItems:'flex-end' } : { alignItems:'center', justifyContent:'center', padding:16 }),
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background:'var(--color-surface)', width:'100%', overflowY:'auto',
+          boxShadow:'var(--shadow-lg)',
+          ...(isMobile
+            ? { borderRadius:'20px 20px 0 0', maxHeight:'94dvh', padding:'0 0 calc(env(safe-area-inset-bottom, 0px) + 16px)' }
+            : { borderRadius:14, maxWidth:560, maxHeight:'92dvh', padding:28 }),
+        }}
+        onClick={e=>e.stopPropagation()}
+      >
+        {isMobile && (
+          <div style={{ display:'flex', justifyContent:'center', padding:'12px 0 4px' }}>
+            <div style={{ width:40, height:4, borderRadius:2, background:'var(--color-border)' }} />
+          </div>
+        )}
+        <div style={{ padding: isMobile ? '8px 16px 16px' : 0 }}>
+
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
           <div style={{ fontSize:17, fontWeight:700 }}>Nueva Cotización</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'var(--color-text-muted)', cursor:'pointer' }}>✕</button>
+          {!isMobile && <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, color:'var(--color-text-muted)', cursor:'pointer', padding:'4px 8px' }}>✕</button>}
         </div>
 
         <div style={{ fontSize:11, fontWeight:700, color:'#d4a900', textTransform:'uppercase', letterSpacing:1.5, marginBottom:10, borderBottom:'2px solid #f5c400', paddingBottom:5 }}>Cliente</div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px 14px', marginBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap:'12px 14px', marginBottom:16 }}>
           <div>{lbl('Nombre')}<input style={inp} value={form.nombreCliente} onChange={set('nombreCliente')} placeholder="Juan Pérez" /></div>
           <div>{lbl('Teléfono')}<input style={inp} value={form.telefonoCliente} onChange={set('telefonoCliente')} placeholder="51987654321" /></div>
           <div>{lbl('DNI / CE')}<input style={inp} value={form.dniCe} onChange={set('dniCe')} placeholder="45678901" /></div>
@@ -55,12 +79,12 @@ function ModalNuevaCotizacion({ onClose, onCreada, leadData }) {
         </div>
 
         <div style={{ fontSize:11, fontWeight:700, color:'#d4a900', textTransform:'uppercase', letterSpacing:1.5, marginBottom:10, borderBottom:'2px solid #f5c400', paddingBottom:5 }}>Producto</div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px 14px', marginBottom:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr 1fr', gap:'12px 14px', marginBottom:14 }}>
           <div>{lbl('Medida')}<input style={inp} value={form.medidaLlanta} onChange={set('medidaLlanta')} placeholder="195/65R15" /></div>
           <div>{lbl('Marca')}<input style={inp} value={form.marcaLlanta} onChange={set('marcaLlanta')} placeholder="Michelin" /></div>
-          <div>{lbl('Modelo')}<input style={inp} value={form.modeloLlanta} onChange={set('modeloLlanta')} placeholder="Energy E3" /></div>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : undefined }}>{lbl('Modelo')}<input style={inp} value={form.modeloLlanta} onChange={set('modeloLlanta')} placeholder="Energy E3" /></div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px 14px', marginBottom:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px 14px', marginBottom:14 }}>
           <div>{lbl('Cantidad')}<input style={inp} type="number" min="1" value={form.cantidad} onChange={set('cantidad')} /></div>
           <div>{lbl('Precio unit. (S/)')}<input style={inp} type="number" value={form.precioUnit} onChange={set('precioUnit')} placeholder="380.00" /></div>
           <div>{lbl('Descuento (S/)')}<input style={inp} type="number" value={form.descuento} onChange={set('descuento')} placeholder="0" /></div>
@@ -81,10 +105,11 @@ function ModalNuevaCotizacion({ onClose, onCreada, leadData }) {
         <button
           onClick={() => crearMut.mutate()}
           disabled={crearMut.isPending || !form.medidaLlanta || !form.precioUnit}
-          style={{ width:'100%', padding:'13px', background: (!form.medidaLlanta||!form.precioUnit) ? '#e2e8f0' : '#f5c400', color:'#000', border:'none', borderRadius:8, fontSize:15, fontWeight:900, cursor:'pointer' }}
+          style={{ width:'100%', padding: isMobile ? '16px' : '13px', background: (!form.medidaLlanta||!form.precioUnit) ? '#e2e8f0' : '#f5c400', color:'#000', border:'none', borderRadius:10, fontSize: isMobile ? 16 : 15, fontWeight:900, cursor:'pointer' }}
         >
           {crearMut.isPending ? '⏳ Creando...' : '✅ Crear Cotización'}
         </button>
+        </div>
       </div>
     </div>
   );
@@ -106,7 +131,7 @@ export default function Cotizaciones() {
 
   const pdfMut = useMutation({
     mutationFn: (id) => cotizacionesApi.generarPdf(id),
-    onSuccess: (d) => { if (d?.pdfUrl) window.open(`http://161.97.102.3:3001${d.pdfUrl}`, '_blank'); },
+    onSuccess: (d) => { if (d?.pdfUrl) window.open(d.pdfUrl, '_blank'); },
     onError: (e) => toast.error(e?.error || 'Error PDF'),
   });
 
@@ -178,11 +203,11 @@ export default function Cotizaciones() {
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span style={{ fontWeight:800, fontSize:16, color:'#16a34a' }}>{fmt(c.precioTotal)}</span>
                 <div style={{ display:'flex', gap:6 }}>
-                  <button onClick={() => pdfMut.mutate(c.id)} style={{ padding:'5px 10px', fontSize:12, border:'1px solid var(--color-border)', borderRadius:6, background:'var(--color-surface)', cursor:'pointer' }}>📄</button>
+                  <button onClick={() => pdfMut.mutate(c.id)} style={{ padding:'10px 14px', fontSize:13, border:'1px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', cursor:'pointer' }}>📄 PDF</button>
                   {!c.venta && !['RECHAZADA','CONVERTIDA'].includes(c.estado) && (
-                    <button onClick={() => { if(window.confirm('¿Convertir a venta?')) convertirMut.mutate(c.id); }} style={{ padding:'5px 10px', fontSize:12, background:'#f5c400', color:'#000', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer' }}>💰 Venta</button>
+                    <button onClick={() => { if(window.confirm('¿Convertir a venta?')) convertirMut.mutate(c.id); }} style={{ padding:'10px 14px', fontSize:13, background:'#f5c400', color:'#000', border:'none', borderRadius:8, fontWeight:700, cursor:'pointer' }}>💰 Venta</button>
                   )}
-                  {c.venta && <Link to={`/ventas/${c.venta.id}`} style={{ padding:'5px 10px', fontSize:12, background:'#8b5cf620', color:'#8b5cf6', border:'1px solid #8b5cf640', borderRadius:6, fontWeight:700 }}>Ver venta</Link>}
+                  {c.venta && <Link to={`/ventas/${c.venta.id}`} style={{ padding:'10px 14px', fontSize:13, background:'#8b5cf620', color:'#8b5cf6', border:'1px solid #8b5cf640', borderRadius:8, fontWeight:700, display:'inline-block' }}>Ver venta</Link>}
                 </div>
               </div>
               <div style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:6 }}>Vendedor: {c.usuario?.nombre} · {new Date(c.createdAt).toLocaleDateString('es-PE')}</div>

@@ -142,8 +142,8 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             {lead.humanTakeover?.agenteActivo && <span style={badge('#8b5cf6')}>👤 Agente humano</span>}
           </div>
 
-          {/* Datos en grid 2 col */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+          {/* Datos en grid — 1 col en móvil, 2 col en desktop */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '0 16px' }}>
             <Field label="DNI / CE" value={lead.dniCe} />
             <Field label="Vehículo" value={[lead.marcaAuto, lead.modeloAuto, lead.anioAuto].filter(Boolean).join(' ')} />
             <Field label="Medida llanta" value={lead.medidaDetectada} />
@@ -152,6 +152,16 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <Field label="Local asignado" value={localNombre} />
             <Field label="Fecha cita" value={lead.fechaCita} />
             <Field label="Logística" value={lead.estadoLogistica} />
+          </div>
+
+          {/* Botones acción — arriba del flujo para acceso inmediato en móvil */}
+          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+            <button onClick={crearCotizacion} style={{ flex:1, padding:'13px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
+              📋 Crear Cotización
+            </button>
+            <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              Ver cotizaciones →
+            </button>
           </div>
 
           {/* Flujo del cliente */}
@@ -198,23 +208,13 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             })()}
           </div>
 
-          {/* Botones acción */}
-          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-            <button onClick={crearCotizacion} style={{ flex:1, padding:'11px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:14, fontWeight:800, cursor:'pointer' }}>
-              📋 Crear Cotización
-            </button>
-            <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'11px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
-              Ver cotizaciones →
-            </button>
-          </div>
-
           {/* Historial */}
           {lead.historial?.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--color-text-muted)' }}>
                 CONVERSACIÓN ({lead.historial.length} mensajes)
               </div>
-              <div style={{ maxHeight: isMobile ? 220 : 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ maxHeight: isMobile ? 320 : 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {lead.historial.map((m, i) => (
                   <div key={i} style={{
                     padding: '8px 12px', borderRadius: 10, fontSize: 12.5, maxWidth: '86%',
