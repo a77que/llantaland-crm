@@ -87,6 +87,17 @@ app.use('/api/importar', importarRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
+// Diagnóstico temporal: ver rutas de archivos dentro del contenedor
+app.get('/api/debug-paths', (req, res) => {
+  const fs = require('fs');
+  const check = (p) => ({ path: p, exists: fs.existsSync(p), files: fs.existsSync(p) ? fs.readdirSync(p).slice(0, 3) : null });
+  res.json({
+    assets: check(path.join(__dirname, 'assets', 'audios')),
+    media:  check(path.join(__dirname, '..', 'media', 'audios')),
+    uploads: check(path.join(__dirname, '..', 'uploads', 'audios')),
+  });
+});
+
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
