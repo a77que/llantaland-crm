@@ -87,25 +87,6 @@ app.use('/api/importar', importarRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
-// Diagnóstico temporal: ver estructura del contenedor y mounts activos
-app.get('/api/debug-paths', (req, res) => {
-  const fs = require('fs');
-  const { execSync } = require('child_process');
-  const check = (p) => ({ path: p, exists: fs.existsSync(p), files: fs.existsSync(p) ? fs.readdirSync(p).slice(0, 5) : null });
-  const appRoot = path.join(__dirname, '..');
-  let gitLog = null;
-  try { gitLog = execSync('git -C /app log --oneline -3 2>/dev/null || echo "no git"', { encoding: 'utf8' }); } catch(_) {}
-  let assetsRaw = null;
-  try { assetsRaw = execSync('ls /app/src/assets/ 2>/dev/null || echo "empty"', { encoding: 'utf8' }); } catch(_) {}
-  res.json({
-    __dirname,
-    assetsRaw,
-    gitLog,
-    assets: check(path.join(__dirname, 'assets', 'audios')),
-    assetsParent: check(path.join(__dirname, 'assets')),
-    uploads: check(path.join(__dirname, '..', 'uploads', 'audios')),
-  });
-});
 
 app.use(errorHandler);
 
