@@ -20,4 +20,4 @@ RUN mkdir -p uploads
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && mkdir -p /app/uploads/audios && cp -rn /app/media/audios/. /app/uploads/audios/ && node src/index.js"]
