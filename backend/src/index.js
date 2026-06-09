@@ -63,7 +63,11 @@ app.use(express.json({ limit: process.env.MAX_FILE_SIZE || '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Fallback: serve built-in audio files from src/assets/audios (never a Docker volume)
+// so they survive EasyPanel rebuilds without manual restore.
+app.use('/uploads/audios', express.static(path.join(__dirname, 'assets', 'audios')));
 app.use('/media', express.static(path.join(__dirname, '..', 'media')));
+app.use('/media/audios', express.static(path.join(__dirname, 'assets', 'audios')));
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
 app.use('/api/', limiter);
