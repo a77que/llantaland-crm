@@ -2,7 +2,7 @@ const router = require('express').Router();
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { listar, obtener, crear, actualizar, compatibles, subirImagen } = require('../controllers/productoController');
+const { listar, obtener, crear, actualizar, compatibles, subirImagen, marcas } = require('../controllers/productoController');
 const { auth, requireAdmin } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
@@ -25,6 +25,7 @@ const upload = multer({
 
 router.use(auth);
 router.get('/',           listar);
+router.get('/marcas',     marcas);
 router.get('/compatibles',compatibles);
 router.get('/:id',        obtener);
 router.post('/',          requireAdmin, crear);

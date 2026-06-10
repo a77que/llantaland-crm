@@ -117,4 +117,18 @@ const subirImagen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, compatibles, subirImagen };
+const marcas = async (req, res, next) => {
+  try {
+    const result = await prisma.producto.findMany({
+      distinct: ['marca'],
+      select: { marca: true },
+      where: { activo: true },
+      orderBy: { marca: 'asc' },
+    });
+    res.json(result.map(r => r.marca).filter(Boolean));
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, actualizar, compatibles, subirImagen, marcas };

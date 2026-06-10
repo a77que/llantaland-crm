@@ -47,6 +47,7 @@ export const productosApi = {
   crear: (data) => api.post('/productos', data),
   actualizar: (id, data) => api.put(`/productos/${id}`, data),
   compatibles: (params) => api.get('/productos/compatibles', { params }),
+  marcas: () => api.get('/productos/marcas'),
   subirImagen: (id, formData) => api.post(`/productos/${id}/imagenes`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { productosApi, sedesApi } from '../services/api';
+import { productosApi, sedesApi, stockApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -182,7 +182,7 @@ const GRUPO_OPCIONES = ['Excelente', 'Muy Buena', 'Buena'];  // debe coincidir c
 const GRUPO_COLOR = { 'Excelente': '#16a34a', 'Muy Buena': '#3b82f6', 'Buena': '#f59e0b' };
 
 // ── Celda editable inline ─────────────────────────────────────────────────────
-function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef }) {
+function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef, marcas = [] }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value === '—' ? '' : String(value || ''));
   const ref = useRef();
@@ -214,6 +214,50 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef }) {
     return (
       <span onClick={() => setEditing(true)} title="Clic para editar"
         style={{ cursor:'pointer', display:'block', minHeight:20, fontWeight:600, color }}>
+        {value === '—' ? <span style={{ color:'var(--color-text-muted)', fontWeight:400 }}>— Clic para asignar</span> : value}
+      </span>
+    );
+  }
+
+  // Marca — dropdown con todas las marcas del sistema
+  if (campo === 'marca') {
+    if (editing) {
+      return (
+        <select ref={ref} value={val} autoFocus
+          onChange={e => { setVal(e.target.value); save(e.target.value); }}
+          onBlur={() => setEditing(false)}
+          style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}>
+          <option value="">— Sin marca —</option>
+          {marcas.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      );
+    }
+    return (
+      <span onClick={() => setEditing(true)} title="Clic para editar"
+        style={{ cursor:'pointer', display:'block', minHeight:20, fontWeight:700 }}>
+        {value === '—' ? <span style={{ color:'var(--color-text-muted)', fontWeight:400 }}>— Clic para asignar</span> : value}
+      </span>
+    );
+  }
+
+  // Tipo — dropdown fijo
+  if (campo === 'tipo') {
+    const TIPOS = ['AUTO', 'CAMIONETA', 'CAMION', 'MOTO'];
+    const tipoColor = { AUTO: '#3b82f6', CAMIONETA: '#8b5cf6', CAMION: '#f59e0b', MOTO: '#ec4899' };
+    if (editing) {
+      return (
+        <select ref={ref} value={val} autoFocus
+          onChange={e => { setVal(e.target.value); save(e.target.value); }}
+          onBlur={() => setEditing(false)}
+          style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}>
+          <option value="">— Sin tipo —</option>
+          {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      );
+    }
+    return (
+      <span onClick={() => setEditing(true)} title="Clic para editar"
+        style={{ cursor:'pointer', display:'block', minHeight:20, fontWeight:600, color: tipoColor[value] || 'var(--color-text-muted)' }}>
         {value === '—' ? <span style={{ color:'var(--color-text-muted)', fontWeight:400 }}>— Clic para asignar</span> : value}
       </span>
     );
@@ -251,6 +295,26 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef }) {
     );
   }
 
+  // Stock por local — input numérico con display coloreado
+  if (campo.startsWith('stock_')) {
+    if (editing) {
+      return (
+        <input ref={ref} type="number" min="0" value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={() => save()}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+          style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}
+        />
+      );
+    }
+    const num = typeof value === 'number' ? value : parseInt(value) || 0;
+    return (
+      <span onClick={() => setEditing(true)} title="Clic para editar" style={{ cursor:'pointer', display:'block', minHeight:20 }}>
+        <StockCell value={num} />
+      </span>
+    );
+  }
+
   // Input genérico (texto, número, fecha)
   const inputType = isCustom && colDef?.tipo === 'numero' ? 'number' : isCustom && colDef?.tipo === 'fecha' ? 'date' : 'text';
 
@@ -282,19 +346,22 @@ const SORTABLE = {
 };
 
 // ── Aplicar valor masivo con input inteligente según campo ────────────────────
-function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambiosMasivos }) {
+function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambiosMasivos, marcas = [] }) {
   const [campo, setCampo] = useState('grupo');
   const [valor, setValor] = useState('');
 
   const editableCols = columnasVisibles.filter(c =>
-    !['medida','marca','stockTotal'].includes(c.key) && !c.key.startsWith('stock_')
+    c.key !== 'medida' && c.key !== 'stockTotal'
   );
 
   const colDef = customCols.find(c => c.key === campo);
   const isGrupo = campo === 'grupo';
+  const isTipo  = campo === 'tipo';
+  const isMarca = campo === 'marca';
+  const isStockField = campo.startsWith('stock_');
   const isSelectCustom = colDef?.tipo === 'select' && colDef?.opciones?.length > 0;
   const isBool = colDef?.tipo === 'booleano';
-  const isNum  = colDef?.tipo === 'numero' || ['precioRegular','precioOferta','descuentoMaximo'].includes(campo);
+  const isNum  = colDef?.tipo === 'numero' || ['precioRegular','precioOferta','descuentoMaximo'].includes(campo) || isStockField;
   const isFecha = colDef?.tipo === 'fecha';
 
   const aplicar = () => {
@@ -317,10 +384,20 @@ function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambios
       </select>
 
       {/* Input inteligente según el tipo de campo */}
-      {isGrupo ? (
+      {isMarca ? (
+        <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:160 }}>
+          <option value="">— Elegir marca —</option>
+          {marcas.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      ) : isGrupo ? (
         <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
           <option value="">— Elegir —</option>
           {GRUPO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : isTipo ? (
+        <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
+          <option value="">— Elegir —</option>
+          {['AUTO','CAMIONETA','CAMION','MOTO'].map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       ) : isSelectCustom ? (
         <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
@@ -390,6 +467,24 @@ export default function Inventario() {
     queryFn: () => productosApi.listar({ q, tipo, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     keepPreviousData: true,
   });
+
+  const { data: sedesData = [] } = useQuery({
+    queryKey: ['sedes'],
+    queryFn: sedesApi.listar,
+    staleTime: Infinity,
+  });
+
+  const { data: marcasList = [] } = useQuery({
+    queryKey: ['marcas'],
+    queryFn: productosApi.marcas,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const sedesMap = useMemo(() => {
+    const m = {};
+    sedesData.forEach(s => { if (s.codigoLocal) m[s.codigoLocal] = s.id; });
+    return m;
+  }, [sedesData]);
 
   // Función para ordenar al hacer clic en cabecera
   const handleSort = (colKey) => {
@@ -471,10 +566,15 @@ export default function Inventario() {
         const prod = productos.find(p => p.id === prodId);
         const camposExtra = { ...(prod?.camposExtra || {}), [campo]: valor };
         await productosApi.actualizar(prodId, { camposExtra });
+      } else if (campo.startsWith('stock_')) {
+        const codigoLocal = campo.replace('stock_', '').toUpperCase();
+        const sedeId = sedesMap[codigoLocal];
+        if (!sedeId) throw new Error('Sede no encontrada');
+        await stockApi.actualizar(prodId, sedeId, { cantidad: parseInt(valor) || 0 });
       } else {
         let v = valor;
         if (['precioRegular','precioOferta','descuentoMaximo'].includes(campo)) {
-          v = valor ? parseFloat(valor.replace('S/ ','').replace('%','')) : null;
+          v = valor ? parseFloat(String(valor).replace('S/ ','').replace('%','')) : null;
         }
         await productosApi.actualizar(prodId, { [campo]: v });
       }
@@ -605,9 +705,9 @@ export default function Inventario() {
                       const raw = rawPendiente !== undefined ? rawPendiente : rawOriginal;
                       const hasCambio = rawPendiente !== undefined && String(rawPendiente) !== String(rawOriginal === '—' ? '' : rawOriginal || '');
 
-                      const isStock = col.key.startsWith('stock_') || col.key === 'stockTotal';
+                      const isStockTotal = col.key === 'stockTotal';
                       const isCustom = col.key.startsWith('custom_');
-                      const isEditable = !['medida','marca','stockTotal'].includes(col.key) && !col.key.startsWith('stock_');
+                      const isEditable = col.key !== 'medida' && !isStockTotal;
 
                       // En modo edición masiva: guardar en estado local
                       const onSaveMasivo = (prodId, campo, valor, isC) => {
@@ -619,7 +719,7 @@ export default function Inventario() {
 
                       return (
                         <td key={col.key} style={{ padding:'6px 12px', borderLeft:'1px solid var(--color-border)', whiteSpace:'nowrap', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', background: hasCambio ? '#fffbeb' : undefined }}>
-                          {isStock ? (
+                          {isStockTotal ? (
                             <StockCell value={typeof raw === 'number' ? raw : parseInt(raw)||0} />
                           ) : isEditable ? (
                             <CeldaEditable
@@ -627,9 +727,10 @@ export default function Inventario() {
                               onSave={modoEdicion ? onSaveMasivo : guardarCelda}
                               isCustom={isCustom}
                               colDef={isCustom ? customCols.find(c=>c.key===col.key) : null}
+                              marcas={marcasList}
                             />
                           ) : (
-                            <span style={{ color: col.key==='tipo' ? TIPO_COLOR[raw] : undefined, fontWeight: col.key==='medida'?700:undefined }}>
+                            <span style={{ fontWeight: col.key==='medida'?700:undefined }}>
                               {raw}
                             </span>
                           )}
@@ -690,6 +791,7 @@ export default function Inventario() {
             customCols={customCols}
             seleccionados={seleccionados}
             setCambiosMasivos={setCambiosMasivos}
+            marcas={marcasList}
           />}
 
           {Object.keys(cambiosMasivos).length > 0 && (
@@ -699,12 +801,42 @@ export default function Inventario() {
                 setGuardandoMasivo(true);
                 let ok = 0;
                 for (const [prodId, cambios] of Object.entries(cambiosMasivos)) {
+                  const regularFields = {};
+                  const customFields = {};
+                  const stockFields = {};
                   for (const [campo, valor] of Object.entries(cambios)) {
-                    const isCustom = campo.startsWith('custom_');
-                    await guardarCelda(prodId, campo, valor, isCustom).catch(()=>{});
-                    ok++;
+                    if (campo.startsWith('custom_')) {
+                      customFields[campo] = valor;
+                    } else if (campo.startsWith('stock_')) {
+                      stockFields[campo] = valor;
+                    } else {
+                      let v = valor;
+                      if (['precioRegular','precioOferta','descuentoMaximo'].includes(campo)) {
+                        v = valor ? parseFloat(String(valor).replace('S/ ','').replace('%','')) : null;
+                      }
+                      regularFields[campo] = v;
+                    }
+                  }
+                  if (Object.keys(regularFields).length > 0) {
+                    await productosApi.actualizar(prodId, regularFields).catch(() => {});
+                    ok += Object.keys(regularFields).length;
+                  }
+                  if (Object.keys(customFields).length > 0) {
+                    const prod = productos.find(p => p.id === prodId);
+                    const camposExtra = { ...(prod?.camposExtra || {}), ...customFields };
+                    await productosApi.actualizar(prodId, { camposExtra }).catch(() => {});
+                    ok += Object.keys(customFields).length;
+                  }
+                  for (const [campo, valor] of Object.entries(stockFields)) {
+                    const codigoLocal = campo.replace('stock_', '').toUpperCase();
+                    const sedeId = sedesMap[codigoLocal];
+                    if (sedeId) {
+                      await stockApi.actualizar(prodId, sedeId, { cantidad: parseInt(valor) || 0 }).catch(() => {});
+                      ok++;
+                    }
                   }
                 }
+                qc.invalidateQueries(['productos']);
                 setCambiosMasivos({});
                 setSeleccionados([]);
                 setGuardandoMasivo(false);
