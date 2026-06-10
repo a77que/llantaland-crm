@@ -48,6 +48,24 @@ export default function ImportadorStock() {
   const [preview, setPreview] = useState(null);
   const [mapeo, setMapeo] = useState({});
   const [resultado, setResultado] = useState(null);
+  const [descargando, setDescargando] = useState(false);
+
+  const descargarTemplate = async () => {
+    setDescargando(true);
+    try {
+      const blob = await importarApi.template();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'plantilla_productos_llantaland.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Error al descargar la plantilla');
+    } finally {
+      setDescargando(false);
+    }
+  };
 
   const previewMutation = useMutation({
     mutationFn: (file) => {
@@ -100,6 +118,26 @@ export default function ImportadorStock() {
 
   return (
     <div>
+      {/* Banner descarga plantilla */}
+      <div style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', border: '1.5px solid #93c5fd', borderRadius: 12, padding: '16px 20px', marginBottom: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#1d4ed8', marginBottom: 4 }}>
+            📋 Plantilla de ejemplo
+          </div>
+          <div style={{ fontSize: 12.5, color: '#3b82f6', lineHeight: 1.5 }}>
+            Descarga el formato correcto con <strong>4 llantas de muestra</strong> y una hoja de instrucciones.<br />
+            Columnas obligatorias: <strong>SKU · Medida · Marca · Precio</strong>
+          </div>
+        </div>
+        <button
+          onClick={descargarTemplate}
+          disabled={descargando}
+          style={{ padding: '9px 18px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: descargando ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: descargando ? 0.7 : 1, transition: 'opacity .15s' }}
+        >
+          {descargando ? '⏳ Descargando...' : '⬇️ Descargar plantilla .xlsx'}
+        </button>
+      </div>
+
       {/* Dropzone */}
       <div style={S.card}>
         <div style={S.cardTitle}>1. Subir archivo</div>

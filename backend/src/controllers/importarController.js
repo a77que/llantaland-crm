@@ -357,4 +357,73 @@ const aplicarUpdate = async (req, res, next) => {
   }
 };
 
-module.exports = { preview, ejecutar, previewUpdate, aplicarUpdate };
+const generarTemplate = async (req, res, next) => {
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // ── Hoja 1: Datos ──────────────────────────────────────────────────────
+    const headers = [
+      'SKU', 'Medida', 'Marca', 'Modelo', 'Descripción',
+      'Tipo', 'Índice de carga', 'Velocidad máxima', 'Ancho mm', 'Aro',
+      'Tipo terreno', 'Garantía', 'Precio', 'Stock cantidad', 'Sede del stock',
+    ];
+
+    const notas = [
+      '← Único, ej: LLT-001', '← Ej: 195/65R15', '← Ej: BRIDGESTONE', 'Ej: ECOPIA EP150', 'Descripción libre',
+      'AUTO / CAMIONETA / CAMION / MOTO', 'Ej: 91', 'Ej: H', 'Ej: 195', 'Ej: 15',
+      'Ej: Asfalto', 'Ej: 2 años', '← Solo número, ej: 250.00', 'Entero, ej: 30', 'Ej: Almacén Central',
+    ];
+
+    const ejemplos = [
+      ['LLT-195-65-R15-001', '195/65R15',    'BRIDGESTONE', 'ECOPIA EP150', 'Llanta para auto sedán',          'AUTO',      '91',  'H', 195, 15, 'Asfalto',       '2 años', 250.00,  30, 'Almacén Central'],
+      ['LLT-265-70-R17-002', '265/70R17',    'MICHELIN',    'LTX FORCE',   'Llanta para camioneta 4x4',       'CAMIONETA', '121', 'S', 265, 17, 'Todo terreno',  '3 años', 480.00,  15, 'Santa Anita'],
+      ['LLT-315-80-R22-003', '315/80R22.5',  'CONTINENTAL', 'HDR2',        'Llanta para camión de carga',     'CAMION',    '156', 'L', 315, 22, 'Asfalto',       '1 año',  1200.00,  8, 'Almacén Central'],
+      ['LLT-110-70-R17-004', '110/70R17',    'PIRELLI',     'ANGEL GT2',   'Llanta para moto deportiva',      'MOTO',      '54',  'H', 110, 17, 'Asfalto',       '1 año',  320.00,  20, 'Santa Anita'],
+    ];
+
+    const wsData = [headers, notas, ...ejemplos];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    ws['!cols'] = headers.map((h, i) => {
+      const allVals = [h, notas[i], ...ejemplos.map(r => String(r[i] ?? ''))];
+      const max = Math.max(...allVals.map(v => String(v).length));
+      return { wch: Math.min(max + 2, 36) };
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+
+    // ── Hoja 2: Instrucciones ──────────────────────────────────────────────
+    const instrucciones = [
+      ['CAMPO', 'OBLIGATORIO', 'FORMATO', 'DESCRIPCIÓN'],
+      ['SKU',               'SÍ',  'Texto único',                        'Código único del producto. No puede repetirse. Ej: LLT-195-65-R15-001'],
+      ['Medida',            'SÍ',  'Texto (ej: 195/65R15)',              'Medida estándar de la llanta en formato ancho/perfil-aro.'],
+      ['Marca',             'SÍ',  'Texto (ej: BRIDGESTONE)',            'Nombre del fabricante en mayúsculas.'],
+      ['Modelo',            'No',  'Texto',                             'Nombre del modelo o línea comercial. Ej: ECOPIA EP150.'],
+      ['Descripción',       'No',  'Texto libre',                       'Descripción del producto para mostrar en el sistema.'],
+      ['Tipo',              'No',  'AUTO / CAMIONETA / CAMION / MOTO',  'Tipo de vehículo. Si se omite, se asigna AUTO por defecto.'],
+      ['Índice de carga',   'No',  'Número (ej: 91)',                   'Índice de carga de la llanta según norma estándar.'],
+      ['Velocidad máxima',  'No',  'Letra (ej: H, V, S)',               'Código de velocidad máxima (norma ETRTO).'],
+      ['Ancho mm',          'No',  'Número entero (ej: 195)',           'Ancho de la llanta en milímetros.'],
+      ['Aro',               'No',  'Número entero (ej: 15)',            'Diámetro del aro en pulgadas.'],
+      ['Tipo terreno',      'No',  'Texto (ej: Asfalto)',               'Terreno recomendado. Ej: Asfalto, Todo terreno, Barro.'],
+      ['Garantía',          'No',  'Texto (ej: 2 años)',                'Período de garantía del fabricante.'],
+      ['Precio',            'SÍ',  'Número decimal (ej: 250.00)',       'Precio de venta. Sin símbolo de moneda, usar punto decimal.'],
+      ['Stock cantidad',    'No',  'Número entero (ej: 30)',            'Cantidad de unidades en la sede indicada. Requiere "Sede del stock".'],
+      ['Sede del stock',    'No',  'Nombre de la sede',                 'Sede donde se registra el stock. Ej: Almacén Central, Santa Anita, Surco.'],
+    ];
+
+    const wsInstr = XLSX.utils.aoa_to_sheet(instrucciones);
+    wsInstr['!cols'] = [{ wch: 18 }, { wch: 13 }, { wch: 34 }, { wch: 65 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla_productos_llantaland.xlsx"');
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { preview, ejecutar, previewUpdate, aplicarUpdate, generarTemplate };

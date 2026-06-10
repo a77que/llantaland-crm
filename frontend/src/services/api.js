@@ -102,6 +102,7 @@ export const citasApi = {
 };
 
 export const importarApi = {
+  template: () => api.get('/importar/template', { responseType: 'blob' }),
   preview: (formData) => api.post('/importar/preview', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
