@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import ImportadorStock from '../components/ImportadorStock/ImportadorStock';
 import ActualizarStock from '../components/ImportadorStock/ActualizarStock';
+import { importarApi } from '../services/api';
 
 const S = {
   page: { padding: 24 },
@@ -18,18 +20,61 @@ const S = {
 };
 
 const TABS = [
-  { id: 'importar',  icon: '📥', label: 'Importar productos',  desc: 'Crea o actualiza productos completos desde Excel/CSV' },
-  { id: 'actualizar', icon: '🔄', label: 'Actualizar stock/precios', desc: 'Actualiza campos específicos de productos existentes' },
+  { id: 'importar',   icon: '📥', label: 'Importar productos',       desc: 'Crea o actualiza productos completos desde Excel/CSV' },
+  { id: 'actualizar', icon: '🔄', label: 'Actualizar stock/precios',  desc: 'Actualiza campos específicos de productos existentes' },
 ];
+
+function useDescarga(fn, filename) {
+  const [cargando, setCargando] = useState(false);
+  const descargar = async () => {
+    setCargando(true);
+    try {
+      const blob = await fn();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Error al descargar');
+    } finally {
+      setCargando(false);
+    }
+  };
+  return { descargar, cargando };
+}
 
 export default function Importar() {
   const [tab, setTab] = useState('actualizar');
+  const template  = useDescarga(importarApi.template,         'plantilla_productos_llantaland.xlsx');
+  const exportar  = useDescarga(importarApi.exportarCatalogo, `catalogo_llantaland_${new Date().toISOString().slice(0,10)}.xlsx`);
 
   return (
     <div style={S.page}>
-      <div style={S.header}>
-        <div style={S.title}>Gestión masiva de inventario</div>
-        <div style={S.sub}>Importa nuevos productos o actualiza precios y stock de los existentes desde un archivo Excel o CSV.</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14, marginBottom: 20 }}>
+        <div style={S.header}>
+          <div style={S.title}>Gestión masiva de inventario</div>
+          <div style={S.sub}>Importa nuevos productos o actualiza precios y stock desde Excel o CSV.</div>
+        </div>
+
+        {/* Botones de descarga */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={template.descargar}
+            disabled={template.cargando}
+            style={{ padding: '8px 14px', background: 'var(--color-surface)', border: '1.5px solid #3b82f6', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            {template.cargando ? '⏳' : '📋'} {template.cargando ? 'Generando...' : 'Plantilla de carga'}
+          </button>
+          <button
+            onClick={exportar.descargar}
+            disabled={exportar.cargando}
+            style={{ padding: '8px 14px', background: '#16a34a', border: 'none', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            {exportar.cargando ? '⏳' : '⬇️'} {exportar.cargando ? 'Exportando...' : 'Exportar catálogo'}
+          </button>
+        </div>
       </div>
 
       <div style={S.tabs}>
@@ -40,7 +85,7 @@ export default function Importar() {
         ))}
       </div>
 
-      {tab === 'importar'  && <ImportadorStock />}
+      {tab === 'importar'   && <ImportadorStock />}
       {tab === 'actualizar' && <ActualizarStock />}
     </div>
   );

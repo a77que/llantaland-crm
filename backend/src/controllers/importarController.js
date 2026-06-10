@@ -357,67 +357,110 @@ const aplicarUpdate = async (req, res, next) => {
   }
 };
 
+// Extrae todas las keys de camposExtra usadas en productos activos
+async function getExtraKeys() {
+  const muestra = await prisma.producto.findMany({
+    select: { camposExtra: true },
+    where: { activo: true },
+  });
+  const seen = new Set();
+  const keys = [];
+  muestra.forEach(p => {
+    if (p.camposExtra && typeof p.camposExtra === 'object' && !Array.isArray(p.camposExtra)) {
+      Object.keys(p.camposExtra).forEach(k => { if (!seen.has(k)) { seen.add(k); keys.push(k); } });
+    }
+  });
+  return keys;
+}
+
+function extraKeyLabel(k) {
+  return k.replace(/^custom_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function toNum(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object' && typeof val.toNumber === 'function') return val.toNumber();
+  return val;
+}
+
 const generarTemplate = async (req, res, next) => {
   try {
-    const wb = XLSX.utils.book_new();
+    const [sedes, extraKeys] = await Promise.all([
+      prisma.sede.findMany({ where: { activo: true }, orderBy: { codigoLocal: 'asc' } }),
+      getExtraKeys(),
+    ]);
 
-    // ── Hoja 1: Datos ──────────────────────────────────────────────────────
-    const headers = [
-      'SKU', 'Medida', 'Marca', 'Modelo', 'Descripción',
-      'Tipo', 'Índice de carga', 'Velocidad máxima', 'Ancho mm', 'Aro',
-      'Tipo terreno', 'Garantía', 'Precio', 'Stock cantidad', 'Sede del stock',
+    // Columnas fijas del sistema
+    const fixedCols = [
+      { key: 'sku',             label: 'SKU',                  nota: '← OBLIGATORIO. Único, ej: LLT-001',         ej1: 'LLT-195-65-R15-001',  ej2: 'LLT-265-70-R17-002' },
+      { key: 'medida',          label: 'Medida',               nota: '← OBLIGATORIO. Ej: 195/65R15',              ej1: '195/65R15',            ej2: '265/70R17'           },
+      { key: 'marca',           label: 'Marca',                nota: '← OBLIGATORIO. Ej: BRIDGESTONE',            ej1: 'BRIDGESTONE',          ej2: 'MICHELIN'            },
+      { key: 'nombreComercial', label: 'Nombre Comercial',     nota: 'Ej: ECOPIA EP150',                          ej1: 'ECOPIA EP150',         ej2: 'LTX FORCE'           },
+      { key: 'grupo',           label: 'Grupo',                nota: 'Excelente / Muy Buena / Buena',             ej1: 'Excelente',            ej2: 'Muy Buena'           },
+      { key: 'tipo',            label: 'Tipo',                 nota: 'AUTO / CAMIONETA / CAMION / MOTO',          ej1: 'AUTO',                 ej2: 'CAMIONETA'           },
+      { key: 'precioRegular',   label: 'Precio Regular',       nota: '← OBLIGATORIO. Número, ej: 250.00',         ej1: 250.00,                 ej2: 480.00                },
+      { key: 'precioOferta',    label: 'Precio Oferta',        nota: 'Vacío si no hay oferta',                    ej1: 220.00,                 ej2: ''                    },
+      { key: 'descuentoMaximo', label: 'Descuento Máximo %',   nota: 'Número del %, ej: 15',                      ej1: 15,                     ej2: 10                    },
+      { key: 'garantia',        label: 'Garantía',             nota: 'Ej: 2 años',                                ej1: '2 años',               ej2: '3 años'              },
+      { key: 'fichaTecnica',    label: 'Ficha Técnica',        nota: 'URL o texto técnico',                       ej1: '',                     ej2: ''                    },
+      { key: 'indice_carga',    label: 'Índice de carga',      nota: 'Ej: 91',                                    ej1: '91',                   ej2: '121'                 },
+      { key: 'velocidad_max',   label: 'Velocidad máxima',     nota: 'Ej: H',                                     ej1: 'H',                    ej2: 'S'                   },
     ];
 
-    const notas = [
-      '← Único, ej: LLT-001', '← Ej: 195/65R15', '← Ej: BRIDGESTONE', 'Ej: ECOPIA EP150', 'Descripción libre',
-      'AUTO / CAMIONETA / CAMION / MOTO', 'Ej: 91', 'Ej: H', 'Ej: 195', 'Ej: 15',
-      'Ej: Asfalto', 'Ej: 2 años', '← Solo número, ej: 250.00', 'Entero, ej: 30', 'Ej: Almacén Central',
+    const stockCols = sedes.map((s, i) => ({
+      key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}`,
+      nota: 'Número entero, ej: 10',
+      ej1: i === 0 ? 30 : 0,
+      ej2: i === 1 ? 15 : 0,
+    }));
+
+    const extraCols = extraKeys.map(k => ({
+      key: k, label: extraKeyLabel(k),
+      nota: 'Campo personalizado', ej1: '', ej2: '',
+    }));
+
+    const allCols = [...fixedCols, ...stockCols, ...extraCols];
+
+    const wsData = [
+      allCols.map(c => c.label),
+      allCols.map(c => c.nota),
+      allCols.map(c => c.ej1),
+      allCols.map(c => c.ej2),
     ];
 
-    const ejemplos = [
-      ['LLT-195-65-R15-001', '195/65R15',    'BRIDGESTONE', 'ECOPIA EP150', 'Llanta para auto sedán',          'AUTO',      '91',  'H', 195, 15, 'Asfalto',       '2 años', 250.00,  30, 'Almacén Central'],
-      ['LLT-265-70-R17-002', '265/70R17',    'MICHELIN',    'LTX FORCE',   'Llanta para camioneta 4x4',       'CAMIONETA', '121', 'S', 265, 17, 'Todo terreno',  '3 años', 480.00,  15, 'Santa Anita'],
-      ['LLT-315-80-R22-003', '315/80R22.5',  'CONTINENTAL', 'HDR2',        'Llanta para camión de carga',     'CAMION',    '156', 'L', 315, 22, 'Asfalto',       '1 año',  1200.00,  8, 'Almacén Central'],
-      ['LLT-110-70-R17-004', '110/70R17',    'PIRELLI',     'ANGEL GT2',   'Llanta para moto deportiva',      'MOTO',      '54',  'H', 110, 17, 'Asfalto',       '1 año',  320.00,  20, 'Santa Anita'],
-    ];
-
-    const wsData = [headers, notas, ...ejemplos];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    ws['!cols'] = headers.map((h, i) => {
-      const allVals = [h, notas[i], ...ejemplos.map(r => String(r[i] ?? ''))];
-      const max = Math.max(...allVals.map(v => String(v).length));
-      return { wch: Math.min(max + 2, 36) };
+    ws['!cols'] = allCols.map((c, i) => {
+      const max = Math.max(...wsData.map(row => String(row[i] ?? '').length));
+      return { wch: Math.min(max + 2, 32) };
     });
 
+    const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Productos');
 
-    // ── Hoja 2: Instrucciones ──────────────────────────────────────────────
-    const instrucciones = [
-      ['CAMPO', 'OBLIGATORIO', 'FORMATO', 'DESCRIPCIÓN'],
-      ['SKU',               'SÍ',  'Texto único',                        'Código único del producto. No puede repetirse. Ej: LLT-195-65-R15-001'],
-      ['Medida',            'SÍ',  'Texto (ej: 195/65R15)',              'Medida estándar de la llanta en formato ancho/perfil-aro.'],
-      ['Marca',             'SÍ',  'Texto (ej: BRIDGESTONE)',            'Nombre del fabricante en mayúsculas.'],
-      ['Modelo',            'No',  'Texto',                             'Nombre del modelo o línea comercial. Ej: ECOPIA EP150.'],
-      ['Descripción',       'No',  'Texto libre',                       'Descripción del producto para mostrar en el sistema.'],
-      ['Tipo',              'No',  'AUTO / CAMIONETA / CAMION / MOTO',  'Tipo de vehículo. Si se omite, se asigna AUTO por defecto.'],
-      ['Índice de carga',   'No',  'Número (ej: 91)',                   'Índice de carga de la llanta según norma estándar.'],
-      ['Velocidad máxima',  'No',  'Letra (ej: H, V, S)',               'Código de velocidad máxima (norma ETRTO).'],
-      ['Ancho mm',          'No',  'Número entero (ej: 195)',           'Ancho de la llanta en milímetros.'],
-      ['Aro',               'No',  'Número entero (ej: 15)',            'Diámetro del aro en pulgadas.'],
-      ['Tipo terreno',      'No',  'Texto (ej: Asfalto)',               'Terreno recomendado. Ej: Asfalto, Todo terreno, Barro.'],
-      ['Garantía',          'No',  'Texto (ej: 2 años)',                'Período de garantía del fabricante.'],
-      ['Precio',            'SÍ',  'Número decimal (ej: 250.00)',       'Precio de venta. Sin símbolo de moneda, usar punto decimal.'],
-      ['Stock cantidad',    'No',  'Número entero (ej: 30)',            'Cantidad de unidades en la sede indicada. Requiere "Sede del stock".'],
-      ['Sede del stock',    'No',  'Nombre de la sede',                 'Sede donde se registra el stock. Ej: Almacén Central, Santa Anita, Surco.'],
+    // Hoja instrucciones
+    const instrRows = [
+      ['CAMPO', 'OBLIGATORIO', 'FORMATO / OPCIONES', 'DESCRIPCIÓN'],
+      ['SKU',                'SÍ',  'Texto único',                       'Código único del producto. No puede repetirse.'],
+      ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar de la llanta.'],
+      ['Marca',              'SÍ',  'Ej: BRIDGESTONE',                   'Nombre del fabricante.'],
+      ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
+      ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
+      ['Tipo',               'No',  'AUTO / CAMIONETA / CAMION / MOTO',  'Si se omite, se asigna AUTO.'],
+      ['Precio Regular',     'SÍ',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda.'],
+      ['Precio Oferta',      'No',  'Número decimal',                    'Dejar vacío si no hay precio de oferta.'],
+      ['Descuento Máximo %', 'No',  'Número (ej: 15)',                   'Porcentaje máximo de descuento permitido.'],
+      ['Garantía',           'No',  'Texto (ej: 2 años)',                'Período de garantía del fabricante.'],
+      ['Ficha Técnica',      'No',  'URL o texto',                       'URL o descripción técnica del producto.'],
+      ['Índice de carga',    'No',  'Número (ej: 91)',                   'Índice de carga estándar.'],
+      ['Velocidad máxima',   'No',  'Letra (ej: H, V, S)',               'Código de velocidad máxima.'],
+      ...sedes.map(s  => [`Stock ${s.nombre}`, 'No', 'Número entero (ej: 10)', `Stock en sede ${s.nombre} (${s.codigoLocal}).`]),
+      ...extraKeys.map(k => [extraKeyLabel(k), 'No', 'Texto libre', 'Campo personalizado del catálogo.']),
     ];
-
-    const wsInstr = XLSX.utils.aoa_to_sheet(instrucciones);
-    wsInstr['!cols'] = [{ wch: 18 }, { wch: 13 }, { wch: 34 }, { wch: 65 }];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instrRows);
+    wsInstr['!cols'] = [{ wch: 22 }, { wch: 13 }, { wch: 34 }, { wch: 58 }];
     XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
 
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="plantilla_productos_llantaland.xlsx"');
     res.send(buffer);
@@ -426,4 +469,72 @@ const generarTemplate = async (req, res, next) => {
   }
 };
 
-module.exports = { preview, ejecutar, previewUpdate, aplicarUpdate, generarTemplate };
+const exportarCatalogo = async (req, res, next) => {
+  try {
+    const [sedes, extraKeys] = await Promise.all([
+      prisma.sede.findMany({ where: { activo: true }, orderBy: { codigoLocal: 'asc' } }),
+      getExtraKeys(),
+    ]);
+
+    const productos = await prisma.producto.findMany({
+      where: { activo: true },
+      include: { stocks: { include: { sede: true } } },
+      orderBy: [{ marca: 'asc' }, { medida: 'asc' }],
+    });
+
+    const fixedCols = [
+      { key: 'sku',             label: 'SKU'                  },
+      { key: 'medida',          label: 'Medida'               },
+      { key: 'marca',           label: 'Marca'                },
+      { key: 'nombreComercial', label: 'Nombre Comercial'     },
+      { key: 'grupo',           label: 'Grupo'                },
+      { key: 'tipo',            label: 'Tipo'                 },
+      { key: 'precioRegular',   label: 'Precio Regular'       },
+      { key: 'precioOferta',    label: 'Precio Oferta'        },
+      { key: 'descuentoMaximo', label: 'Descuento Máximo %'   },
+      { key: 'garantia',        label: 'Garantía'             },
+      { key: 'fichaTecnica',    label: 'Ficha Técnica'        },
+      { key: 'indice_carga',    label: 'Índice de carga'      },
+      { key: 'velocidad_max',   label: 'Velocidad máxima'     },
+      { key: '__stockTotal',    label: 'Stock Total'          },
+    ];
+    const stockCols = sedes.map(s => ({ key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}`, codigoLocal: s.codigoLocal }));
+    const extraCols  = extraKeys.map(k => ({ key: k, label: extraKeyLabel(k) }));
+    const allCols    = [...fixedCols, ...stockCols, ...extraCols];
+
+    const headers = allCols.map(c => c.label);
+
+    const rows = productos.map(prod => {
+      const stockMap = {};
+      let stockTotal = 0;
+      prod.stocks.forEach(s => { stockMap[s.sede.codigoLocal] = s.cantidad; stockTotal += s.cantidad; });
+
+      return allCols.map(col => {
+        if (col.key === '__stockTotal') return stockTotal;
+        if (col.key.startsWith('stock_')) return stockMap[col.codigoLocal] ?? 0;
+        if (extraKeys.includes(col.key)) return prod.camposExtra?.[col.key] ?? '';
+        const v = prod[col.key];
+        return toNum(v) === '' ? (v ?? '') : toNum(v);
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map((h, i) => {
+      const sample = [h, ...rows.slice(0, 15).map(r => String(r[i] ?? ''))];
+      return { wch: Math.min(Math.max(...sample.map(v => v.length)) + 2, 32) };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Catalogo');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="catalogo_llantaland_${fecha}.xlsx"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { preview, ejecutar, previewUpdate, aplicarUpdate, generarTemplate, exportarCatalogo };
