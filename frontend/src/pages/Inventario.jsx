@@ -348,27 +348,34 @@ const SORTABLE = {
 // ── Aplicar valor masivo con input inteligente según campo ────────────────────
 function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambiosMasivos, marcas = [] }) {
   const [campo, setCampo] = useState('grupo');
+  const [sedeLocal, setSedeLocal] = useState('');
   const [valor, setValor] = useState('');
 
-  const editableCols = columnasVisibles.filter(c =>
-    c.key !== 'medida' && c.key !== 'stockTotal'
-  );
+  // Stock cols visibles — para el sub-selector de local
+  const stockCols = columnasVisibles.filter(c => c.key.startsWith('stock_'));
+
+  // Columnas editables: sin stock individual (se agrupan bajo __stock__)
+  const editableCols = [
+    ...columnasVisibles.filter(c => c.key !== 'medida' && c.key !== 'stockTotal' && !c.key.startsWith('stock_')),
+    ...(stockCols.length > 0 ? [{ key: '__stock__', label: 'Stock' }] : []),
+  ];
 
   const colDef = customCols.find(c => c.key === campo);
-  const isGrupo = campo === 'grupo';
-  const isTipo  = campo === 'tipo';
-  const isMarca = campo === 'marca';
-  const isStockField = campo.startsWith('stock_');
+  const isGrupo       = campo === 'grupo';
+  const isTipo        = campo === 'tipo';
+  const isMarca       = campo === 'marca';
+  const isStockGroup  = campo === '__stock__';
   const isSelectCustom = colDef?.tipo === 'select' && colDef?.opciones?.length > 0;
-  const isBool = colDef?.tipo === 'booleano';
-  const isNum  = colDef?.tipo === 'numero' || ['precioRegular','precioOferta','descuentoMaximo'].includes(campo) || isStockField;
+  const isBool  = colDef?.tipo === 'booleano';
+  const isNum   = colDef?.tipo === 'numero' || ['precioRegular','precioOferta','descuentoMaximo'].includes(campo) || isStockGroup;
   const isFecha = colDef?.tipo === 'fecha';
 
   const aplicar = () => {
-    if (!campo || (!valor && !isBool)) return;
+    const realCampo = isStockGroup ? sedeLocal : campo;
+    if (!realCampo || (!valor && !isBool)) return;
     setCambiosMasivos(prev => {
       const next = { ...prev };
-      seleccionados.forEach(id => { next[id] = { ...(next[id]||{}), [campo]: valor }; });
+      seleccionados.forEach(id => { next[id] = { ...(next[id]||{}), [realCampo]: valor }; });
       return next;
     });
     toast.success(`Aplicado a ${seleccionados.length} llantas`);
@@ -379,11 +386,20 @@ function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambios
 
   return (
     <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-      <select value={campo} onChange={e => { setCampo(e.target.value); setValor(''); }} style={{ ...inp }}>
+      {/* Selector de campo */}
+      <select value={campo} onChange={e => { setCampo(e.target.value); setValor(''); setSedeLocal(''); }} style={{ ...inp }}>
         {editableCols.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
       </select>
 
-      {/* Input inteligente según el tipo de campo */}
+      {/* Sub-selector de local cuando campo es Stock */}
+      {isStockGroup && (
+        <select value={sedeLocal} onChange={e => { setSedeLocal(e.target.value); setValor(''); }} style={{ ...inp, width:150 }}>
+          <option value="">— Elegir local —</option>
+          {stockCols.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+        </select>
+      )}
+
+      {/* Input según tipo de campo */}
       {isMarca ? (
         <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:160 }}>
           <option value="">— Elegir marca —</option>
@@ -410,19 +426,20 @@ function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambios
           <option value="Sí">✅ Sí</option>
           <option value="No">❌ No</option>
         </select>
-      ) : (
+      ) : (!isStockGroup || sedeLocal) ? (
         <input
           value={valor} onChange={e => setValor(e.target.value)}
           type={isNum ? 'number' : isFecha ? 'date' : 'text'}
-          placeholder="Nuevo valor..."
-          style={{ ...inp, width:130 }}
+          min={isStockGroup ? 0 : undefined}
+          placeholder={isStockGroup ? 'Cantidad...' : 'Nuevo valor...'}
+          style={{ ...inp, width:110 }}
           onKeyDown={e => { if (e.key === 'Enter') aplicar(); }}
         />
-      )}
+      ) : null}
 
       <button
         onClick={aplicar}
-        disabled={!campo || (!valor && !isBool)}
+        disabled={!campo || (!valor && !isBool) || (isStockGroup && !sedeLocal)}
         style={{ padding:'6px 12px', background:'#f5c400', color:'#000', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}
       >Aplicar</button>
     </div>
