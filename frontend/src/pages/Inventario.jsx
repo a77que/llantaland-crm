@@ -11,9 +11,18 @@ import ComparadorModal from '../components/ComparadorModal';
 const fmt   = (v) => v ? `S/ ${parseFloat(v).toFixed(2)}` : '—';
 const fmtPct = (v) => v ? `${parseFloat(v).toFixed(0)}%` : '—';
 
+function parseMedida(medida) {
+  const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
+  if (!m) return { ancho: null, perfil: null, radio: null };
+  return { ancho: parseInt(m[1]), perfil: parseInt(m[2]), radio: parseInt(m[3]) };
+}
+
 // Columnas fijas del sistema
 const COLUMNAS_FIJAS = [
   { key: 'medida',          label: 'Medida',          group: 'Producto',  required: true },
+  { key: 'ancho',           label: 'Ancho (mm)',       group: 'Medida' },
+  { key: 'perfil',          label: 'Perfil (%)',       group: 'Medida' },
+  { key: 'radio',           label: 'Radio (R)',        group: 'Medida' },
   { key: 'marca',           label: 'Marca',           group: 'Producto',  required: true },
   { key: 'nombreComercial', label: 'Nombre Comercial', group: 'Producto' },
   { key: 'grupo',           label: 'Grupo',           group: 'Producto' },
@@ -49,7 +58,8 @@ const defaultVisible = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) return JSON.parse(saved);
   return COLUMNAS_FIJAS.filter(c => [
-    'medida','marca','nombreComercial','grupo','precioRegular','precioOferta','descuentoMaximo',
+    'medida','ancho','perfil','radio',
+    'marca','nombreComercial','grupo','precioRegular','precioOferta','descuentoMaximo',
     'indice_carga','velocidad_max','cargaMaxNeumatico','velocidadMaxKmh',
     'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
     'stockTotal','stock_L0','stock_L1','stock_L2','stock_L3','stock_L4','stock_L5'
@@ -61,6 +71,9 @@ function getStockLocal(producto, codigoLocal) {
 }
 
 function getCellValue(prod, key) {
+  if (key === 'ancho')  { const p = parseMedida(prod.medida); return p.ancho  ?? '—'; }
+  if (key === 'perfil') { const p = parseMedida(prod.medida); return p.perfil ?? '—'; }
+  if (key === 'radio')  { const p = parseMedida(prod.medida); return p.radio  ?? '—'; }
   if (key.startsWith('stock_')) {
     const cod = key.replace('stock_', '').toUpperCase();
     return getStockLocal(prod, cod);

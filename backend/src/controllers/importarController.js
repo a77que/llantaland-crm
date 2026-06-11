@@ -422,6 +422,12 @@ function toNum(val) {
   return val;
 }
 
+function parseMedida(medida) {
+  const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
+  if (!m) return { ancho: null, perfil: null, radio: null };
+  return { ancho: parseInt(m[1]), perfil: parseInt(m[2]), radio: parseInt(m[3]) };
+}
+
 const generarTemplate = async (req, res, next) => {
   try {
     const [sedes, extraKeys] = await Promise.all([
@@ -490,7 +496,7 @@ const generarTemplate = async (req, res, next) => {
     const instrRows = [
       ['CAMPO', 'OBLIGATORIO', 'FORMATO / OPCIONES', 'DESCRIPCIÓN'],
       ['SKU',                'SÍ',  'Texto único',                       'Código único del producto. No puede repetirse.'],
-      ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar de la llanta.'],
+      ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar. El sistema extrae automáticamente Ancho (195mm), Perfil (65%) y Radio (R15).'],
       ['Marca',              'SÍ',  'Ej: BRIDGESTONE',                   'Nombre del fabricante.'],
       ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
@@ -534,6 +540,9 @@ const exportarCatalogo = async (req, res, next) => {
     const fixedCols = [
       { key: 'sku',             label: 'SKU'                  },
       { key: 'medida',          label: 'Medida'               },
+      { key: '__ancho',         label: 'Ancho (mm)'           },
+      { key: '__perfil',        label: 'Perfil (%)'           },
+      { key: '__radio',         label: 'Radio (R)'            },
       { key: 'marca',           label: 'Marca'                },
       { key: 'nombreComercial', label: 'Nombre Comercial'     },
       { key: 'grupo',           label: 'Grupo'                },
@@ -564,9 +573,13 @@ const exportarCatalogo = async (req, res, next) => {
       const stockMap = {};
       let stockTotal = 0;
       prod.stocks.forEach(s => { stockMap[s.sede.codigoLocal] = s.cantidad; stockTotal += s.cantidad; });
+      const mp = parseMedida(prod.medida);
 
       return allCols.map(col => {
         if (col.key === '__stockTotal') return stockTotal;
+        if (col.key === '__ancho')  return mp.ancho  ?? '';
+        if (col.key === '__perfil') return mp.perfil ?? '';
+        if (col.key === '__radio')  return mp.radio  ?? '';
         if (col.key.startsWith('stock_')) return stockMap[col.codigoLocal] ?? 0;
         if (extraKeys.includes(col.key)) return prod.camposExtra?.[col.key] ?? '';
         const v = prod[col.key];

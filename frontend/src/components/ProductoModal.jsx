@@ -103,6 +103,12 @@ const TECH_FIELDS = [
   'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
 ];
 
+function parseMedida(medida) {
+  const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
+  if (!m) return { ancho: null, perfil: null, radio: null };
+  return { ancho: parseInt(m[1]), perfil: parseInt(m[2]), radio: parseInt(m[3]) };
+}
+
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
 function EUGradeCard({ grade, label, tips, icon }) {
@@ -399,6 +405,7 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
 
   const tipoColor = prod ? (TIPO_COLOR[prod.tipo] || '#64748b') : '#64748b';
   const stockTotal = prod?.stocks?.reduce((a, s) => a + s.cantidad, 0) || 0;
+  const medidaParts = prod ? parseMedida(prod.medida) : {};
   const camposFaltantes = prod ? TECH_FIELDS.filter(f => !prod[f] && prod[f] !== 0).length : 0;
   const camposExtra = prod?.camposExtra ? Object.entries(prod.camposExtra) : [];
 
@@ -420,8 +427,11 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                 <div style={{ fontSize:15, fontWeight:800, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                   {prod.marca} {prod.nombreComercial || ''}
                 </div>
-                <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:2, flexWrap:'wrap' }}>
-                  <span style={{ fontSize:13, fontWeight:700, color:'var(--color-primary)' }}>{prod.medida}</span>
+                <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:3, flexWrap:'wrap' }}>
+                  <span style={{ fontSize:13, fontWeight:800, color:'var(--color-primary)', background:'var(--color-surface)', border:'1px solid var(--color-border)', borderRadius:6, padding:'1px 8px' }}>{prod.medida}</span>
+                  {medidaParts.ancho  && <span style={{ fontSize:11, fontWeight:700, padding:'1px 7px', borderRadius:6, background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe' }}>⬌ {medidaParts.ancho} mm</span>}
+                  {medidaParts.perfil && <span style={{ fontSize:11, fontWeight:700, padding:'1px 7px', borderRadius:6, background:'#f5f3ff', color:'#6d28d9', border:'1px solid #ddd6fe' }}>↕ {medidaParts.perfil}%</span>}
+                  {medidaParts.radio  && <span style={{ fontSize:11, fontWeight:700, padding:'1px 7px', borderRadius:6, background:'#fff7ed', color:'#c2410c', border:'1px solid #fed7aa' }}>R{medidaParts.radio}</span>}
                   <span style={{ padding:'1px 8px', borderRadius:6, fontSize:10, fontWeight:700, background:tipoColor+'20', color:tipoColor }}>{prod.tipo}</span>
                   {prod.grupo && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{prod.grupo}</span>}
                   {prod.garantia && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>🛡️ {prod.garantia}</span>}
