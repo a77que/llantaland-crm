@@ -17,6 +17,13 @@ const CAMPOS_BD = [
   { key: 'aro', label: 'Aro' },
   { key: 'tipo_terreno', label: 'Tipo terreno' },
   { key: 'garantia', label: 'Garantía' },
+  { key: 'cargaMaxNeumatico', label: 'Carga Maxima Neumatico kg' },
+  { key: 'velocidadMaxKmh', label: 'Velocidad Maxima km/h' },
+  { key: 'eficienciaCombustible', label: 'Eficiencia Combustible EU' },
+  { key: 'eficienciaFrenado', label: 'Eficiencia Frenado EU' },
+  { key: 'nivelRuido', label: 'Nivel Ruido dB' },
+  { key: 'paisFabricacion', label: 'Pais Fabricacion' },
+  { key: 'origenMarca', label: 'Origen Marca' },
   { key: 'precio', label: 'Precio', required: true },
   { key: '_stock_cantidad', label: 'Stock cantidad' },
   { key: '_stock_sede', label: 'Sede del stock' },
@@ -97,6 +104,13 @@ const ejecutar = async (req, res, next) => {
           aro: record.aro ? parseInt(record.aro) : null,
           tipo_terreno: record.tipo_terreno ? String(record.tipo_terreno).trim() : null,
           garantia: record.garantia ? String(record.garantia).trim() : null,
+          cargaMaxNeumatico: record.cargaMaxNeumatico ? parseInt(record.cargaMaxNeumatico) : null,
+          velocidadMaxKmh: record.velocidadMaxKmh ? parseInt(record.velocidadMaxKmh) : null,
+          eficienciaCombustible: record.eficienciaCombustible ? String(record.eficienciaCombustible).trim().toUpperCase() : null,
+          eficienciaFrenado: record.eficienciaFrenado ? String(record.eficienciaFrenado).trim().toUpperCase() : null,
+          nivelRuido: record.nivelRuido ? parseInt(record.nivelRuido) : null,
+          paisFabricacion: record.paisFabricacion ? String(record.paisFabricacion).trim() : null,
+          origenMarca: record.origenMarca ? String(record.origenMarca).trim() : null,
           precio: parseFloat(String(record.precio).replace(',', '.')),
         };
 
@@ -190,6 +204,17 @@ const previewUpdate = async (req, res, next) => {
       { key: 'grupo',           label: 'Grupo',            grupo: 'Info producto' },
       { key: 'tipo',            label: 'Tipo',             grupo: 'Info producto' },
       { key: 'imagenUrl',       label: 'URL Imagen',       grupo: 'Info producto' },
+      { key: 'garantia',        label: 'Garantia',         grupo: 'Tecnico' },
+      { key: 'fichaTecnica',    label: 'Ficha Tecnica',    grupo: 'Tecnico' },
+      { key: 'indice_carga',    label: 'Indice de carga',  grupo: 'Tecnico' },
+      { key: 'velocidad_max',   label: 'Indice velocidad', grupo: 'Tecnico' },
+      { key: 'cargaMaxNeumatico', label: 'Carga Maxima kg', grupo: 'Tecnico' },
+      { key: 'velocidadMaxKmh', label: 'Velocidad Maxima km/h', grupo: 'Tecnico' },
+      { key: 'eficienciaCombustible', label: 'Combustible EU', grupo: 'Etiqueta EU' },
+      { key: 'eficienciaFrenado', label: 'Frenado EU', grupo: 'Etiqueta EU' },
+      { key: 'nivelRuido',      label: 'Ruido dB',         grupo: 'Etiqueta EU' },
+      { key: 'paisFabricacion', label: 'Pais Fabricacion', grupo: 'Origen' },
+      { key: 'origenMarca',     label: 'Origen Marca',     grupo: 'Origen' },
       ...sedes.map(s => ({
         key: `stock_${s.codigoLocal}`,
         label: `Stock ${s.nombre}`,
@@ -213,6 +238,17 @@ const previewUpdate = async (req, res, next) => {
       else if (hl.includes('nombre') || hl.includes('comercial') || hl.includes('model')) updateSugerido = 'nombreComercial';
       else if (hl === 'grupo' || hl === 'categoria' || hl === 'categoría') updateSugerido = 'grupo';
       else if (hl.includes('imagen') || hl.includes('foto') || hl.includes('url')) updateSugerido = 'imagenUrl';
+      else if (hl.includes('garantia') || hl.includes('garant')) updateSugerido = 'garantia';
+      else if (hl.includes('ficha')) updateSugerido = 'fichaTecnica';
+      else if (hl.includes('indice') && hl.includes('carga')) updateSugerido = 'indice_carga';
+      else if ((hl.includes('indice') && hl.includes('vel')) || hl.includes('velocidad_max')) updateSugerido = 'velocidad_max';
+      else if (hl.includes('carga') && (hl.includes('kg') || hl.includes('max'))) updateSugerido = 'cargaMaxNeumatico';
+      else if (hl.includes('velocidad') && (hl.includes('km') || hl.includes('max'))) updateSugerido = 'velocidadMaxKmh';
+      else if (hl.includes('combustible')) updateSugerido = 'eficienciaCombustible';
+      else if (hl.includes('frenado') || hl.includes('freno')) updateSugerido = 'eficienciaFrenado';
+      else if (hl.includes('ruido') || hl.includes('db')) updateSugerido = 'nivelRuido';
+      else if (hl.includes('fabricacion') || hl.includes('fabricaci')) updateSugerido = 'paisFabricacion';
+      else if (hl.includes('origen') && hl.includes('marca')) updateSugerido = 'origenMarca';
       else {
         // stock por local: "stock l0", "stock_l1", "l2", "santa anita", etc.
         const sede = sedes.find(s =>
@@ -300,6 +336,9 @@ const aplicarUpdate = async (req, res, next) => {
             if (sedeId) datosStock[sedeId] = Math.max(0, qty); // stock nunca negativo
           } else if (campoCRM === 'precioRegular' || campoCRM === 'precioOferta') {
             const num = parseFloat(String(valorArchivo).replace(',', '.'));
+            if (!isNaN(num)) datosProducto[campoCRM] = num;
+          } else if (['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'].includes(campoCRM)) {
+            const num = parseInt(valorArchivo);
             if (!isNaN(num)) datosProducto[campoCRM] = num;
           } else if (campoCRM === 'tipo') {
             datosProducto.tipo = normalizarTipo(valorArchivo);
@@ -407,6 +446,16 @@ const generarTemplate = async (req, res, next) => {
       { key: 'velocidad_max',   label: 'Velocidad máxima',     nota: 'Ej: H',                                     ej1: 'H',                    ej2: 'S'                   },
     ];
 
+    fixedCols.push(
+      { key: 'cargaMaxNeumatico', label: 'Carga Maxima Neumatico kg', nota: 'Kg por neumatico, ej: 615', ej1: 615, ej2: 1450 },
+      { key: 'velocidadMaxKmh', label: 'Velocidad Maxima km/h', nota: 'Km/h maxima, ej: 210', ej1: 210, ej2: 180 },
+      { key: 'eficienciaCombustible', label: 'Eficiencia Combustible EU', nota: 'Etiqueta A/B/C/D/E/F/G', ej1: 'B', ej2: 'C' },
+      { key: 'eficienciaFrenado', label: 'Eficiencia Frenado EU', nota: 'Etiqueta A/B/C/D/E/F/G', ej1: 'A', ej2: 'B' },
+      { key: 'nivelRuido', label: 'Nivel Ruido dB', nota: 'Decibeles, ej: 71', ej1: 71, ej2: 73 },
+      { key: 'paisFabricacion', label: 'Pais Fabricacion', nota: 'Ej: Japon, China, Peru', ej1: 'Japon', ej2: 'Tailandia' },
+      { key: 'origenMarca', label: 'Origen Marca', nota: 'Pais origen de la marca', ej1: 'Japon', ej2: 'Francia' }
+    );
+
     const stockCols = sedes.map((s, i) => ({
       key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}`,
       nota: 'Número entero, ej: 10',
@@ -496,6 +545,13 @@ const exportarCatalogo = async (req, res, next) => {
       { key: 'fichaTecnica',    label: 'Ficha Técnica'        },
       { key: 'indice_carga',    label: 'Índice de carga'      },
       { key: 'velocidad_max',   label: 'Velocidad máxima'     },
+      { key: 'cargaMaxNeumatico', label: 'Carga Maxima Neumatico kg' },
+      { key: 'velocidadMaxKmh', label: 'Velocidad Maxima km/h' },
+      { key: 'eficienciaCombustible', label: 'Eficiencia Combustible EU' },
+      { key: 'eficienciaFrenado', label: 'Eficiencia Frenado EU' },
+      { key: 'nivelRuido',      label: 'Nivel Ruido dB' },
+      { key: 'paisFabricacion', label: 'Pais Fabricacion' },
+      { key: 'origenMarca',     label: 'Origen Marca' },
       { key: '__stockTotal',    label: 'Stock Total'          },
     ];
     const stockCols = sedes.map(s => ({ key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}`, codigoLocal: s.codigoLocal }));

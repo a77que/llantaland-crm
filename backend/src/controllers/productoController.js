@@ -9,6 +9,10 @@ const SORT_FIELDS = {
   medida: 'medida', marca: 'marca', nombreComercial: 'nombreComercial',
   grupo: 'grupo', precioRegular: 'precioRegular', precioOferta: 'precioOferta',
   descuentoMaximo: 'descuentoMaximo', garantia: 'garantia',
+  indice_carga: 'indice_carga', velocidad_max: 'velocidad_max',
+  cargaMaxNeumatico: 'cargaMaxNeumatico', velocidadMaxKmh: 'velocidadMaxKmh',
+  eficienciaCombustible: 'eficienciaCombustible', eficienciaFrenado: 'eficienciaFrenado',
+  nivelRuido: 'nivelRuido', paisFabricacion: 'paisFabricacion', origenMarca: 'origenMarca',
   sku: 'sku', tipo: 'tipo', createdAt: 'createdAt',
 };
 

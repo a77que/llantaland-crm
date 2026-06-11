@@ -22,6 +22,15 @@ const COLUMNAS_FIJAS = [
   { key: 'descuentoMaximo', label: 'Descuento Máx.',  group: 'Precios' },
   { key: 'garantia',        label: 'Garantía',        group: 'Técnico' },
   { key: 'fichaTecnica',    label: 'Ficha Técnica',   group: 'Técnico' },
+  { key: 'indice_carga',    label: 'Indice Carga',    group: 'Tecnico' },
+  { key: 'cargaMaxNeumatico', label: 'Carga Max. kg', group: 'Tecnico' },
+  { key: 'velocidad_max',   label: 'Indice Vel.',     group: 'Tecnico' },
+  { key: 'velocidadMaxKmh', label: 'Vel. Max. km/h',  group: 'Tecnico' },
+  { key: 'eficienciaCombustible', label: 'Combustible EU', group: 'Etiqueta EU' },
+  { key: 'eficienciaFrenado', label: 'Frenado EU',    group: 'Etiqueta EU' },
+  { key: 'nivelRuido',      label: 'Ruido dB',         group: 'Etiqueta EU' },
+  { key: 'paisFabricacion', label: 'Pais Fabricacion', group: 'Origen' },
+  { key: 'origenMarca',     label: 'Origen Marca',     group: 'Origen' },
   { key: 'stockTotal',      label: 'Stock Total',     group: 'Stock' },
   { key: 'stock_L0',        label: 'Almacén Central', group: 'Stock' },
   { key: 'stock_L1',        label: 'Santa Anita',     group: 'Stock' },
@@ -39,7 +48,12 @@ const STORAGE_CUSTOM_KEY = 'inventario_columnas_custom';
 const defaultVisible = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) return JSON.parse(saved);
-  return COLUMNAS_FIJAS.filter(c => ['medida','marca','nombreComercial','grupo','precioRegular','precioOferta','descuentoMaximo','stockTotal','stock_L0','stock_L1','stock_L2','stock_L3','stock_L4','stock_L5'].includes(c.key)).map(c => c.key);
+  return COLUMNAS_FIJAS.filter(c => [
+    'medida','marca','nombreComercial','grupo','precioRegular','precioOferta','descuentoMaximo',
+    'indice_carga','velocidad_max','cargaMaxNeumatico','velocidadMaxKmh',
+    'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
+    'stockTotal','stock_L0','stock_L1','stock_L2','stock_L3','stock_L4','stock_L5'
+  ].includes(c.key)).map(c => c.key);
 };
 
 function getStockLocal(producto, codigoLocal) {
@@ -345,6 +359,10 @@ const SORTABLE = {
   medida: 'medida', marca: 'marca', nombreComercial: 'nombreComercial',
   grupo: 'grupo', precioRegular: 'precioRegular', precioOferta: 'precioOferta',
   descuentoMaximo: 'descuentoMaximo', garantia: 'garantia', sku: 'sku', tipo: 'tipo',
+  indice_carga: 'indice_carga', velocidad_max: 'velocidad_max',
+  cargaMaxNeumatico: 'cargaMaxNeumatico', velocidadMaxKmh: 'velocidadMaxKmh',
+  eficienciaCombustible: 'eficienciaCombustible', eficienciaFrenado: 'eficienciaFrenado',
+  nivelRuido: 'nivelRuido', paisFabricacion: 'paisFabricacion', origenMarca: 'origenMarca',
 };
 
 // ── Aplicar valor masivo con input inteligente según campo ────────────────────
