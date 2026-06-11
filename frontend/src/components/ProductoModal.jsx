@@ -101,6 +101,7 @@ function noiseLabel(db) {
 const TECH_FIELDS = [
   'indice_carga','velocidad_max','garantia','cargaMaxNeumatico','velocidadMaxKmh',
   'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
+  'fichaTecnica',
 ];
 
 function parseMedida(medida) {
@@ -521,6 +522,14 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                   </div>
                 </div>
               </div>
+
+              {/* Ficha técnica */}
+              {prod.fichaTecnica && (
+                <div style={{ background:'var(--color-bg)', borderRadius:12, padding:'14px 16px', border:'1px solid var(--color-border)' }}>
+                  <div style={{ fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:1, color:'var(--color-primary)', marginBottom:10 }}>📄 Ficha Técnica</div>
+                  <div style={{ fontSize:13, color:'var(--color-text)', lineHeight:1.75, whiteSpace:'pre-wrap' }}>{prod.fichaTecnica}</div>
+                </div>
+              )}
 
               {/* Campos extra */}
               {camposExtra.length > 0 && (

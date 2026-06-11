@@ -139,7 +139,7 @@ const TECH_FIELDS = [
   'indice_carga', 'velocidad_max', 'garantia',
   'cargaMaxNeumatico', 'velocidadMaxKmh',
   'eficienciaCombustible', 'eficienciaFrenado', 'nivelRuido',
-  'paisFabricacion', 'origenMarca',
+  'paisFabricacion', 'origenMarca', 'fichaTecnica',
 ];
 
 const enriquecerConIA = async (req, res, next) => {
@@ -167,7 +167,9 @@ Campos faltantes que necesito: ${missing.join(', ')}
 Responde ÚNICAMENTE con un objeto JSON válido. Usa null para campos que genuinamente no puedas determinar.
 Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
 
-Formato:
+IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta para el vendedor. Debe ser rica y útil para que el vendedor asesore correctamente al cliente.
+
+Formato de ejemplo:
 {
   "indice_carga": "91",
   "velocidad_max": "H",
@@ -178,7 +180,8 @@ Formato:
   "eficienciaFrenado": "A",
   "nivelRuido": 71,
   "paisFabricacion": "Japón",
-  "origenMarca": "Japón"
+  "origenMarca": "Japón",
+  "fichaTecnica": "Descripción técnica completa del neumático..."
 }`;
 
     let datos = null;
@@ -237,7 +240,9 @@ Formato:
 
     for (const f of missing) {
       if (datos[f] == null) continue;
-      if (INT_FIELDS.includes(f)) {
+      if (f === 'fichaTecnica') {
+        update[f] = String(datos[f]).trim();
+      } else if (INT_FIELDS.includes(f)) {
         const n = parseInt(datos[f]);
         if (!isNaN(n)) update[f] = n;
       } else if (STR_FIELDS.includes(f)) {
