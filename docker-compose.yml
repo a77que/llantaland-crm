@@ -45,6 +45,8 @@ services:
       API_RUC_KEY: ${API_RUC_KEY:-}
       API_CE_URL: ${API_CE_URL:-}
       API_CE_KEY: ${API_CE_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       UPLOAD_PATH: /app/uploads
       MAX_FILE_SIZE: 10mb
     volumes:

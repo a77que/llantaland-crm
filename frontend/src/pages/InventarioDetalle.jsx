@@ -9,6 +9,30 @@ import { useIsMobile } from '../hooks/useIsMobile';
 const TIPO_COLOR = { AUTO: '#3b82f6', CAMIONETA: '#8b5cf6', CAMION: '#f59e0b', MOTO: '#ec4899' };
 const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
 
+const EU_GRADES = {
+  A: { bg: '#006d2c', text: '#fff' }, B: { bg: '#31a354', text: '#fff' },
+  C: { bg: '#74c476', text: '#000' }, D: { bg: '#f7dc6f', text: '#000' },
+  E: { bg: '#f0a500', text: '#000' }, F: { bg: '#e34a33', text: '#fff' },
+  G: { bg: '#b30000', text: '#fff' },
+};
+function GradeBadge({ grade }) {
+  const g = grade ? String(grade).toUpperCase() : null;
+  const c = (g && EU_GRADES[g]) ? EU_GRADES[g] : { bg: '#e2e8f0', text: '#94a3b8' };
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:6, background:c.bg, color:c.text, fontSize:14, fontWeight:900, boxShadow:`0 1px 4px ${c.bg}88` }}>
+      {g || '?'}
+    </span>
+  );
+}
+function noiseColor(db) {
+  if (!db) return '#94a3b8';
+  if (db <= 67) return '#16a34a';
+  if (db <= 71) return '#84cc16';
+  if (db <= 74) return '#eab308';
+  return '#dc2626';
+}
+const TECH_FIELDS = ['indice_carga','velocidad_max','garantia','cargaMaxNeumatico','velocidadMaxKmh','eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca'];
+
 function Seccion({ titulo, children }) {
   return (
     <div style={{ background: 'var(--color-surface)', borderRadius: 10, padding: 20, border: '1px solid var(--color-border)', marginBottom: 14 }}>
@@ -40,6 +64,15 @@ export default function InventarioDetalle() {
     },
     onSuccess: () => { toast.success('Imagen actualizada'); setImgFile(null); qc.invalidateQueries(['producto', id]); },
     onError: (e) => toast.error(e?.error || 'Error'),
+  });
+
+  const aiMut = useMutation({
+    mutationFn: () => productosApi.enriquecer(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['producto', id] });
+      toast.success(data?.mensaje || 'Información completada con IA');
+    },
+    onError: (e) => toast.error(e?.error || 'Error al conectar con IA'),
   });
 
   if (isLoading) return <LoadingSpinner fullPage />;
@@ -93,14 +126,47 @@ export default function InventarioDetalle() {
             </div>
           </div>
 
+          {/* Etiqueta EU */}
+          <Seccion titulo="🏷️ Etiqueta EU">
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+              <div style={{ textAlign: 'center' }}>
+                <GradeBadge grade={prod.eficienciaCombustible} />
+                <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4 }}>Combustible</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <GradeBadge grade={prod.eficienciaFrenado} />
+                <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4 }}>Frenado</div>
+              </div>
+              {prod.nivelRuido && (
+                <div style={{ textAlign: 'center' }}>
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'3px 8px', borderRadius:6, background: noiseColor(prod.nivelRuido) + '22', border:`1px solid ${noiseColor(prod.nivelRuido)}`, fontSize:13, fontWeight:800, color: noiseColor(prod.nivelRuido) }}>
+                    🔊 {prod.nivelRuido} dB
+                  </span>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4 }}>Ruido</div>
+                </div>
+              )}
+            </div>
+          </Seccion>
+
           {/* Info técnica */}
           <Seccion titulo="⚙️ Especificaciones">
             {prod.grupo && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Grupo: </span><strong>{prod.grupo}</strong></div>}
             {prod.indice_carga && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Índice carga: </span><strong>{prod.indice_carga}</strong></div>}
             {prod.velocidad_max && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Veloc. máx: </span><strong>{prod.velocidad_max}</strong></div>}
+            {prod.cargaMaxNeumatico && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Carga máx/neu.: </span><strong>{prod.cargaMaxNeumatico} kg</strong></div>}
+            {prod.cargaMaxNeumatico && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Carga total (4): </span><strong>{prod.cargaMaxNeumatico * 4} kg</strong></div>}
+            {prod.velocidadMaxKmh && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Veloc. máx: </span><strong>{prod.velocidadMaxKmh} km/h</strong></div>}
             {prod.garantia && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Garantía: </span><strong>{prod.garantia}</strong></div>}
-            {!prod.grupo && !prod.indice_carga && !prod.garantia && (
-              <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sin especificaciones adicionales</div>
+            {prod.paisFabricacion && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>País fab.: </span><strong>{prod.paisFabricacion}</strong></div>}
+            {prod.origenMarca && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Origen marca: </span><strong>{prod.origenMarca}</strong></div>}
+            {TECH_FIELDS.filter(f => prod[f] !== null && prod[f] !== undefined && prod[f] !== '').length < TECH_FIELDS.length && (
+              <button
+                onClick={() => aiMut.mutate()}
+                disabled={aiMut.isPending}
+                style={{ marginTop: 8, width: '100%', padding: '9px', background: aiMut.isPending ? '#64748b' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: aiMut.isPending ? 'wait' : 'pointer' }}
+              >
+                {aiMut.isPending ? '⏳ Consultando IA...' : `🤖 Rellenar ${TECH_FIELDS.filter(f => !prod[f] && prod[f] !== 0).length} campos con IA`}
+              </button>
             )}
           </Seccion>
         </div>

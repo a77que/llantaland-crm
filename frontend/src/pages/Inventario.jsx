@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { productosApi, sedesApi, stockApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
+import ProductoModal from '../components/ProductoModal';
 
 const fmt   = (v) => v ? `S/ ${parseFloat(v).toFixed(2)}` : '—';
 const fmtPct = (v) => v ? `${parseFloat(v).toFixed(0)}%` : '—';
@@ -473,6 +474,8 @@ export default function Inventario() {
     try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM_KEY) || '[]'); } catch { return []; }
   });
   const [showGestor, setShowGestor] = useState(false);
+  // Modal de detalle
+  const [modalProdId, setModalProdId] = useState(null);
   // Edición masiva
   const [modoEdicion, setModoEdicion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
@@ -710,9 +713,9 @@ export default function Inventario() {
                           style={{ width:16, height:16, accentColor:'#f5c400', cursor:'pointer' }}
                         />
                       ) : (
-                        <Link to={`/inventario/${prod.id}`} style={{ fontSize:11, padding:'4px 10px', background:'#1a2234', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c400', display:'inline-block' }}>
-                          Ver →
-                        </Link>
+                        <button onClick={() => setModalProdId(prod.id)} style={{ fontSize:11, padding:'4px 10px', background:'#1a2234', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c400', cursor:'pointer' }}>
+                          Ver
+                        </button>
                       )}
                     </td>
                     {columnasVisibles.map(col => {
@@ -870,6 +873,10 @@ export default function Inventario() {
             style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}
           >✕ Salir</button>
         </div>
+      )}
+
+      {modalProdId && (
+        <ProductoModal prodId={modalProdId} onClose={() => setModalProdId(null)} />
       )}
     </div>
   );

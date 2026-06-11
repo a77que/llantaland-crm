@@ -170,12 +170,20 @@ model Producto {
   precioOferta    Decimal?     @db.Decimal(10, 2) // null = sin oferta
   imagenUrl       String?                        // URL imagen en sheet PRECIOS
   // Ficha técnica
-  indice_carga    String?
-  velocidad_max   String?
-  garantia        String?
-  descuentoMaximo Decimal?     @db.Decimal(5, 2)   // % máximo de descuento permitido
-  fichaTecnica    String?      @db.Text             // URL o descripción técnica
-  camposExtra     Json?                             // campos personalizados dinámicos
+  indice_carga           String?
+  velocidad_max          String?
+  garantia               String?
+  descuentoMaximo        Decimal?  @db.Decimal(5, 2)
+  fichaTecnica           String?   @db.Text
+  // Ficha técnica ampliada
+  cargaMaxNeumatico      Int?                       // kg por neumático (del índice de carga)
+  velocidadMaxKmh        Int?                       // km/h máxima (del índice de velocidad)
+  eficienciaCombustible  String?                    // Etiqueta EU: A/B/C/D/E
+  eficienciaFrenado      String?                    // Etiqueta EU: A/B/C/D/E
+  nivelRuido             Int?                       // Nivel de ruido en dB
+  paisFabricacion        String?                    // Ej: "Japón"
+  origenMarca            String?                    // País de origen de la marca
+  camposExtra            Json?                      // campos personalizados dinámicos
   activo          Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
