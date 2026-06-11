@@ -367,7 +367,7 @@ function LoadSpeedSection({ indice_carga, velocidad_max, cargaMaxNeumatico, velo
 }
 
 // ── Modal principal ───────────────────────────────────────────────────────────
-export default function ProductoModal({ prodId, onClose }) {
+export default function ProductoModal({ prodId, onClose, comparar = [], setComparar = () => {} }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -524,22 +524,58 @@ export default function ProductoModal({ prodId, onClose }) {
         {/* Footer */}
         {prod && (
           <div style={{ padding:'12px 16px', borderTop:'1px solid var(--color-border)', display:'flex', gap:8, alignItems:'center', flexShrink:0, background:'var(--color-bg)', flexWrap:'wrap' }}>
+            {/* Botón IA */}
             {camposFaltantes > 0 ? (
               <button
                 onClick={() => aiMut.mutate()}
                 disabled={aiMut.isPending}
-                style={{ flex:1, minWidth:200, padding:'9px 14px', background: aiMut.isPending ? '#64748b' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff', border:'none', borderRadius:9, fontSize:13, fontWeight:700, cursor: aiMut.isPending ? 'wait' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}
+                style={{ flex:1, minWidth:160, padding:'9px 12px', background: aiMut.isPending ? '#64748b' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff', border:'none', borderRadius:9, fontSize:12, fontWeight:700, cursor: aiMut.isPending ? 'wait' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}
               >
-                {aiMut.isPending ? '⏳ Consultando IA...' : `🤖 Completar ${camposFaltantes} campo${camposFaltantes>1?'s':''} con IA`}
+                {aiMut.isPending ? '⏳ Consultando IA...' : `🤖 Completar ${camposFaltantes} campos con IA`}
               </button>
             ) : (
-              <div style={{ flex:1, fontSize:12, color:'#16a34a', fontWeight:700 }}>✅ Ficha técnica completa</div>
+              <div style={{ fontSize:12, color:'#16a34a', fontWeight:700 }}>✅ Ficha completa</div>
             )}
+
+            {/* Botón comparar */}
+            {(() => {
+              const estaEnComparar = comparar.includes(prodId);
+              const hayOtra = comparar.length === 1 && !estaEnComparar;
+              if (hayOtra) {
+                return (
+                  <button
+                    onClick={() => setComparar(prev => [...prev, prodId])}
+                    style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #f59e0b', background:'#fffbeb', color:'#92400e', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
+                  >
+                    ⚖️ Comparar con la anterior
+                  </button>
+                );
+              }
+              if (estaEnComparar) {
+                return (
+                  <button
+                    onClick={() => setComparar(prev => prev.filter(id => id !== prodId))}
+                    style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #16a34a', background:'#f0fdf4', color:'#166534', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
+                  >
+                    ✅ Marcada · Quitar
+                  </button>
+                );
+              }
+              return (
+                <button
+                  onClick={() => setComparar([prodId])}
+                  style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', color:'var(--color-text)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
+                >
+                  📌 Marcar para comparar
+                </button>
+              );
+            })()}
+
             <button
               onClick={() => { onClose(); navigate(`/inventario/${prodId}`); }}
-              style={{ padding:'9px 14px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
+              style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
             >
-              Editar completo →
+              Editar →
             </button>
           </div>
         )}

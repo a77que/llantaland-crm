@@ -6,6 +6,7 @@ import { productosApi, sedesApi, stockApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
 import ProductoModal from '../components/ProductoModal';
+import ComparadorModal from '../components/ComparadorModal';
 
 const fmt   = (v) => v ? `S/ ${parseFloat(v).toFixed(2)}` : '—';
 const fmtPct = (v) => v ? `${parseFloat(v).toFixed(0)}%` : '—';
@@ -474,8 +475,9 @@ export default function Inventario() {
     try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM_KEY) || '[]'); } catch { return []; }
   });
   const [showGestor, setShowGestor] = useState(false);
-  // Modal de detalle
+  // Modal de detalle y comparador
   const [modalProdId, setModalProdId] = useState(null);
+  const [comparar, setComparar] = useState([]); // hasta 2 IDs para comparar
   // Edición masiva
   const [modoEdicion, setModoEdicion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
@@ -741,14 +743,16 @@ export default function Inventario() {
                         <td key={col.key} style={{ padding:'6px 12px', borderLeft:'1px solid var(--color-border)', whiteSpace:'nowrap', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', background: hasCambio ? '#fffbeb' : undefined }}>
                           {isStockTotal ? (
                             <StockCell value={typeof raw === 'number' ? raw : parseInt(raw)||0} />
-                          ) : isEditable ? (
+                          ) : (isEditable && modoEdicion) ? (
                             <CeldaEditable
                               value={raw} prodId={prod.id} campo={col.key}
-                              onSave={modoEdicion ? onSaveMasivo : guardarCelda}
+                              onSave={onSaveMasivo}
                               isCustom={isCustom}
                               colDef={isCustom ? customCols.find(c=>c.key===col.key) : null}
                               marcas={marcasList}
                             />
+                          ) : col.key.startsWith('stock_') ? (
+                            <StockCell value={typeof raw === 'number' ? raw : parseInt(raw)||0} />
                           ) : (
                             <span style={{ fontWeight: col.key==='medida'?700:undefined }}>
                               {raw}
@@ -875,8 +879,29 @@ export default function Inventario() {
         </div>
       )}
 
+      {/* Badge comparación activa */}
+      {comparar.length === 1 && !modalProdId && (
+        <div style={{ position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)', background:'#1a2234', border:'2px solid #f59e0b', borderRadius:12, padding:'10px 18px', display:'flex', alignItems:'center', gap:12, zIndex:300, boxShadow:'0 8px 24px rgba(0,0,0,.4)', whiteSpace:'nowrap' }}>
+          <span style={{ fontSize:13, color:'#f59e0b', fontWeight:700 }}>📌 1 llanta marcada — abre otra para comparar</span>
+          <button onClick={() => setComparar([])} style={{ padding:'4px 10px', borderRadius:6, border:'1px solid #f59e0b', background:'transparent', color:'#f59e0b', cursor:'pointer', fontSize:12, fontWeight:700 }}>✕ Cancelar</button>
+        </div>
+      )}
+
       {modalProdId && (
-        <ProductoModal prodId={modalProdId} onClose={() => setModalProdId(null)} />
+        <ProductoModal
+          prodId={modalProdId}
+          onClose={() => setModalProdId(null)}
+          comparar={comparar}
+          setComparar={(fn) => {
+            const next = typeof fn === 'function' ? fn(comparar) : fn;
+            setComparar(next);
+            if (next.length === 2) setModalProdId(null);
+          }}
+        />
+      )}
+
+      {comparar.length === 2 && !modalProdId && (
+        <ComparadorModal ids={comparar} onClose={() => setComparar([])} />
       )}
     </div>
   );
