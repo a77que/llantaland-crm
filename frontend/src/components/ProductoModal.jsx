@@ -429,9 +429,24 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:3, flexWrap:'wrap' }}>
                   <span style={{ fontSize:13, fontWeight:800, color:'var(--color-primary)', background:'var(--color-surface)', border:'1px solid var(--color-border)', borderRadius:6, padding:'1px 8px' }}>{prod.medida}</span>
-                  {medidaParts.ancho  && <span style={{ fontSize:11, fontWeight:700, padding:'1px 7px', borderRadius:6, background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe' }}>⬌ {medidaParts.ancho} mm</span>}
-                  {medidaParts.perfil && <span style={{ fontSize:11, fontWeight:700, padding:'1px 7px', borderRadius:6, background:'#f5f3ff', color:'#6d28d9', border:'1px solid #ddd6fe' }}>↕ {medidaParts.perfil}%</span>}
-                  {medidaParts.radio  && <span style={{ fontSize:11, fontWeight:700, padding:'1px 7px', borderRadius:6, background:'#fff7ed', color:'#c2410c', border:'1px solid #fed7aa' }}>R{medidaParts.radio}</span>}
+                  {medidaParts.ancho && (
+                    <div style={{ textAlign:'center', padding:'2px 8px', borderRadius:6, background:'#eff6ff', border:'1px solid #bfdbfe' }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:'#1d4ed8', lineHeight:1.2 }}>{medidaParts.ancho} mm</div>
+                      <div style={{ fontSize:9, fontWeight:600, color:'#3b82f6', letterSpacing:.3 }}>ANCHO</div>
+                    </div>
+                  )}
+                  {medidaParts.perfil && (
+                    <div style={{ textAlign:'center', padding:'2px 8px', borderRadius:6, background:'#f5f3ff', border:'1px solid #ddd6fe' }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:'#6d28d9', lineHeight:1.2 }}>{medidaParts.perfil}%</div>
+                      <div style={{ fontSize:9, fontWeight:600, color:'#8b5cf6', letterSpacing:.3 }}>PERFIL</div>
+                    </div>
+                  )}
+                  {medidaParts.radio && (
+                    <div style={{ textAlign:'center', padding:'2px 8px', borderRadius:6, background:'#fff7ed', border:'1px solid #fed7aa' }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:'#c2410c', lineHeight:1.2 }}>R{medidaParts.radio}</div>
+                      <div style={{ fontSize:9, fontWeight:600, color:'#ea580c', letterSpacing:.3 }}>RADIO</div>
+                    </div>
+                  )}
                   <span style={{ padding:'1px 8px', borderRadius:6, fontSize:10, fontWeight:700, background:tipoColor+'20', color:tipoColor }}>{prod.tipo}</span>
                   {prod.grupo && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{prod.grupo}</span>}
                   {prod.garantia && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>🛡️ {prod.garantia}</span>}
@@ -498,7 +513,7 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                       const color = s.cantidad <= s.stockMinimo ? '#dc2626' : s.cantidad <= s.stockMinimo*2 ? '#f97316' : '#16a34a';
                       return (
                         <div key={s.id} style={{ display:'flex', justifyContent:'space-between', fontSize:11, marginBottom:2 }}>
-                          <span style={{ color:'var(--color-text-muted)' }}>{s.sede?.codigoLocal}</span>
+                          <span style={{ color:'var(--color-text-muted)' }}>{s.sede?.nombre || s.sede?.codigoLocal}</span>
                           <span style={{ fontWeight:700, color }}>{s.cantidad}</span>
                         </div>
                       );
