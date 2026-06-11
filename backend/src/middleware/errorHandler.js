@@ -10,13 +10,17 @@ const errorHandler = (err, req, res, next) => {
 
   // Errores Prisma conocidos
   if (err.code === 'P2002') {
-    return res.status(409).json({ error: 'Registro duplicado', field: err.meta?.target });
+    const campo = err.meta?.target?.[0] || 'campo';
+    return res.status(409).json({ error: `Ya existe un registro con ese ${campo === 'codigoLocal' ? 'código de local' : campo}` });
   }
   if (err.code === 'P2025') {
     return res.status(404).json({ error: 'Registro no encontrado' });
   }
   if (err.code === 'P2003') {
     return res.status(400).json({ error: 'Referencia inválida' });
+  }
+  if (err.name === 'PrismaClientValidationError') {
+    return res.status(400).json({ error: 'Datos inválidos enviados al servidor' });
   }
 
   const status = err.status || err.statusCode || 500;
