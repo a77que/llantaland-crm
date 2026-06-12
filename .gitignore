@@ -36,3 +36,6 @@ Thumbs.db
 # IDE
 .vscode/settings.json
 *.log
+
+# Claude Code — configuración personal con credenciales, nunca subir
+.claude/settings.local.json
