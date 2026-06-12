@@ -24,24 +24,7 @@ const S = {
   btn: (c) => ({ padding: '10px 24px', background: c, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }),
 };
 
-const CAMPOS_BD = [
-  { key: '_skip', label: '— No importar —' },
-  { key: 'sku', label: 'SKU *' },
-  { key: 'medida', label: 'Medida *' },
-  { key: 'marca', label: 'Marca *' },
-  { key: 'modelo', label: 'Modelo' },
-  { key: 'descripcion', label: 'Descripción' },
-  { key: 'tipo', label: 'Tipo (AUTO/CAMIONETA...)' },
-  { key: 'indice_carga', label: 'Índice de carga' },
-  { key: 'velocidad_max', label: 'Velocidad máx.' },
-  { key: 'ancho_mm', label: 'Ancho (mm)' },
-  { key: 'aro', label: 'Aro' },
-  { key: 'tipo_terreno', label: 'Tipo terreno' },
-  { key: 'garantia', label: 'Garantía' },
-  { key: 'precio', label: 'Precio *' },
-  { key: '_stock_cantidad', label: 'Stock cantidad' },
-  { key: '_stock_sede', label: 'Sede del stock' },
-];
+// camposBD se obtiene dinámicamente del backend (incluye stock por sede)
 
 export default function ImportadorStock() {
   const [archivo, setArchivo] = useState(null);
@@ -186,7 +169,7 @@ export default function ImportadorStock() {
                     <td style={{ ...S.td, fontWeight: 600 }}>{col.nombre}</td>
                     <td style={S.td}>
                       <select style={S.select} value={mapeo[colIdx] || '_skip'} onChange={(e) => setMapeoCampo(colIdx, e.target.value)}>
-                        {CAMPOS_BD.map((c) => (
+                        {(preview.camposBD || []).map((c) => (
                           <option key={c.key} value={c.key}>{c.label}</option>
                         ))}
                       </select>

@@ -3,30 +3,29 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-// Columnas del modelo Producto en BD
-const CAMPOS_BD = [
-  { key: 'sku', label: 'SKU', required: true },
-  { key: 'medida', label: 'Medida', required: true },
-  { key: 'marca', label: 'Marca', required: true },
-  { key: 'modelo', label: 'Modelo' },
-  { key: 'descripcion', label: 'Descripción' },
-  { key: 'tipo', label: 'Tipo (AUTO/CAMIONETA/CAMION/MOTO)' },
-  { key: 'indice_carga', label: 'Índice de carga' },
-  { key: 'velocidad_max', label: 'Velocidad máxima' },
-  { key: 'ancho_mm', label: 'Ancho (mm)' },
-  { key: 'aro', label: 'Aro' },
-  { key: 'tipo_terreno', label: 'Tipo terreno' },
-  { key: 'garantia', label: 'Garantía' },
-  { key: 'cargaMaxNeumatico', label: 'Carga Maxima Neumatico kg' },
-  { key: 'velocidadMaxKmh', label: 'Velocidad Maxima km/h' },
-  { key: 'eficienciaCombustible', label: 'Eficiencia Combustible EU' },
-  { key: 'eficienciaFrenado', label: 'Eficiencia Frenado EU' },
-  { key: 'nivelRuido', label: 'Nivel Ruido dB' },
-  { key: 'paisFabricacion', label: 'Pais Fabricacion' },
-  { key: 'origenMarca', label: 'Origen Marca' },
-  { key: 'precio', label: 'Precio', required: true },
-  { key: '_stock_cantidad', label: 'Stock cantidad' },
-  { key: '_stock_sede', label: 'Sede del stock' },
+// Campos base del modelo Producto (sin stock dinámico por sede)
+const CAMPOS_BD_BASE = [
+  { key: '_skip',                label: '— No importar —' },
+  { key: 'sku',                  label: 'SKU', required: true },
+  { key: 'medida',               label: 'Medida', required: true },
+  { key: 'marca',                label: 'Marca', required: true },
+  { key: 'nombreComercial',      label: 'Nombre Comercial' },
+  { key: 'grupo',                label: 'Grupo' },
+  { key: 'tipo',                 label: 'Tipo (AUTO/CAMIONETA/CAMION/MOTO)' },
+  { key: 'precioRegular',        label: 'Precio Regular', required: true },
+  { key: 'precioOferta',         label: 'Precio Oferta' },
+  { key: 'descuentoMaximo',      label: 'Descuento Máximo %' },
+  { key: 'garantia',             label: 'Garantía' },
+  { key: 'fichaTecnica',         label: 'Ficha Técnica' },
+  { key: 'indice_carga',         label: 'Índice de carga' },
+  { key: 'velocidad_max',        label: 'Índice de Velocidad' },
+  { key: 'cargaMaxNeumatico',    label: 'Carga Maxima Neumatico kg' },
+  { key: 'velocidadMaxKmh',      label: 'Velocidad Maxima km/h' },
+  { key: 'eficienciaCombustible',label: 'Eficiencia Combustible EU' },
+  { key: 'eficienciaFrenado',    label: 'Eficiencia Frenado EU' },
+  { key: 'nivelRuido',           label: 'Nivel Ruido dB' },
+  { key: 'paisFabricacion',      label: 'Pais Fabricacion' },
+  { key: 'origenMarca',          label: 'Origen Marca' },
 ];
 
 const preview = async (req, res, next) => {
@@ -40,13 +39,20 @@ const preview = async (req, res, next) => {
 
     if (!data.length) return res.status(400).json({ error: 'Archivo vacío' });
 
+    const sedes = await prisma.sede.findMany({ where: { activo: true }, orderBy: { codigoLocal: 'asc' } });
+
+    const camposBD = [
+      ...CAMPOS_BD_BASE,
+      ...sedes.map(s => ({ key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}` })),
+    ];
+
     const headers = data[0].map((h) => String(h || '').trim());
-    const rows = data.slice(1, 11); // primeras 10 filas
+    const rows = data.slice(1, 11); // primeras 10 filas para preview (fila 2 = notas, luego ejemplos)
 
     res.json({
-      columnas: headers.map((h) => ({ nombre: h, sugerencia: sugerirCampo(h) })),
+      columnas: headers.map((h) => ({ nombre: h, sugerencia: sugerirCampo(h, sedes) })),
       preview: rows,
-      camposBD: CAMPOS_BD,
+      camposBD,
       totalFilas: data.length - 1,
     });
   } catch (err) {
@@ -58,14 +64,27 @@ const ejecutar = async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
 
-    const { mapeo } = req.body; // { "0": "sku", "1": "medida", ... }
+    const { mapeo } = req.body;
     const columnMap = typeof mapeo === 'string' ? JSON.parse(mapeo) : mapeo;
 
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-    const dataRows = rows.slice(1);
+
+    // La plantilla tiene: fila 1=headers, fila 2=notas, filas 3-4=ejemplos → saltar hasta la primera fila con SKU real
+    const allRows = rows.slice(1); // quitar headers
+    const dataRows = allRows.filter(row => {
+      // Buscar en qué columna está SKU para ver si esta fila tiene valor real
+      const skuColIdx = Object.entries(columnMap).find(([, campo]) => campo === 'sku')?.[0];
+      const val = skuColIdx !== undefined ? String(row[parseInt(skuColIdx)] || '').trim() : '';
+      // Ignorar filas que son notas/ejemplos de la plantilla (empiezan con "←" o son los 2 ejemplos)
+      return val && !val.startsWith('←') && val !== 'LLT-195-65-R15-001' && val !== 'LLT-265-70-R17-002';
+    });
+
+    // Pre-cargar sedes para mapear stock_LX → sedeId sin queries por fila
+    const sedes = await prisma.sede.findMany({ where: { activo: true } });
+    const sedeMap = Object.fromEntries(sedes.map(s => [s.codigoLocal, s.id]));
 
     let creados = 0;
     let actualizados = 0;
@@ -80,39 +99,44 @@ const ejecutar = async (req, res, next) => {
         }
       }
 
-      if (!record.sku || !record.medida || !record.marca || !record.precio) {
-        errores.push({ fila: i + 2, error: 'Campos obligatorios faltantes (sku, medida, marca, precio)' });
+      // Normalizar precio: acepta precioRegular (plantilla nueva) o precio (legado)
+      const precioRaw = record.precioRegular ?? record.precio;
+      if (!record.sku || !record.medida || !record.marca || !precioRaw) {
+        errores.push({ fila: i + 3, error: 'Campos obligatorios faltantes (SKU, Medida, Marca, Precio Regular)' });
         continue;
       }
 
-      try {
-        const stockCantidad = record._stock_cantidad ? parseInt(record._stock_cantidad) : null;
-        const stockSede = record._stock_sede || null;
-        delete record._stock_cantidad;
-        delete record._stock_sede;
+      const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
+      const int = (v) => { const n = parseInt(v); return isNaN(n) ? null : n; };
+      const str = (v) => v != null && String(v).trim() !== '' ? String(v).trim() : null;
+      const eu  = (v) => { const s = str(v); return s ? s.toUpperCase().charAt(0) : null; };
 
+      try {
         const productoData = {
-          sku: String(record.sku).trim(),
-          medida: String(record.medida).trim(),
-          marca: String(record.marca).trim(),
-          modelo: record.modelo ? String(record.modelo).trim() : null,
-          descripcion: record.descripcion ? String(record.descripcion).trim() : null,
-          tipo: normalizarTipo(record.tipo),
-          indice_carga: record.indice_carga ? String(record.indice_carga) : null,
-          velocidad_max: record.velocidad_max ? String(record.velocidad_max) : null,
-          ancho_mm: record.ancho_mm ? parseInt(record.ancho_mm) : null,
-          aro: record.aro ? parseInt(record.aro) : null,
-          tipo_terreno: record.tipo_terreno ? String(record.tipo_terreno).trim() : null,
-          garantia: record.garantia ? String(record.garantia).trim() : null,
-          cargaMaxNeumatico: record.cargaMaxNeumatico ? parseInt(record.cargaMaxNeumatico) : null,
-          velocidadMaxKmh: record.velocidadMaxKmh ? parseInt(record.velocidadMaxKmh) : null,
-          eficienciaCombustible: record.eficienciaCombustible ? String(record.eficienciaCombustible).trim().toUpperCase() : null,
-          eficienciaFrenado: record.eficienciaFrenado ? String(record.eficienciaFrenado).trim().toUpperCase() : null,
-          nivelRuido: record.nivelRuido ? parseInt(record.nivelRuido) : null,
-          paisFabricacion: record.paisFabricacion ? String(record.paisFabricacion).trim() : null,
-          origenMarca: record.origenMarca ? String(record.origenMarca).trim() : null,
-          precio: parseFloat(String(record.precio).replace(',', '.')),
+          sku:                   String(record.sku).trim(),
+          medida:                String(record.medida).trim(),
+          marca:                 String(record.marca).trim(),
+          nombreComercial:       str(record.nombreComercial),
+          grupo:                 str(record.grupo),
+          tipo:                  normalizarTipo(record.tipo),
+          precioRegular:         num(precioRaw),
+          precioOferta:          num(record.precioOferta) ?? undefined,
+          descuentoMaximo:       num(record.descuentoMaximo) ?? undefined,
+          garantia:              str(record.garantia),
+          fichaTecnica:          str(record.fichaTecnica),
+          indice_carga:          str(record.indice_carga),
+          velocidad_max:         str(record.velocidad_max),
+          cargaMaxNeumatico:     int(record.cargaMaxNeumatico),
+          velocidadMaxKmh:       int(record.velocidadMaxKmh),
+          eficienciaCombustible: eu(record.eficienciaCombustible),
+          eficienciaFrenado:     eu(record.eficienciaFrenado),
+          nivelRuido:            int(record.nivelRuido),
+          paisFabricacion:       str(record.paisFabricacion),
+          origenMarca:           str(record.origenMarca),
         };
+
+        // Quitar claves undefined para que Prisma no las toque en update
+        Object.keys(productoData).forEach(k => productoData[k] === undefined && delete productoData[k]);
 
         const existing = await prisma.producto.findUnique({ where: { sku: productoData.sku } });
         let producto;
@@ -124,21 +148,22 @@ const ejecutar = async (req, res, next) => {
           creados++;
         }
 
-        // Actualizar stock si se proporcionó
-        if (stockCantidad !== null && stockSede) {
-          const sede = await prisma.sede.findFirst({
-            where: { nombre: { contains: String(stockSede), mode: 'insensitive' } },
+        // Stock por sede: claves con formato stock_L0, stock_L1, ...
+        for (const [campo, valor] of Object.entries(record)) {
+          if (!campo.startsWith('stock_')) continue;
+          const codigoLocal = campo.replace('stock_', '').toUpperCase();
+          const cantidad = int(valor);
+          if (cantidad === null) continue;
+          const sedeId = sedeMap[codigoLocal];
+          if (!sedeId) continue;
+          await prisma.stock.upsert({
+            where: { productoId_sedeId: { productoId: producto.id, sedeId } },
+            update: { cantidad },
+            create: { productoId: producto.id, sedeId, cantidad },
           });
-          if (sede) {
-            await prisma.stock.upsert({
-              where: { productoId_sedeId: { productoId: producto.id, sedeId: sede.id } },
-              update: { cantidad: stockCantidad },
-              create: { productoId: producto.id, sedeId: sede.id, cantidad: stockCantidad },
-            });
-          }
         }
       } catch (rowErr) {
-        errores.push({ fila: i + 2, error: rowErr.message });
+        errores.push({ fila: i + 3, error: rowErr.message });
       }
     }
 
@@ -148,18 +173,83 @@ const ejecutar = async (req, res, next) => {
   }
 };
 
-function sugerirCampo(header) {
-  const h = header.toLowerCase();
-  if (h.includes('sku') || h.includes('codigo') || h.includes('código')) return 'sku';
+function sugerirCampo(header, sedes = []) {
+  const h = header.toLowerCase().trim();
+
+  // Columnas AUTO de la plantilla → ignorar
+  if (h.includes('[auto]')) return '_skip';
+
+  // Mapeo exacto de las etiquetas de la plantilla
+  const EXACTO = {
+    'sku':                          'sku',
+    'medida':                       'medida',
+    'marca':                        'marca',
+    'nombre comercial':             'nombreComercial',
+    'grupo':                        'grupo',
+    'tipo':                         'tipo',
+    'precio regular':               'precioRegular',
+    'precio oferta':                'precioOferta',
+    'descuento máximo %':           'descuentoMaximo',
+    'descuento maximo %':           'descuentoMaximo',
+    'garantía':                     'garantia',
+    'garantia':                     'garantia',
+    'ficha técnica':                'fichaTecnica',
+    'ficha tecnica':                'fichaTecnica',
+    'índice de carga':              'indice_carga',
+    'indice de carga':              'indice_carga',
+    'índice de velocidad':          'velocidad_max',
+    'indice de velocidad':          'velocidad_max',
+    'carga maxima neumatico kg':    'cargaMaxNeumatico',
+    'velocidad maxima km/h':        'velocidadMaxKmh',
+    'eficiencia combustible eu':    'eficienciaCombustible',
+    'eficiencia frenado eu':        'eficienciaFrenado',
+    'nivel ruido db':               'nivelRuido',
+    'pais fabricacion':             'paisFabricacion',
+    'origen marca':                 'origenMarca',
+  };
+  if (EXACTO[h]) return EXACTO[h];
+
+  // Columnas de stock por sede: "stock tienda santa anita", "stock l0", etc.
+  if (h.startsWith('stock ') || h.includes('stock')) {
+    const texto = h.replace('stock', '').replace(/_/g, ' ').trim();
+    const sede = sedes.find(s =>
+      texto.includes(s.nombre.toLowerCase()) ||
+      texto === s.codigoLocal.toLowerCase() ||
+      texto.includes(s.codigoLocal.toLowerCase())
+    );
+    if (sede) return `stock_${sede.codigoLocal}`;
+  }
+
+  // Coincidencias parciales para archivos externos (no plantilla)
+  if (h.includes('sku') || (h.includes('cod') && !h.includes('local'))) return 'sku';
   if (h.includes('medida') || h.includes('talla') || h.includes('size')) return 'medida';
-  if (h.includes('marca') || h.includes('brand')) return 'marca';
-  if (h.includes('modelo') || h.includes('model')) return 'modelo';
-  if (h.includes('precio') || h.includes('price')) return 'precio';
-  if (h.includes('stock') && h.includes('cant')) return '_stock_cantidad';
-  if (h.includes('sede') || h.includes('tienda') || h.includes('almacen')) return '_stock_sede';
-  if (h.includes('descripcion') || h.includes('descripción')) return 'descripcion';
-  if (h.includes('garantia') || h.includes('garantía')) return 'garantia';
-  return null;
+  if (h.includes('marca') || h.includes('brand'))                         return 'marca';
+  if (h.includes('nombre') || h.includes('comercial') || h.includes('model')) return 'nombreComercial';
+  if (h.includes('precio') && (h.includes('regular') || h.includes('lista')))  return 'precioRegular';
+  if (h.includes('precio') && (h.includes('oferta') || h.includes('especial'))) return 'precioOferta';
+  if (h.includes('precio') || h.includes('price'))                         return 'precioRegular';
+  if (h.includes('descuento') || h.includes('discount'))                   return 'descuentoMaximo';
+  if (h.includes('garantia') || h.includes('garantía'))                    return 'garantia';
+  if (h.includes('ficha'))                                                  return 'fichaTecnica';
+  if (h.includes('indice') && h.includes('carga'))                         return 'indice_carga';
+  if (h.includes('indice') && h.includes('vel'))                           return 'velocidad_max';
+  if (h.includes('carga') && (h.includes('kg') || h.includes('max')))      return 'cargaMaxNeumatico';
+  if (h.includes('velocidad') && h.includes('km'))                         return 'velocidadMaxKmh';
+  if (h.includes('combustible'))                                            return 'eficienciaCombustible';
+  if (h.includes('frenado') || h.includes('freno'))                        return 'eficienciaFrenado';
+  if (h.includes('ruido') || h.includes('ruido') || h.includes('db'))      return 'nivelRuido';
+  if (h.includes('fabricacion') || h.includes('fabricación'))              return 'paisFabricacion';
+  if (h.includes('origen') && h.includes('marca'))                         return 'origenMarca';
+  if (h.includes('tipo'))                                                   return 'tipo';
+  if (h.includes('grupo') || h.includes('categoria'))                      return 'grupo';
+
+  // Stock con nombre de sede en la columna
+  const sedeMatch = sedes.find(s =>
+    h.includes(s.nombre.toLowerCase()) || h.includes(s.codigoLocal.toLowerCase())
+  );
+  if (sedeMatch) return `stock_${sedeMatch.codigoLocal}`;
+
+  return '_skip';
 }
 
 function normalizarTipo(tipo) {
