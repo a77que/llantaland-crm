@@ -16,4 +16,4 @@ RUN mkdir -p uploads
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/index.js"]
+CMD ["sh", "-c", "npx prisma db execute --file prisma/pre-push.sql --schema prisma/schema.prisma; npx prisma db push --accept-data-loss && node src/index.js"]

@@ -21,13 +21,6 @@ enum TipoDoc {
   PASAPORTE
 }
 
-enum TipoProducto {
-  AUTO
-  CAMIONETA
-  CAMION
-  MOTO
-}
-
 enum EstadoCotizacion {
   BORRADOR
   ENVIADA
@@ -165,7 +158,7 @@ model Producto {
   marca           String
   nombreComercial String?                        // Nombre_Comercial en sheet
   grupo           String?                        // Grupo (Turismo, SUV, etc.)
-  tipo            TipoProducto @default(AUTO)
+  tipo            String       @default("AUTO") // categoria libre: AUTO, CAMIONETA, CAMION, MOTO o personalizada
   precioRegular   Decimal      @db.Decimal(10, 2)
   precioOferta    Decimal?     @db.Decimal(10, 2) // null = sin oferta
   imagenUrl       String?                        // URL imagen en sheet PRECIOS

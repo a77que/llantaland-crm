@@ -211,7 +211,7 @@ const GRUPO_OPCIONES = ['Excelente', 'Muy Buena', 'Buena'];  // debe coincidir c
 const GRUPO_COLOR = { 'Excelente': '#16a34a', 'Muy Buena': '#3b82f6', 'Buena': '#f59e0b' };
 
 // ── Celda editable inline ─────────────────────────────────────────────────────
-function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef, marcas = [] }) {
+function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef, marcas = [], tipos = [] }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value === '—' ? '' : String(value || ''));
   const ref = useRef();
@@ -269,24 +269,29 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef, marcas 
     );
   }
 
-  // Tipo — dropdown fijo
+  // Tipo — texto libre con sugerencias (no limitado a opciones fijas)
   if (campo === 'tipo') {
-    const TIPOS = ['AUTO', 'CAMIONETA', 'CAMION', 'MOTO'];
     const tipoColor = { AUTO: '#3b82f6', CAMIONETA: '#8b5cf6', CAMION: '#f59e0b', MOTO: '#ec4899' };
+    const sugerencias = [...new Set(['AUTO', 'CAMIONETA', 'CAMION', 'MOTO', ...tipos])];
     if (editing) {
       return (
-        <select ref={ref} value={val} autoFocus
-          onChange={e => { setVal(e.target.value); save(e.target.value); }}
-          onBlur={() => setEditing(false)}
-          style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}>
-          <option value="">— Sin tipo —</option>
-          {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <>
+          <input ref={ref} list={`tipos-dl-${prodId}`} value={val}
+            onChange={e => setVal(e.target.value)}
+            onBlur={() => save()}
+            onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+            placeholder="AUTO, SUV, VAN..."
+            style={{ width:'100%', padding:'2px 6px', fontSize:12, border:'1.5px solid #f5c400', borderRadius:4, background:'#fffbeb', outline:'none' }}
+          />
+          <datalist id={`tipos-dl-${prodId}`}>
+            {sugerencias.map(t => <option key={t} value={t} />)}
+          </datalist>
+        </>
       );
     }
     return (
       <span onClick={() => setEditing(true)} title="Clic para editar"
-        style={{ cursor:'pointer', display:'block', minHeight:20, fontWeight:600, color: tipoColor[value] || 'var(--color-text-muted)' }}>
+        style={{ cursor:'pointer', display:'block', minHeight:20, fontWeight:600, color: tipoColor[value] || 'var(--color-text)' }}>
         {value === '—' ? <span style={{ color:'var(--color-text-muted)', fontWeight:400 }}>— Clic para asignar</span> : value}
       </span>
     );
@@ -379,7 +384,7 @@ const SORTABLE = {
 };
 
 // ── Aplicar valor masivo con input inteligente según campo ────────────────────
-function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambiosMasivos, marcas = [] }) {
+function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambiosMasivos, marcas = [], tipos = [] }) {
   const [campo, setCampo] = useState('grupo');
   const [sedeLocal, setSedeLocal] = useState('');
   const [valor, setValor] = useState('');
@@ -444,10 +449,18 @@ function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambios
           {GRUPO_OPCIONES.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : isTipo ? (
-        <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
-          <option value="">— Elegir —</option>
-          {['AUTO','CAMIONETA','CAMION','MOTO'].map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
+        <>
+          <input
+            list="tipos-dl-masivo" value={valor}
+            onChange={e => setValor(e.target.value)}
+            placeholder="AUTO, SUV..."
+            style={{ ...inp, width:130 }}
+            onKeyDown={e => { if (e.key === 'Enter') aplicar(); }}
+          />
+          <datalist id="tipos-dl-masivo">
+            {[...new Set(['AUTO','CAMIONETA','CAMION','MOTO', ...tipos])].map(t => <option key={t} value={t} />)}
+          </datalist>
+        </>
       ) : isSelectCustom ? (
         <select value={valor} onChange={e => setValor(e.target.value)} style={{ ...inp, width:130 }}>
           <option value="">— Elegir —</option>
@@ -531,6 +544,12 @@ export default function Inventario() {
   const { data: marcasList = [] } = useQuery({
     queryKey: ['marcas'],
     queryFn: productosApi.marcas,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: tiposList = [] } = useQuery({
+    queryKey: ['tipos'],
+    queryFn: productosApi.tipos,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -676,10 +695,9 @@ export default function Inventario() {
           value={tipo} onChange={e => setParam('tipo', e.target.value)}
         >
           <option value="">Todos</option>
-          <option value="AUTO">Auto</option>
-          <option value="CAMIONETA">Camioneta</option>
-          <option value="CAMION">Camión</option>
-          <option value="MOTO">Moto</option>
+          {(tiposList.length > 0 ? tiposList : ['AUTO', 'CAMIONETA', 'CAMION', 'MOTO']).map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
         </select>
       </div>
 
@@ -782,6 +800,7 @@ export default function Inventario() {
                               isCustom={isCustom}
                               colDef={isCustom ? customCols.find(c=>c.key===col.key) : null}
                               marcas={marcasList}
+                              tipos={tiposList}
                             />
                           ) : col.key.startsWith('stock_') ? (
                             <StockCell value={typeof raw === 'number' ? raw : parseInt(raw)||0} />
@@ -848,6 +867,7 @@ export default function Inventario() {
             seleccionados={seleccionados}
             setCambiosMasivos={setCambiosMasivos}
             marcas={marcasList}
+            tipos={tiposList}
           />}
 
           {/* Eliminar seleccionados */}

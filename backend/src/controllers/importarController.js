@@ -37,7 +37,7 @@ const CAMPOS_BD_BASE = [
   { key: 'marca',                label: 'Marca', required: true },
   { key: 'nombreComercial',      label: 'Nombre Comercial' },
   { key: 'grupo',                label: 'Grupo' },
-  { key: 'tipo',                 label: 'Tipo (AUTO/CAMIONETA/CAMION/MOTO)' },
+  { key: 'tipo',                 label: 'Tipo (AUTO, CAMIONETA, CAMION, MOTO o personalizado)' },
   { key: 'precioRegular',        label: 'Precio Regular', required: true },
   { key: 'precioOferta',         label: 'Precio Oferta' },
   { key: 'descuentoMaximo',      label: 'Descuento Máximo %' },
@@ -308,12 +308,9 @@ function sugerirCampo(header, sedes = []) {
 }
 
 function normalizarTipo(tipo) {
-  if (!tipo) return 'AUTO';
-  const t = String(tipo).toUpperCase();
-  if (t.includes('CAMION') && !t.includes('ETA')) return 'CAMION';
-  if (t.includes('CAMIONETA')) return 'CAMIONETA';
-  if (t.includes('MOTO')) return 'MOTO';
-  return 'AUTO';
+  // Categoría libre: se guarda lo que el usuario escriba (en mayúsculas). Vacío → AUTO.
+  const t = String(tipo ?? '').trim();
+  return t ? t.toUpperCase() : 'AUTO';
 }
 
 /**
@@ -667,7 +664,7 @@ const generarTemplate = async (req, res, next) => {
       { key: 'marca',           label: 'Marca',                nota: '← OBLIGATORIO. Ej: BRIDGESTONE',            ej1: 'BRIDGESTONE',          ej2: 'MICHELIN'            },
       { key: 'nombreComercial', label: 'Nombre Comercial',     nota: 'Ej: ECOPIA EP150',                          ej1: 'ECOPIA EP150',         ej2: 'LTX FORCE'           },
       { key: 'grupo',           label: 'Grupo',                nota: 'Excelente / Muy Buena / Buena',             ej1: 'Excelente',            ej2: 'Muy Buena'           },
-      { key: 'tipo',            label: 'Tipo',                 nota: 'AUTO / CAMIONETA / CAMION / MOTO',          ej1: 'AUTO',                 ej2: 'CAMIONETA'           },
+      { key: 'tipo',            label: 'Tipo',                 nota: 'Categoría libre. Ej: AUTO, CAMIONETA, SUV',  ej1: 'AUTO',                 ej2: 'CAMIONETA'           },
       { key: 'precioRegular',   label: 'Precio Regular',       nota: '← OBLIGATORIO. Número, ej: 250.00',         ej1: 250.00,                 ej2: 480.00                },
       { key: 'precioOferta',    label: 'Precio Oferta',        nota: 'Vacío si no hay oferta',                    ej1: 220.00,                 ej2: ''                    },
       { key: 'descuentoMaximo', label: 'Descuento Máximo %',   nota: 'Número del %, ej: 15',                      ej1: 15,                     ej2: 10                    },
@@ -727,7 +724,7 @@ const generarTemplate = async (req, res, next) => {
       ['Marca',              'SÍ',  'Ej: BRIDGESTONE',                   'Nombre del fabricante.'],
       ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
-      ['Tipo',               'No',  'AUTO / CAMIONETA / CAMION / MOTO',  'Si se omite, se asigna AUTO.'],
+      ['Tipo',               'No',  'Categoría libre (ej: AUTO, CAMIONETA, SUV, VAN)', 'Se guarda tal como lo escribas (en mayúsculas). Si se omite, se asigna AUTO.'],
       ['Precio Regular',     'SÍ',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda.'],
       ['Precio Oferta',      'No',  'Número decimal',                    'Dejar vacío si no hay precio de oferta.'],
       ['Descuento Máximo %', 'No',  'Número (ej: 15)',                   'Porcentaje máximo de descuento permitido.'],

@@ -163,6 +163,20 @@ const marcas = async (req, res, next) => {
   }
 };
 
+const tipos = async (req, res, next) => {
+  try {
+    const result = await prisma.producto.findMany({
+      distinct: ['tipo'],
+      select: { tipo: true },
+      where: { activo: true },
+      orderBy: { tipo: 'asc' },
+    });
+    res.json(result.map(r => r.tipo).filter(Boolean));
+  } catch (err) {
+    next(err);
+  }
+};
+
 const TECH_FIELDS = [
   'indice_carga', 'velocidad_max', 'garantia',
   'cargaMaxNeumatico', 'velocidadMaxKmh',
@@ -298,4 +312,4 @@ Formato de ejemplo:
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, enriquecerConIA };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, enriquecerConIA };
