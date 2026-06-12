@@ -182,6 +182,7 @@ const ejecutar = async (req, res, next) => {
           nivelRuido:            int(record.nivelRuido),
           paisFabricacion:       str(record.paisFabricacion),
           origenMarca:           str(record.origenMarca),
+          activo:                true, // re-importar un producto eliminado lo reactiva
         };
 
         // Quitar claves undefined para que Prisma no las toque en update
@@ -511,7 +512,7 @@ const aplicarUpdate = async (req, res, next) => {
       try {
         // Buscar producto
         const producto = await prisma.producto.findFirst({
-          where: { [matchCampoCRM]: { equals: valorMatch, mode: 'insensitive' } },
+          where: { activo: true, [matchCampoCRM]: { equals: valorMatch, mode: 'insensitive' } },
           include: { stocks: { include: { sede: true } } },
         });
 
