@@ -1,7 +1,33 @@
 const XLSX = require('xlsx');
+const XLSXStyle = require('xlsx-js-style');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
+
+// Traduce los errores técnicos de Prisma a mensajes entendibles en español
+function explicarErrorPrisma(err) {
+  if (err?.code === 'P2000') {
+    return `El valor es demasiado largo para el campo "${err.meta?.column_name || 'desconocido'}"`;
+  }
+  if (err?.code === 'P2002') {
+    const campos = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : (err.meta?.target || 'campo único');
+    return `Ya existe otro producto con el mismo valor en: ${campos}`;
+  }
+  if (err?.code === 'P2025') {
+    return 'El producto ya no existe en la base de datos';
+  }
+  if (err?.name === 'PrismaClientValidationError' || /Invalid `prisma\./.test(err?.message || '')) {
+    const m = (err.message || '').match(/Argument `(\w+)`[:\s]([^\n]*)/);
+    if (m) {
+      if (/must not be null/.test(m[2])) return `El campo "${m[1]}" quedó vacío o con un valor no válido (revisa que sea del tipo correcto, ej. números sin símbolos de moneda)`;
+      return `Valor inválido para el campo "${m[1]}"`;
+    }
+    return 'Los datos de la fila tienen un formato inválido para la base de datos';
+  }
+  // Recortar mensajes largos de otros errores
+  const lineas = String(err?.message || 'Error desconocido').split('\n').map(l => l.trim()).filter(Boolean);
+  return lineas[lineas.length - 1].slice(0, 200);
+}
 
 // Campos base del modelo Producto (sin stock dinámico por sede)
 const CAMPOS_BD_BASE = [
@@ -124,6 +150,12 @@ const ejecutar = async (req, res, next) => {
       }
 
       const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
+
+      // Validar que el precio sea numérico ANTES de tocar la BD (evita errores crípticos de Prisma)
+      if (num(precioRaw) === null) {
+        errores.push({ fila: filaExcel, error: `Precio Regular no es un número válido: "${precioRaw}". Usa solo números, sin símbolos de moneda (ej: 250.00)` });
+        continue;
+      }
       const int = (v) => { const n = parseInt(v); return isNaN(n) ? null : n; };
       const str = (v) => v != null && String(v).trim() !== '' ? String(v).trim() : null;
       const eu  = (v) => { const s = str(v); return s ? s.toUpperCase().charAt(0) : null; };
@@ -180,7 +212,7 @@ const ejecutar = async (req, res, next) => {
           });
         }
       } catch (rowErr) {
-        errores.push({ fila: filaExcel, error: rowErr.message });
+        errores.push({ fila: filaExcel, error: explicarErrorPrisma(rowErr) });
       }
     }
 
@@ -276,6 +308,61 @@ function normalizarTipo(tipo) {
   if (t.includes('CAMIONETA')) return 'CAMIONETA';
   if (t.includes('MOTO')) return 'MOTO';
   return 'AUTO';
+}
+
+/**
+ * Genera un Excel (base64) con las filas del archivo subido sombreadas según resultado:
+ * verde = actualizado, naranja = no encontrado en CRM, rojo = error, gris = fila vacía.
+ * Agrega columnas RESULTADO y DETALLE al final.
+ */
+function generarReporteUpdate(headers, dataRows, resultadosFila, dryRun) {
+  const ESTILOS = {
+    actualizado:   { fill: 'C6EFCE', font: '006100' },
+    no_encontrado: { fill: 'FFD8A8', font: '9C5700' },
+    error:         { fill: 'FFC7CE', font: '9C0006' },
+    vacio:         { fill: 'EFEFEF', font: '777777' },
+  };
+  const LABEL = {
+    actualizado:   dryRun ? 'SE ACTUALIZARÁ' : 'ACTUALIZADO',
+    no_encontrado: 'NO ENCONTRADO EN CRM',
+    error:         'ERROR',
+    vacio:         'FILA VACÍA',
+  };
+
+  const head = [...headers.map(h => String(h ?? '')), 'RESULTADO', 'DETALLE'];
+  const aoa = [head, ...dataRows.map((row, i) => {
+    const r = resultadosFila[i] || { estado: 'vacio', detalle: '' };
+    return [...headers.map((_, c) => row[c] ?? ''), LABEL[r.estado], r.detalle || ''];
+  })];
+
+  const ws = XLSXStyle.utils.aoa_to_sheet(aoa);
+  const nCols = head.length;
+
+  // Header en negrita
+  for (let c = 0; c < nCols; c++) {
+    const addr = XLSXStyle.utils.encode_cell({ r: 0, c });
+    if (ws[addr]) ws[addr].s = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } } };
+  }
+
+  // Sombrear cada fila según su estado
+  for (let r = 0; r < dataRows.length; r++) {
+    const estado = (resultadosFila[r] || {}).estado || 'vacio';
+    const st = ESTILOS[estado];
+    for (let c = 0; c < nCols; c++) {
+      const addr = XLSXStyle.utils.encode_cell({ r: r + 1, c });
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+      ws[addr].s = {
+        fill: { patternType: 'solid', fgColor: { rgb: st.fill } },
+        font: { color: { rgb: st.font } },
+      };
+    }
+  }
+
+  ws['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
+
+  const wb = XLSXStyle.utils.book_new();
+  XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
+  return XLSXStyle.write(wb, { type: 'base64', bookType: 'xlsx' });
 }
 
 // ─── ACTUALIZAR STOCK ─────────────────────────────────────────────────────────
@@ -412,12 +499,14 @@ const aplicarUpdate = async (req, res, next) => {
     let actualizados = 0;
     let noEncontrados = 0;
     const errores = [];
+    const noEncontradosLista = []; // valores de match que no existen en el CRM
+    const resultadosFila = [];     // estado por fila para el reporte Excel
     const cambiosMuestra = []; // máx 10 para mostrar preview
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
       const valorMatch = String(row[matchIdx] ?? '').trim();
-      if (!valorMatch) continue;
+      if (!valorMatch) { resultadosFila.push({ estado: 'vacio', detalle: 'Sin valor en la columna de match' }); continue; }
 
       try {
         // Buscar producto
@@ -426,7 +515,12 @@ const aplicarUpdate = async (req, res, next) => {
           include: { stocks: { include: { sede: true } } },
         });
 
-        if (!producto) { noEncontrados++; continue; }
+        if (!producto) {
+          noEncontrados++;
+          if (noEncontradosLista.length < 200) noEncontradosLista.push({ fila: i + 2, valor: valorMatch });
+          resultadosFila.push({ estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` });
+          continue;
+        }
 
         const datosProducto = {};
         const datosStock = {};
@@ -449,6 +543,8 @@ const aplicarUpdate = async (req, res, next) => {
             if (!isNaN(num)) datosProducto[campoCRM] = num;
           } else if (campoCRM === 'tipo') {
             datosProducto.tipo = normalizarTipo(valorArchivo);
+          } else if (campoCRM === 'eficienciaCombustible' || campoCRM === 'eficienciaFrenado') {
+            datosProducto[campoCRM] = valorArchivo.toUpperCase().charAt(0); // etiqueta EU: una sola letra
           } else {
             datosProducto[campoCRM] = valorArchivo;
           }
@@ -485,8 +581,21 @@ const aplicarUpdate = async (req, res, next) => {
         } else {
           actualizados++; // en dry run contamos igualmente
         }
+        resultadosFila.push({ estado: 'actualizado', detalle: dryRun ? 'Se actualizará' : 'Actualizado correctamente' });
       } catch (rowErr) {
-        errores.push({ fila: i + 2, valor: valorMatch, error: rowErr.message });
+        const msg = explicarErrorPrisma(rowErr);
+        errores.push({ fila: i + 2, valor: valorMatch, error: msg });
+        resultadosFila.push({ estado: 'error', detalle: msg });
+      }
+    }
+
+    // Reporte Excel con filas sombreadas según resultado (verde=ok, naranja=no encontrado, rojo=error)
+    let reporteBase64 = null;
+    if (dataRows.length <= 10000) {
+      try {
+        reporteBase64 = generarReporteUpdate(rows[0], dataRows, resultadosFila, dryRun);
+      } catch (e) {
+        console.error('No se pudo generar el reporte Excel:', e.message);
       }
     }
 
@@ -494,9 +603,11 @@ const aplicarUpdate = async (req, res, next) => {
       esPreview: dryRun,
       actualizados,
       noEncontrados,
+      noEncontradosLista,
       errores,
       total: dataRows.length,
       cambiosMuestra,
+      reporteBase64,
     });
   } catch (err) {
     next(err);

@@ -111,6 +111,39 @@ export default function ActualizarStock() {
 
   const reset = () => { setArchivo(null); setInfo(null); setMatchCol(null); setUpdateMapeo({}); setPreviewRes(null); setResultado(null); };
 
+  // Descarga el reporte Excel (base64) que devuelve el backend con filas sombreadas
+  const descargarReporte = (base64, esPreview) => {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte_actualizacion_${esPreview ? 'preview_' : ''}${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Bloque reutilizable: lista de valores de match que no existen en el CRM
+  const ListaNoEncontrados = ({ lista }) => {
+    if (!lista || lista.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#f97316', marginBottom: 6 }}>
+          ⚠️ No encontrados en el CRM ({lista.length}) — verifica estos valores:
+        </div>
+        <div style={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 12px', background: '#fff7ed', borderRadius: 8, border: '1px solid #fed7aa' }}>
+          {lista.map((it, i) => (
+            <span key={i} style={{ padding: '3px 10px', background: '#fff', borderRadius: 12, border: '1px solid #fdba74', fontSize: 11.5, fontFamily: 'monospace' }}>
+              Fila {it.fila}: <strong>{it.valor}</strong>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const updateMapeoActivo = Object.entries(updateMapeo).filter(([, v]) => v && v !== '_skip');
   const canPreview = matchCol && updateMapeoActivo.length > 0;
 
@@ -384,6 +417,8 @@ export default function ActualizarStock() {
             </div>
           )}
 
+          <ListaNoEncontrados lista={previewRes.noEncontradosLista} />
+
           {previewRes.errores.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>Filas con error:</div>
@@ -397,7 +432,7 @@ export default function ActualizarStock() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               style={S.btn('#16a34a')}
               onClick={() => applyMut.mutate()}
@@ -405,6 +440,11 @@ export default function ActualizarStock() {
             >
               {applyMut.isPending ? '⏳ Actualizando...' : `✅ Aplicar ${previewRes.actualizados} actualizaciones`}
             </button>
+            {previewRes.reporteBase64 && (
+              <button style={S.btn('#0891b2', true)} onClick={() => descargarReporte(previewRes.reporteBase64, true)}>
+                📥 Descargar Excel con resultados
+              </button>
+            )}
             <button style={S.btn('#64748b', true)} onClick={() => setPreviewRes(null)}>
               ← Volver a editar
             </button>
@@ -431,20 +471,29 @@ export default function ActualizarStock() {
             </div>
           </div>
 
+          <ListaNoEncontrados lista={resultado.noEncontradosLista} />
+
           {resultado.errores.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>Errores:</div>
               {resultado.errores.map((e, i) => (
                 <div key={i} style={{ padding: '5px 10px', background: '#fef2f2', borderRadius: 6, marginBottom: 4, fontSize: 12 }}>
-                  <strong>Fila {e.fila}:</strong> {e.error}
+                  <strong>Fila {e.fila} {e.valor ? `(${e.valor})` : ''}:</strong> {e.error}
                 </div>
               ))}
             </div>
           )}
 
-          <button style={S.btn('#3b82f6')} onClick={reset}>
-            Actualizar otro archivo
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {resultado.reporteBase64 && (
+              <button style={S.btn('#0891b2')} onClick={() => descargarReporte(resultado.reporteBase64, false)}>
+                📥 Descargar Excel con resultados sombreados
+              </button>
+            )}
+            <button style={S.btn('#3b82f6', !resultado.reporteBase64 ? false : true)} onClick={reset}>
+              Actualizar otro archivo
+            </button>
+          </div>
         </div>
       )}
     </div>
