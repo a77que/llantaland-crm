@@ -190,7 +190,7 @@ export default function Cotizaciones() {
           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight:700 }}>Cotizaciones</div>
           <div style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:2 }}>{total} cotizaciones</div>
         </div>
-        <button onClick={() => setModal(true)} style={{ padding:'10px 20px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:14, fontWeight:800, cursor:'pointer' }}>
+        <button onClick={() => navigate('/cotizaciones/nueva')} style={{ padding:'10px 20px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:14, fontWeight:800, cursor:'pointer' }}>
           + Nueva Cotización
         </button>
       </div>
@@ -213,7 +213,7 @@ export default function Cotizaciones() {
         <div style={{ textAlign:'center', padding:60, color:'var(--color-text-muted)' }}>
           <div style={{ fontSize:44 }}>📋</div>
           <div style={{ marginTop:12, fontWeight:600 }}>Sin cotizaciones{estado ? ` en estado ${estado}` : ''}</div>
-          <button onClick={() => setModal(true)} style={{ marginTop:16, padding:'10px 24px', background:'#f5c400', color:'#000', border:'none', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer' }}>
+          <button onClick={() => navigate('/cotizaciones/nueva')} style={{ marginTop:16, padding:'10px 24px', background:'#f5c400', color:'#000', border:'none', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer' }}>
             Crear primera cotización
           </button>
         </div>
