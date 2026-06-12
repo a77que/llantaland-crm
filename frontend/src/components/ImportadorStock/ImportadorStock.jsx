@@ -164,8 +164,9 @@ export default function ImportadorStock() {
                 </tr>
               </thead>
               <tbody>
-                {preview.columnas.map((col, colIdx) => (
-                  <tr key={colIdx}>
+                {preview.columnas.map((col, colIdx) => {
+                  if (col.nombre.includes('[AUTO]')) return null; // derivado de Medida, no importar
+                  return (<tr key={colIdx}>
                     <td style={{ ...S.td, fontWeight: 600 }}>{col.nombre}</td>
                     <td style={S.td}>
                       <select style={S.select} value={mapeo[colIdx] || '_skip'} onChange={(e) => setMapeoCampo(colIdx, e.target.value)}>
@@ -179,8 +180,8 @@ export default function ImportadorStock() {
                         {String(row[colIdx] ?? '').slice(0, 30)}
                       </td>
                     ))}
-                  </tr>
-                ))}
+                  </tr>);
+                })}
               </tbody>
             </table>
           </div>
