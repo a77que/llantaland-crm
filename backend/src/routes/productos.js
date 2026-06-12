@@ -2,7 +2,7 @@ const router = require('express').Router();
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { listar, obtener, crear, actualizar, compatibles, subirImagen, marcas, enriquecerConIA } = require('../controllers/productoController');
+const { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, enriquecerConIA } = require('../controllers/productoController');
 const { auth, requireAdmin } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
@@ -30,6 +30,8 @@ router.get('/compatibles',compatibles);
 router.get('/:id',        obtener);
 router.post('/',          requireAdmin, crear);
 router.put('/:id',        requireAdmin, actualizar);
+router.delete('/:id',     requireAdmin, eliminar);
+router.post('/eliminar-masivo', requireAdmin, eliminarMasivo);
 router.post('/:id/imagenes',      requireAdmin, upload.single('imagen'), subirImagen);
 router.post('/:id/enriquecer-ia', requireAdmin, enriquecerConIA);
 

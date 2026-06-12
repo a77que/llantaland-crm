@@ -93,6 +93,34 @@ const actualizar = async (req, res, next) => {
   }
 };
 
+// Eliminación lógica: activo=false (conserva historial de ventas y movimientos)
+const eliminar = async (req, res, next) => {
+  try {
+    const producto = await prisma.producto.findUnique({ where: { id: req.params.id } });
+    if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
+    await prisma.producto.update({ where: { id: req.params.id }, data: { activo: false } });
+    res.json({ ok: true, mensaje: `Producto ${producto.sku} eliminado del catálogo` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const eliminarMasivo = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Debes enviar un array "ids" con al menos un producto' });
+    }
+    const result = await prisma.producto.updateMany({
+      where: { id: { in: ids }, activo: true },
+      data: { activo: false },
+    });
+    res.json({ ok: true, eliminados: result.count });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const compatibles = async (req, res, next) => {
   try {
     const { medida } = req.query;
@@ -270,4 +298,4 @@ Formato de ejemplo:
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, compatibles, subirImagen, marcas, enriquecerConIA };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, enriquecerConIA };

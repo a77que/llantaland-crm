@@ -514,6 +514,7 @@ export default function Inventario() {
   const [seleccionados, setSeleccionados] = useState([]);
   const [cambiosMasivos, setCambiosMasivos] = useState({});
   const [guardandoMasivo, setGuardandoMasivo] = useState(false);
+  const [eliminandoMasivo, setEliminandoMasivo] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['productos', { q, tipo, page, sortBy, sortDir }],
@@ -848,6 +849,35 @@ export default function Inventario() {
             setCambiosMasivos={setCambiosMasivos}
             marcas={marcasList}
           />}
+
+          {/* Eliminar seleccionados */}
+          {seleccionados.length > 0 && (
+            <button
+              disabled={eliminandoMasivo}
+              onClick={async () => {
+                const detalle = seleccionados.slice(0, 5)
+                  .map(id => { const p = productos.find(pr => pr.id === id); return p ? `• ${p.marca} ${p.medida} (${p.sku})` : null; })
+                  .filter(Boolean).join('\n');
+                const extra = seleccionados.length > 5 ? `\n...y ${seleccionados.length - 5} más` : '';
+                if (!window.confirm(`⚠️ ¿Eliminar ${seleccionados.length} llanta(s) del catálogo?\n\n${detalle}${extra}\n\nDejarán de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) return;
+                setEliminandoMasivo(true);
+                try {
+                  const r = await productosApi.eliminarMasivo(seleccionados);
+                  qc.invalidateQueries(['productos']);
+                  setSeleccionados([]);
+                  setCambiosMasivos({});
+                  toast.success(`🗑️ ${r.eliminados} llanta(s) eliminadas del catálogo`);
+                } catch (e) {
+                  toast.error(e?.error || 'Error al eliminar');
+                } finally {
+                  setEliminandoMasivo(false);
+                }
+              }}
+              style={{ padding:'8px 14px', background:'transparent', color:'#f87171', border:'2px solid #dc2626', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' }}
+            >
+              {eliminandoMasivo ? '⏳ Eliminando...' : `🗑️ Eliminar (${seleccionados.length})`}
+            </button>
+          )}
 
           {Object.keys(cambiosMasivos).length > 0 && (
             <button

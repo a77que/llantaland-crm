@@ -75,6 +75,16 @@ export default function InventarioDetalle() {
     onError: (e) => toast.error(e?.error || 'Error al conectar con IA'),
   });
 
+  const delMut = useMutation({
+    mutationFn: () => productosApi.eliminar(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['productos'] });
+      toast.success(data?.mensaje || 'Llanta eliminada del catálogo');
+      navigate('/inventario');
+    },
+    onError: (e) => toast.error(e?.error || 'Error al eliminar'),
+  });
+
   if (isLoading) return <LoadingSpinner fullPage />;
   if (!prod) return <div style={{ padding: 24 }}>Producto no encontrado</div>;
 
@@ -91,6 +101,17 @@ export default function InventarioDetalle() {
           <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 500, color: 'var(--color-primary)' }}>{prod.medida}</span>
         </h1>
         <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: tipoColor + '20', color: tipoColor }}>{prod.tipo}</span>
+        <button
+          onClick={() => {
+            if (window.confirm(`⚠️ ¿Eliminar esta llanta del catálogo?\n\n${prod.marca} ${prod.nombreComercial || ''} ${prod.medida} (${prod.sku})\n\nDejará de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) {
+              delMut.mutate();
+            }
+          }}
+          disabled={delMut.isPending}
+          style={{ padding: '7px 14px', borderRadius: 8, border: '2px solid #dc2626', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}
+        >
+          {delMut.isPending ? '⏳ Eliminando...' : '🗑️ Eliminar'}
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 14 }}>

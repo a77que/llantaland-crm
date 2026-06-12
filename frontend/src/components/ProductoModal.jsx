@@ -394,6 +394,16 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
     onError: (e) => toast.error(e?.error || 'Error al conectar con IA'),
   });
 
+  const delMut = useMutation({
+    mutationFn: () => productosApi.eliminar(prodId),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['productos'] });
+      toast.success(data?.mensaje || 'Llanta eliminada del catálogo');
+      onClose();
+    },
+    onError: (e) => toast.error(e?.error || 'Error al eliminar'),
+  });
+
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -610,6 +620,18 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
               style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
             >
               Editar →
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm(`⚠️ ¿Eliminar esta llanta del catálogo?\n\n${prod.marca} ${prod.nombreComercial || ''} ${prod.medida} (${prod.sku})\n\nDejará de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) {
+                  delMut.mutate();
+                }
+              }}
+              disabled={delMut.isPending}
+              style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #dc2626', background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
+            >
+              {delMut.isPending ? '⏳' : '🗑️ Eliminar'}
             </button>
           </div>
         )}
