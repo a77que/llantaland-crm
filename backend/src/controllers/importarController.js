@@ -670,18 +670,7 @@ const generarTemplate = async (req, res, next) => {
       { key: 'velocidad_max',   label: 'Índice de Velocidad',  nota: 'Ej: H (H=210km/h, V=240, S=180)',           ej1: 'H',                    ej2: 'S'                   },
     ];
 
-    // Ancho, Perfil, Radio: informativas — el sistema las extrae de Medida automáticamente
-    const parseMedida = (m) => {
-      const r = String(m || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
-      return r ? { ancho: parseInt(r[1]), perfil: parseInt(r[2]), radio: parseInt(r[3]) } : {};
-    };
-    const { ancho: ejAncho1, perfil: ejPerfil1, radio: ejRadio1 } = parseMedida('195/65R15');
-    const { ancho: ejAncho2, perfil: ejPerfil2, radio: ejRadio2 } = parseMedida('265/70R17');
-    fixedCols.splice(2, 0,
-      { key: '__ancho',  label: 'Ancho (mm) [AUTO]',   nota: '← Auto-calculado desde Medida. No editar.', ej1: ejAncho1,  ej2: ejAncho2  },
-      { key: '__perfil', label: 'Perfil (%) [AUTO]',   nota: '← Auto-calculado desde Medida. No editar.', ej1: ejPerfil1, ej2: ejPerfil2 },
-      { key: '__radio',  label: 'Radio (R) [AUTO]',    nota: '← Auto-calculado desde Medida. No editar.', ej1: ejRadio1,  ej2: ejRadio2  },
-    );
+    // Nota: Ancho/Perfil/Radio NO van en la plantilla — el sistema los calcula automáticamente desde Medida
 
     fixedCols.push(
       { key: 'cargaMaxNeumatico', label: 'Carga Maxima Neumatico kg', nota: 'Kg por neumatico, ej: 615', ej1: 615, ej2: 1450 },
@@ -727,10 +716,7 @@ const generarTemplate = async (req, res, next) => {
     const instrRows = [
       ['CAMPO', 'OBLIGATORIO', 'FORMATO / OPCIONES', 'DESCRIPCIÓN'],
       ['SKU',                'SÍ',  'Texto único',                       'Código único del producto. No puede repetirse.'],
-      ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar. El sistema extrae automáticamente Ancho (195mm), Perfil (65%) y Radio (R15).'],
-      ['Ancho (mm) [AUTO]',  'No',  'Auto-calculado desde Medida',       'NO editar. El sistema lo calcula solo desde la columna Medida.'],
-      ['Perfil (%) [AUTO]',  'No',  'Auto-calculado desde Medida',       'NO editar. El sistema lo calcula solo desde la columna Medida.'],
-      ['Radio (R) [AUTO]',   'No',  'Auto-calculado desde Medida',       'NO editar. El sistema lo calcula solo desde la columna Medida.'],
+      ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar. El sistema extrae automáticamente Ancho (195mm), Perfil (65%) y Radio (R15) — no necesitas columnas aparte.'],
       ['Marca',              'SÍ',  'Ej: BRIDGESTONE',                   'Nombre del fabricante.'],
       ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
