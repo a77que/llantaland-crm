@@ -229,6 +229,11 @@ function sugerirCampo(header, sedes = []) {
   // Columnas AUTO de la plantilla → ignorar
   if (h.includes('[auto]')) return '_skip';
 
+  // Stock Total es calculado (suma de almacenes) — nunca se importa
+  if (h.includes('stock') && h.includes('total')) return '_skip';
+  // Ancho/Perfil/Radio del catálogo exportado — derivados de Medida, no importar
+  if (/^(ancho|perfil|radio)\b/.test(h)) return '_skip';
+
   // Mapeo exacto de las etiquetas de la plantilla
   const EXACTO = {
     'sku':                          'sku',
@@ -444,12 +449,13 @@ const previewUpdate = async (req, res, next) => {
       else if (hl.includes('ruido') || hl.includes('db')) updateSugerido = 'nivelRuido';
       else if (hl.includes('fabricacion') || hl.includes('fabricaci')) updateSugerido = 'paisFabricacion';
       else if (hl.includes('origen') && hl.includes('marca')) updateSugerido = 'origenMarca';
-      else {
+      else if (!hl.includes('total')) {
         // stock por local: "stock l0", "stock_l1", "l2", "santa anita", etc.
+        // "Stock Total" se excluye: es un valor CALCULADO (suma de almacenes), nunca se sube
         const sede = sedes.find(s =>
           hl.includes(s.codigoLocal.toLowerCase()) ||
           hl.includes(s.nombre.toLowerCase()) ||
-          hl.includes(s.distrito?.toLowerCase() || '')
+          (s.distrito && hl.includes(s.distrito.toLowerCase()))
         );
         if (sede) updateSugerido = `stock_${sede.codigoLocal}`;
         else if (hl.includes('stock') || hl.includes('cantidad') || hl.includes('qty')) updateSugerido = `stock_${sedes[0]?.codigoLocal || 'L0'}`;
