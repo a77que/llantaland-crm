@@ -158,30 +158,70 @@ export default function ImportadorStock() {
                 <tr>
                   <th style={S.th}>Columna en archivo</th>
                   <th style={S.th}>Campo destino en CRM</th>
-                  {preview.preview[0]?.map((_, i) => (
-                    <th key={i} style={{ ...S.th, background: '#fff' }}>Fila {i + 1}</th>
+                  {preview.preview.slice(0, 3).map((_, rowIdx) => (
+                    <th key={rowIdx} style={{ ...S.th, background: '#fff' }}>Fila {rowIdx + 1}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {preview.columnas.map((col, colIdx) => {
-                  if (col.nombre.includes('[AUTO]')) return null; // derivado de Medida, no importar
-                  return (<tr key={colIdx}>
-                    <td style={{ ...S.td, fontWeight: 600 }}>{col.nombre}</td>
-                    <td style={S.td}>
-                      <select style={S.select} value={mapeo[colIdx] || '_skip'} onChange={(e) => setMapeoCampo(colIdx, e.target.value)}>
-                        {(preview.camposBD || []).map((c) => (
-                          <option key={c.key} value={c.key}>{c.label}</option>
+                {(() => {
+                  const cols = preview.columnas.map((col, idx) => ({ ...col, idx }));
+                  const recognized   = cols.filter(c => c.sugerencia && c.sugerencia !== '_skip' && !c.nombre.includes('[AUTO]'));
+                  const autoCalc     = cols.filter(c => c.nombre.includes('[AUTO]'));
+                  const unrecognized = cols.filter(c => (!c.sugerencia || c.sugerencia === '_skip') && !c.nombre.includes('[AUTO]'));
+                  const previewRows  = preview.preview.slice(0, 3);
+
+                  const renderRow = (col, opts = {}) => {
+                    const colIdx = col.idx;
+                    return (
+                      <tr key={colIdx} style={opts.rowStyle}>
+                        <td style={{ ...S.td, fontWeight: 600, color: opts.dimText ? '#94a3b8' : undefined }}>
+                          {opts.icon && <span style={{ marginRight: 4 }}>{opts.icon}</span>}
+                          {col.nombre}
+                        </td>
+                        <td style={S.td}>
+                          {opts.locked
+                            ? <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>Auto-calculado desde Medida</span>
+                            : <select
+                                style={{ ...S.select, ...(opts.warn && { borderColor: '#f59e0b' }) }}
+                                value={mapeo[colIdx] || '_skip'}
+                                onChange={(e) => setMapeoCampo(colIdx, e.target.value)}
+                              >
+                                {(preview.camposBD || []).map((c) => (
+                                  <option key={c.key} value={c.key}>{c.label}</option>
+                                ))}
+                              </select>
+                          }
+                        </td>
+                        {previewRows.map((row, rowIdx) => (
+                          <td key={rowIdx} style={{ ...S.td, color: opts.dimText ? '#94a3b8' : 'var(--color-text-muted)', fontFamily: 'monospace' }}>
+                            {String(row[colIdx] ?? '').slice(0, 30)}
+                          </td>
                         ))}
-                      </select>
-                    </td>
-                    {preview.preview.map((row, rowIdx) => (
-                      <td key={rowIdx} style={{ ...S.td, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>
-                        {String(row[colIdx] ?? '').slice(0, 30)}
+                      </tr>
+                    );
+                  };
+
+                  const divider = (key, bg, txtColor, borderColor, label) => (
+                    <tr key={key}>
+                      <td colSpan={99} style={{ background: bg, padding: '4px 12px', fontSize: 10, fontWeight: 700, color: txtColor, textTransform: 'uppercase', letterSpacing: 1, borderTop: `2px solid ${borderColor}` }}>
+                        {label}
                       </td>
-                    ))}
-                  </tr>);
-                })}
+                    </tr>
+                  );
+
+                  return [
+                    ...recognized.map(col => renderRow(col)),
+                    ...(autoCalc.length > 0 ? [
+                      divider('_div_auto', '#f1f5f9', '#64748b', '#e2e8f0', 'Auto-calculado desde Medida — no importar'),
+                      ...autoCalc.map(col => renderRow(col, { locked: true, dimText: true, rowStyle: { background: '#f8fafc', opacity: 0.7 } })),
+                    ] : []),
+                    ...(unrecognized.length > 0 ? [
+                      divider('_div_unk', '#fef3c7', '#92400e', '#fde68a', `⚠️ ${unrecognized.length} columna(s) no reconocidas — asígnalas manualmente`),
+                      ...unrecognized.map(col => renderRow(col, { icon: '⚠️', warn: true, rowStyle: { background: '#fffbeb' } })),
+                    ] : []),
+                  ];
+                })()}
               </tbody>
             </table>
           </div>
