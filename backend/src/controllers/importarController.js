@@ -49,8 +49,17 @@ const preview = async (req, res, next) => {
     const headers = data[0].map((h) => String(h || '').trim());
     const rows = data.slice(1, 11); // primeras 10 filas para preview (fila 2 = notas, luego ejemplos)
 
+    // Evitar sugerencias duplicadas: si dos columnas apuntan al mismo campo, solo la primera gana
+    const camposUsados = new Set();
+    const sugerencias = headers.map((h) => {
+      let s = sugerirCampo(h, sedes);
+      if (s !== '_skip' && camposUsados.has(s)) s = '_skip';
+      if (s !== '_skip') camposUsados.add(s);
+      return s;
+    });
+
     res.json({
-      columnas: headers.map((h) => ({ nombre: h, sugerencia: sugerirCampo(h, sedes) })),
+      columnas: headers.map((h, i) => ({ nombre: h, sugerencia: sugerencias[i] })),
       preview: rows,
       camposBD,
       totalFilas: data.length - 1,
@@ -73,13 +82,14 @@ const ejecutar = async (req, res, next) => {
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
     // La plantilla tiene: fila 1=headers, fila 2=notas, filas 3-4=ejemplos → saltar hasta la primera fila con SKU real
-    const allRows = rows.slice(1); // quitar headers
-    const dataRows = allRows.filter(row => {
-      // Buscar en qué columna está SKU para ver si esta fila tiene valor real
-      const skuColIdx = Object.entries(columnMap).find(([, campo]) => campo === 'sku')?.[0];
+    const skuColIdx = Object.entries(columnMap).find(([, campo]) => campo === 'sku')?.[0];
+    const dataRows = [];
+    rows.slice(1).forEach((row, idx) => {
       const val = skuColIdx !== undefined ? String(row[parseInt(skuColIdx)] || '').trim() : '';
       // Ignorar filas que son notas/ejemplos de la plantilla (empiezan con "←" o son los 2 ejemplos)
-      return val && !val.startsWith('←') && val !== 'LLT-195-65-R15-001' && val !== 'LLT-265-70-R17-002';
+      if (val && !val.startsWith('←') && val !== 'LLT-195-65-R15-001' && val !== 'LLT-265-70-R17-002') {
+        dataRows.push({ row, filaExcel: idx + 2 }); // +2: 1 por headers + 1 porque Excel cuenta desde 1
+      }
     });
 
     // Pre-cargar sedes para mapear stock_LX → sedeId sin queries por fila
@@ -91,18 +101,25 @@ const ejecutar = async (req, res, next) => {
     const errores = [];
 
     for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
+      const { row, filaExcel } = dataRows[i];
       const record = {};
       for (const [colIdx, campo] of Object.entries(columnMap)) {
-        if (campo && campo !== '_skip') {
-          record[campo] = row[parseInt(colIdx)];
-        }
+        if (!campo || campo === '_skip') continue;
+        const valor = row[parseInt(colIdx)];
+        // No pisar un valor ya asignado con una celda vacía (columnas duplicadas en el mapeo)
+        if (valor === undefined || valor === null || String(valor).trim() === '') continue;
+        record[campo] = valor;
       }
 
       // Normalizar precio: acepta precioRegular (plantilla nueva) o precio (legado)
       const precioRaw = record.precioRegular ?? record.precio;
-      if (!record.sku || !record.medida || !record.marca || !precioRaw) {
-        errores.push({ fila: i + 3, error: 'Campos obligatorios faltantes (SKU, Medida, Marca, Precio Regular)' });
+      const faltantes = [];
+      if (!record.sku) faltantes.push('SKU');
+      if (!record.medida) faltantes.push('Medida');
+      if (!record.marca) faltantes.push('Marca');
+      if (!precioRaw) faltantes.push('Precio Regular');
+      if (faltantes.length > 0) {
+        errores.push({ fila: filaExcel, error: `Campos obligatorios faltantes: ${faltantes.join(', ')}` });
         continue;
       }
 
@@ -163,7 +180,7 @@ const ejecutar = async (req, res, next) => {
           });
         }
       } catch (rowErr) {
-        errores.push({ fila: i + 3, error: rowErr.message });
+        errores.push({ fila: filaExcel, error: rowErr.message });
       }
     }
 
