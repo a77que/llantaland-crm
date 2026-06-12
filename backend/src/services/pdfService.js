@@ -24,6 +24,42 @@ const C = {
 
 const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
 const fmtFecha = (d) => new Date(d).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+// Día de la semana + fecha larga, ej: "Lunes 16/06/2026"
+const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+function fmtDiaFecha(d) {
+  if (!d) return null;
+  const f = new Date(d);
+  if (isNaN(f)) return null;
+  const dia = DIAS[f.getDay()];
+  return `${dia} ${f.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+}
+// Bloque de instalación reutilizable (cotización y venta)
+function bloqueInstalacion(doc, obj, y, C) {
+  const local = obj.localInstalacion;
+  const diaFecha = fmtDiaFecha(obj.fechaInstalacion);
+  const tieneAlgo = local || diaFecha || obj.fechaCita || obj.provinciaDestino;
+  if (!tieneAlgo) return y;
+  doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('CITA DE INSTALACIÓN:', 50, y);
+  y += 14;
+  if (local?.Nombre || local?.nombre) {
+    doc.fontSize(9).font('Helvetica').fillColor(C.texto)
+      .text(`Local: ${local.Nombre || local.nombre}  —  ${local.Direccion || local.direccion || local.Distrito || local.distrito || ''}`, 50, y);
+    y += 14;
+  }
+  if (diaFecha) {
+    const horaTxt = obj.horaInstalacion ? `  a las ${obj.horaInstalacion}` : '';
+    doc.fontSize(9).font('Helvetica-Bold').fillColor(C.texto).text(`Día y hora: ${diaFecha}${horaTxt}`, 50, y);
+    y += 14;
+  } else if (obj.fechaCita) {
+    doc.fontSize(9).font('Helvetica').fillColor(C.texto).text(`Fecha de cita: ${obj.fechaCita}`, 50, y);
+    y += 14;
+  }
+  if (obj.provinciaDestino) {
+    doc.fontSize(9).font('Helvetica').fillColor(C.texto).text(`Provincia destino: ${obj.provinciaDestino}`, 50, y);
+    y += 14;
+  }
+  return y + 4;
+}
 
 async function generarVenta(venta) {
   return new Promise((resolve, reject) => {
@@ -129,21 +165,13 @@ async function generarVenta(venta) {
         .text(fmt(venta.precioTotal), 375, y + 7, { width: 165, align: 'right' });
       y += 44;
 
-      // ── Instalación ──
-      const local = venta.localInstalacion;
-      if (local || venta.fechaCita) {
-        doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('INSTALACIÓN:', 50, y);
-        y += 14;
-        if (local?.Nombre || local?.nombre) {
-          doc.fontSize(9).font('Helvetica').fillColor(C.texto)
-            .text(`Local: ${local.Nombre || local.nombre}  —  ${local.Direccion || local.direccion || local.Distrito || ''}`, 50, y);
-          y += 14;
-        }
-        if (venta.fechaCita) {
-          doc.fontSize(9).fillColor(C.texto).text(`Fecha de cita: ${venta.fechaCita}`, 50, y);
-          y += 14;
-        }
+      // ── Instalación (vehículo + cita) ──
+      if (auto) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('VEHÍCULO:', 50, y);
+        doc.fontSize(9).font('Helvetica').fillColor(C.texto).text(auto, 130, y);
+        y += 16;
       }
+      y = bloqueInstalacion(doc, venta, y, C);
 
       // ── Pie ──
       const pieY = doc.page.height - 50;
@@ -241,25 +269,7 @@ async function generarCotizacion(cot) {
       y += 44;
 
       // ── Instalación (si hay datos de cita) ──
-      const localCot = cot.localInstalacion;
-      if (localCot || cot.fechaCita) {
-        doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('INSTALACIÓN:', 50, y);
-        y += 14;
-        if (localCot?.Nombre || localCot?.nombre) {
-          doc.fontSize(9).font('Helvetica').fillColor(C.texto)
-            .text(`Local: ${localCot.Nombre || localCot.nombre}  —  ${localCot.Direccion || localCot.direccion || localCot.Distrito || ''}`, 50, y);
-          y += 14;
-        }
-        if (cot.fechaCita) {
-          doc.fontSize(9).fillColor(C.texto).text(`Fecha de cita: ${cot.fechaCita}`, 50, y);
-          y += 14;
-        }
-        if (cot.provinciaDestino) {
-          doc.fontSize(9).fillColor(C.texto).text(`Provincia destino: ${cot.provinciaDestino}`, 50, y);
-          y += 14;
-        }
-        y += 4;
-      }
+      y = bloqueInstalacion(doc, cot, y, C);
 
       if (cot.notas) {
         doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('NOTAS:', 50, y);

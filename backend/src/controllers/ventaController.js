@@ -145,6 +145,11 @@ const generarPdf = async (req, res, next) => {
     const filename = await pdfService.generarVenta(venta);
     const pdfUrl = `/uploads/${filename}`;
     await prisma.venta.update({ where: { id: req.params.id }, data: {} }); // touch
+
+    // Recibo generado = entrega completada: la cita del lead pasa a ENTREGADO
+    if (venta.leadId) {
+      await prisma.leadCRM.update({ where: { id: venta.leadId }, data: { estadoCita: 'ENTREGADO' } }).catch(() => {});
+    }
     res.json({ pdfUrl });
   } catch (err) {
     next(err);

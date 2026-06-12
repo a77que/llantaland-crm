@@ -103,6 +103,20 @@ export const adminApi = {
 export const citasApi = {
   listar: (params) => api.get('/citas', { params }),
   poll:   ()       => api.get('/citas/poll'),
+  actualizar: (id, data) => api.put(`/citas/${id}`, data),
+};
+
+export const vehiculosApi = {
+  placa:     (placa) => api.get(`/vehiculos/placa/${encodeURIComponent(placa)}`),
+  versiones: (data)  => api.post('/vehiculos/versiones', data),
+};
+
+export const clientesApi = {
+  listar:  (params) => api.get('/clientes', { params }),
+  buscar:  (doc)    => api.get('/clientes/buscar', { params: { doc } }),
+  lookup:  (data)   => api.post('/clientes/lookup', data),
+  obtener: (id)     => api.get(`/clientes/${id}`),
+  crear:   (data)   => api.post('/clientes', data),
 };
 
 export const importarApi = {

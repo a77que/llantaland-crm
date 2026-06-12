@@ -11,6 +11,27 @@ const ESTADO_COLOR = {
   RECHAZADA: '#dc2626', CONVERTIDA: '#8b5cf6',
 };
 const ESTADO_ICON = { BORRADOR:'📝', ENVIADA:'📤', ACEPTADA:'✅', RECHAZADA:'❌', CONVERTIDA:'💰' };
+// Estados que el vendedor gestiona (ENVIADA queda oculta — flujo legado)
+const ESTADOS_GESTION = ['BORRADOR', 'ACEPTADA', 'RECHAZADA', 'CONVERTIDA'];
+
+// Modal para capturar el motivo al rechazar una cotización
+function ModalRechazo({ cot, onClose, onConfirmar }) {
+  const [motivo, setMotivo] = useState('');
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
+      <div style={{ background:'var(--color-surface)', borderRadius:14, maxWidth:420, width:'100%', padding:24 }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>❌ Rechazar {cot.numero}</div>
+        <div style={{ fontSize:13, color:'var(--color-text-muted)', marginBottom:14 }}>Indica por qué el cliente rechazó esta cotización.</div>
+        <textarea value={motivo} onChange={e=>setMotivo(e.target.value)} autoFocus placeholder="Ej: precio alto, eligió otra marca, no tenía stock..."
+          style={{ width:'100%', height:90, resize:'vertical', padding:'10px 12px', fontSize:14, border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)' }} />
+        <div style={{ display:'flex', gap:8, marginTop:16 }}>
+          <button onClick={onClose} style={{ flex:1, padding:'11px', background:'var(--color-bg)', border:'1.5px solid var(--color-border)', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', color:'var(--color-text)' }}>Cancelar</button>
+          <button onClick={() => onConfirmar(motivo)} disabled={!motivo.trim()} style={{ flex:1, padding:'11px', background: motivo.trim() ? '#dc2626' : 'var(--color-surface2)', color: motivo.trim() ? '#fff' : 'var(--color-text-muted)', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor: motivo.trim() ? 'pointer' : 'default' }}>Rechazar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
 const badge = (color) => ({ display:'inline-block', padding:'3px 10px', borderRadius:10, fontSize:11, fontWeight:700, background:color+'20', color });
 
@@ -122,6 +143,7 @@ export default function Cotizaciones() {
   const [estado, setEstado] = useState('');
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
+  const [rechazo, setRechazo] = useState(null); // cotización a rechazar
 
   const { data, isLoading } = useQuery({
     queryKey: ['cotizaciones', { estado, page }],
@@ -142,15 +164,22 @@ export default function Cotizaciones() {
   });
 
   const cambiarEstadoMut = useMutation({
-    mutationFn: ({ id, estado }) => cotizacionesApi.actualizar(id, { estado }),
+    mutationFn: ({ id, estado, motivoRechazo }) => cotizacionesApi.actualizar(id, { estado, ...(motivoRechazo ? { motivoRechazo } : {}) }),
     onSuccess: () => { toast.success('Estado actualizado'); qc.invalidateQueries(['cotizaciones']); },
+    onError: (e) => toast.error(e?.error || 'Error al actualizar'),
   });
+
+  // Cambio de estado desde el selector: si es RECHAZADA pide motivo
+  const onCambiarEstado = (cot, nuevoEstado) => {
+    if (nuevoEstado === 'RECHAZADA') { setRechazo(cot); return; }
+    cambiarEstadoMut.mutate({ id: cot.id, estado: nuevoEstado });
+  };
 
   const cots = data?.data || [];
   const total = data?.total || 0;
 
   const FILTROS = [
-    ['', 'Todas'], ['BORRADOR','📝 Borrador'], ['ENVIADA','📤 Enviada'],
+    ['', 'Todas'], ['BORRADOR','📝 Borrador'],
     ['ACEPTADA','✅ Aceptada'], ['RECHAZADA','❌ Rechazada'], ['CONVERTIDA','💰 Convertida'],
   ];
 
@@ -237,10 +266,11 @@ export default function Cotizaciones() {
                   <td style={{ padding:'10px 12px', fontSize:13, textAlign:'center' }}>{c.cantidad}</td>
                   <td style={{ padding:'10px 12px', fontWeight:700, color:'#16a34a' }}>{fmt(c.precioTotal)}</td>
                   <td style={{ padding:'10px 12px' }}>
-                    <select value={c.estado} onChange={e=>cambiarEstadoMut.mutate({id:c.id,estado:e.target.value})} disabled={c.estado==='CONVERTIDA'}
+                    <select value={ESTADOS_GESTION.includes(c.estado) ? c.estado : 'BORRADOR'} onChange={e=>onCambiarEstado(c, e.target.value)} disabled={c.estado==='CONVERTIDA'}
                       style={{ padding:'3px 8px', borderRadius:8, fontSize:11, fontWeight:700, border:`1.5px solid ${ESTADO_COLOR[c.estado]}`, background:ESTADO_COLOR[c.estado]+'20', color:ESTADO_COLOR[c.estado], cursor:c.estado==='CONVERTIDA'?'default':'pointer' }}>
-                      {['BORRADOR','ENVIADA','ACEPTADA','RECHAZADA','CONVERTIDA'].map(s=><option key={s} value={s}>{ESTADO_ICON[s]} {s}</option>)}
+                      {ESTADOS_GESTION.map(s=><option key={s} value={s}>{ESTADO_ICON[s]} {s}</option>)}
                     </select>
+                    {c.estado==='RECHAZADA' && c.motivoRechazo && <div style={{ fontSize:10, color:'#dc2626', marginTop:3, maxWidth:140, whiteSpace:'normal' }} title={c.motivoRechazo}>{c.motivoRechazo.slice(0,40)}{c.motivoRechazo.length>40?'…':''}</div>}
                   </td>
                   <td style={{ padding:'10px 12px', fontSize:13 }}>{c.usuario?.nombre}</td>
                   <td style={{ padding:'10px 12px', fontSize:12, color:'var(--color-text-muted)' }}>{new Date(c.createdAt).toLocaleDateString('es-PE')}</td>
@@ -270,6 +300,7 @@ export default function Cotizaciones() {
       )}
 
       {modal && <ModalNuevaCotizacion onClose={()=>setModal(false)} onCreada={()=>qc.invalidateQueries(['cotizaciones'])} />}
+      {rechazo && <ModalRechazo cot={rechazo} onClose={()=>setRechazo(null)} onConfirmar={(motivo)=>{ cambiarEstadoMut.mutate({ id: rechazo.id, estado:'RECHAZADA', motivoRechazo: motivo }); setRechazo(null); }} />}
     </div>
   );
 }

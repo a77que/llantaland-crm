@@ -51,11 +51,14 @@ const crear = async (req, res, next) => {
       leadId, medidaLlanta, marcaLlanta, modeloLlanta,
       cantidad, precioUnit, descuento, notas,
       nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
+      // Datos de cita ingresados en el CRM
+      generarCita, fechaInstalacion, horaInstalacion, localInstalacion: localInstalacionBody,
     } = req.body;
 
     const qty   = parseInt(cantidad || 1);
     const pUnit = parseFloat(precioUnit || 0);
     const desc  = descuento ? parseFloat(descuento) : 0;
+    const quiereCita = generarCita === true || generarCita === 'true';
 
     // Validaciones de integridad
     if (qty <= 0)   return res.status(400).json({ error: 'Cantidad debe ser mayor a 0' });
@@ -103,9 +106,13 @@ const crear = async (req, res, next) => {
     const finalMarca     = marcaLlanta     || leadData.marcaLlanta     || null;
     const finalModelo    = modeloLlanta    || leadData.modeloLlanta    || null;
     const finalFechaCita        = leadData.fechaCita        || null;
-    const finalLocalInstalacion = leadData.localInstalacion || null;
+    const finalLocalInstalacion = localInstalacionBody || leadData.localInstalacion || null;
     const finalProvinciaDestino = leadData.provinciaDestino || null;
     const finalEsTraslado       = leadData.esTraslado       || false;
+    const finalFechaInst        = quiereCita && fechaInstalacion ? new Date(fechaInstalacion) : null;
+    const finalHoraInst         = quiereCita ? (horaInstalacion || null) : null;
+    // Si se genera cita y se confirma local+fecha, la cotización nace ACEPTADA
+    const estadoInicial         = (quiereCita && finalFechaInst && finalLocalInstalacion) ? 'ACEPTADA' : 'BORRADOR';
 
     const cot = await prisma.$transaction(async (tx) => {
       const c = await tx.cotizacion.create({
@@ -126,14 +133,48 @@ const crear = async (req, res, next) => {
           descuento: desc > 0 ? desc : null,
           precioTotal: total,
           fechaCita:        finalFechaCita,
+          fechaInstalacion: finalFechaInst,
+          horaInstalacion:  finalHoraInst,
           localInstalacion: finalLocalInstalacion,
           provinciaDestino: finalProvinciaDestino,
           esTraslado:       finalEsTraslado,
+          generarCita:      quiereCita,
           notas: notas || null,
-          estado: 'BORRADOR',
+          estado: estadoInicial,
         },
         include: { usuario: { select: { nombre: true } } },
       });
+
+      // Cuando se genera cita: asegurar un lead (WhatsApp o walk-in CRM) y marcarlo ATENDIDO
+      let citaLeadId = leadId || null;
+      if (quiereCita) {
+        if (!citaLeadId) {
+          // Walk-in: crear un lead para que la cita aparezca en el área de Citas
+          const telCita = finalTelefono || `crm-${numero}`;
+          const nuevoLead = await tx.leadCRM.create({
+            data: {
+              telefono: telCita,
+              nombreCliente: finalNombre,
+              dniCe: finalDni,
+              marcaAuto: finalMarcaAuto, modeloAuto: finalModeloAuto, anioAuto: finalAnioAuto,
+              medidaDetectada: finalMedida, marcaLlanta: finalMarca, modeloLlanta: finalModelo,
+              precioLlanta: pUnit > 0 ? pUnit : null, cantidadLlantas: qty,
+              pasoActual: 'completado', origenCita: 'crm',
+            },
+          });
+          citaLeadId = nuevoLead.id;
+          await tx.cotizacion.update({ where: { id: c.id }, data: { leadId: citaLeadId } });
+        }
+        await tx.leadCRM.update({
+          where: { id: citaLeadId },
+          data: {
+            estadoCita: 'ATENDIDO',
+            fechaInstalacion: finalFechaInst,
+            horaInstalacion:  finalHoraInst,
+            localInstalacion: finalLocalInstalacion || undefined,
+          },
+        });
+      }
 
       // Sincronizar datos al lead cuando la cotización viene de un lead de WhatsApp
       if (leadId) {
@@ -240,6 +281,8 @@ const convertirAVenta = async (req, res, next) => {
           precioTotal:     cot.precioTotal,
           // Datos de la cita (propagados desde la cotización)
           fechaCita:        cot.fechaCita        || null,
+          fechaInstalacion: cot.fechaInstalacion || null,
+          horaInstalacion:  cot.horaInstalacion  || null,
           localInstalacion: cot.localInstalacion || null,
           provinciaDestino: cot.provinciaDestino || null,
           esTraslado:       cot.esTraslado       || false,

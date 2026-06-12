@@ -271,6 +271,12 @@ model LeadCRM {
   fechaCita              String?
   calendarEventId        String?
 
+  // Cita / instalación (gestión desde CRM)
+  estadoCita             String?     @default("RECIBIDO") // RECIBIDO | ATENDIDO | ENTREGADO
+  fechaInstalacion       DateTime?   // día que el cliente irá a la tienda elegida
+  horaInstalacion        String?     // hora de instalación (ej: "15:30")
+  origenCita             String?     @default("whatsapp") // whatsapp | crm (cotización walk-in)
+
   // Conversación
   mensajeCliente         String?     @db.Text
   respuestaBot           String?     @db.Text
@@ -385,13 +391,17 @@ model Cotizacion {
 
   // Datos de la cita (snapshot del lead)
   fechaCita        String?
+  fechaInstalacion DateTime?        // día de instalación elegido en el CRM
+  horaInstalacion  String?          // hora de instalación
   localInstalacion Json?
   provinciaDestino String?
   caso             CasoFlujo?
   esTraslado       Boolean          @default(false)
+  generarCita      Boolean          @default(false) // si el vendedor activó generar cita
 
   // Estado y notas
   estado          EstadoCotizacion @default(BORRADOR)
+  motivoRechazo   String?          @db.Text // razón cuando estado = RECHAZADA
   notas           String?          @db.Text
 
   createdAt       DateTime         @default(now())
@@ -448,6 +458,8 @@ model Venta {
   direccionLocal   String?
   provinciaDestino String?
   fechaCita        String?
+  fechaInstalacion DateTime?
+  horaInstalacion  String?
   calendarId       String?
   rankingLead      RankingLead?
   estadoLogistica  String?

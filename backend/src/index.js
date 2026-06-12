@@ -34,6 +34,8 @@ const n8nRoutes = require('./routes/n8n');
 const leadsRoutes = require('./routes/leads');
 const citasRoutes = require('./routes/citas');
 const importarRoutes = require('./routes/importar');
+const vehiculoRoutes = require('./routes/vehiculos');
+const clienteRoutes = require('./routes/clientes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -84,8 +86,10 @@ app.use('/api/n8n', n8nRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/citas', citasRoutes);
 app.use('/api/importar', importarRoutes);
+app.use('/api/vehiculos', vehiculoRoutes);
+app.use('/api/clientes', clienteRoutes);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-12-tipolibre-v8', timestamp: new Date() }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-13-cotizacion-citas-v9', timestamp: new Date() }));
 
 
 app.use(errorHandler);
