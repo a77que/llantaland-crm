@@ -85,7 +85,7 @@ app.use('/api/leads', leadsRoutes);
 app.use('/api/citas', citasRoutes);
 app.use('/api/importar', importarRoutes);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-12-fix-importador-v2', timestamp: new Date() }));
 
 
 app.use(errorHandler);
