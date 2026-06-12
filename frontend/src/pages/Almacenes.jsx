@@ -6,6 +6,15 @@ import { useIsMobile } from '../hooks/useIsMobile';
 
 const TIPO_COLOR  = { TIENDA: '#3b82f6', ALMACEN: '#f59e0b' };
 const TIPO_ICON   = { TIENDA: '🏪', ALMACEN: '🏭' };
+const INP_STYLE   = { width:'100%', padding:'9px 12px', fontSize:14, border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)' };
+
+function GridCell({ children, half }) {
+  return <div style={{ gridColumn: half ? 'span 1' : 'span 2' }}>{children}</div>;
+}
+
+function Lbl({ txt, req }) {
+  return <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{txt}{req && <span style={{ color:'#e3000f' }}> *</span>}</label>;
+}
 
 function ModalSede({ sede, onClose, onGuardado }) {
   const [form, setForm] = useState(sede || {
@@ -25,10 +34,6 @@ function ModalSede({ sede, onClose, onGuardado }) {
     onError: (e) => toast.error(e?.error || 'Error al guardar'),
   });
 
-  const inp = { width:'100%', padding:'9px 12px', fontSize:14, border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)' };
-  const lbl = (txt, req) => <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>{txt}{req && <span style={{ color:'#e3000f' }}> *</span>}</label>;
-  const G = ({ children, half }) => <div style={{ gridColumn: half ? 'span 1' : 'span 2' }}>{children}</div>;
-
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
       <div style={{ background:'var(--color-surface)', borderRadius:14, width:'100%', maxWidth:600, maxHeight:'92dvh', overflowY:'auto', padding:28 }} onClick={e=>e.stopPropagation()}>
@@ -39,24 +44,24 @@ function ModalSede({ sede, onClose, onGuardado }) {
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px 16px' }}>
           {!sede && (
-            <G half>{lbl('Código Local (L0-L5)', true)}<input style={inp} value={form.codigoLocal} onChange={set('codigoLocal')} placeholder="L0, L1, L2..." maxLength={3} /></G>
+            <GridCell half><Lbl txt="Código Local (L0-L5)" req /><input style={INP_STYLE} value={form.codigoLocal} onChange={set('codigoLocal')} placeholder="L0, L1, L2..." maxLength={3} /></GridCell>
           )}
-          <G>{lbl('Nombre', true)}<input style={inp} value={form.nombre} onChange={set('nombre')} placeholder="Tienda Miraflores" /></G>
-          <G half>
-            {lbl('Tipo')}
-            <select style={inp} value={form.tipo} onChange={set('tipo')}>
+          <GridCell><Lbl txt="Nombre" req /><input style={INP_STYLE} value={form.nombre} onChange={set('nombre')} placeholder="Tienda Miraflores" /></GridCell>
+          <GridCell half>
+            <Lbl txt="Tipo" />
+            <select style={INP_STYLE} value={form.tipo} onChange={set('tipo')}>
               <option value="TIENDA">🏪 Tienda</option>
               <option value="ALMACEN">🏭 Almacén</option>
             </select>
-          </G>
-          <G half>{lbl('Distrito')}<input style={inp} value={form.distrito||''} onChange={set('distrito')} placeholder="Miraflores" /></G>
-          <G>{lbl('Dirección')}<input style={inp} value={form.direccion||''} onChange={set('direccion')} placeholder="Av. Larco 654, Miraflores" /></G>
-          <G half>{lbl('Teléfono')}<input style={inp} value={form.telefono||''} onChange={set('telefono')} placeholder="+51 01 445-5678" /></G>
-          <G half>{lbl('Email')}<input style={inp} type="email" value={form.email||''} onChange={set('email')} placeholder="tienda@llantaland.com" /></G>
-          <G>{lbl('Horario')}<input style={inp} value={form.horario||''} onChange={set('horario')} placeholder="Lun-Sab 8am-7pm, Dom 9am-2pm" /></G>
-          <G>{lbl('Encargado')}<input style={inp} value={form.encargado||''} onChange={set('encargado')} placeholder="Juan Pérez" /></G>
-          <G half>{lbl('Latitud')}<input style={inp} value={form.latitud||''} onChange={set('latitud')} placeholder="-12.1191" /></G>
-          <G half>{lbl('Longitud')}<input style={inp} value={form.longitud||''} onChange={set('longitud')} placeholder="-77.0282" /></G>
+          </GridCell>
+          <GridCell half><Lbl txt="Distrito" /><input style={INP_STYLE} value={form.distrito||''} onChange={set('distrito')} placeholder="Miraflores" /></GridCell>
+          <GridCell><Lbl txt="Dirección" /><input style={INP_STYLE} value={form.direccion||''} onChange={set('direccion')} placeholder="Av. Larco 654, Miraflores" /></GridCell>
+          <GridCell half><Lbl txt="Teléfono" /><input style={INP_STYLE} value={form.telefono||''} onChange={set('telefono')} placeholder="+51 01 445-5678" /></GridCell>
+          <GridCell half><Lbl txt="Email" /><input style={INP_STYLE} type="email" value={form.email||''} onChange={set('email')} placeholder="tienda@llantaland.com" /></GridCell>
+          <GridCell><Lbl txt="Horario" /><input style={INP_STYLE} value={form.horario||''} onChange={set('horario')} placeholder="Lun-Sab 8am-7pm, Dom 9am-2pm" /></GridCell>
+          <GridCell><Lbl txt="Encargado" /><input style={INP_STYLE} value={form.encargado||''} onChange={set('encargado')} placeholder="Juan Pérez" /></GridCell>
+          <GridCell half><Lbl txt="Latitud" /><input style={INP_STYLE} value={form.latitud||''} onChange={set('latitud')} placeholder="-12.1191" /></GridCell>
+          <GridCell half><Lbl txt="Longitud" /><input style={INP_STYLE} value={form.longitud||''} onChange={set('longitud')} placeholder="-77.0282" /></GridCell>
         </div>
 
         <div style={{ marginTop:14, display:'flex', alignItems:'center', gap:8 }}>

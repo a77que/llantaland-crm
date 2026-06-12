@@ -449,8 +449,21 @@ const generarTemplate = async (req, res, next) => {
       { key: 'garantia',        label: 'Garantía',             nota: 'Ej: 2 años',                                ej1: '2 años',               ej2: '3 años'              },
       { key: 'fichaTecnica',    label: 'Ficha Técnica',        nota: 'URL o texto técnico',                       ej1: '',                     ej2: ''                    },
       { key: 'indice_carga',    label: 'Índice de carga',      nota: 'Ej: 91',                                    ej1: '91',                   ej2: '121'                 },
-      { key: 'velocidad_max',   label: 'Velocidad máxima',     nota: 'Ej: H',                                     ej1: 'H',                    ej2: 'S'                   },
+      { key: 'velocidad_max',   label: 'Índice de Velocidad',  nota: 'Ej: H (H=210km/h, V=240, S=180)',           ej1: 'H',                    ej2: 'S'                   },
     ];
+
+    // Ancho, Perfil, Radio: informativas — el sistema las extrae de Medida automáticamente
+    const parseMedida = (m) => {
+      const r = String(m || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
+      return r ? { ancho: parseInt(r[1]), perfil: parseInt(r[2]), radio: parseInt(r[3]) } : {};
+    };
+    const { ancho: ejAncho1, perfil: ejPerfil1, radio: ejRadio1 } = parseMedida('195/65R15');
+    const { ancho: ejAncho2, perfil: ejPerfil2, radio: ejRadio2 } = parseMedida('265/70R17');
+    fixedCols.splice(2, 0,
+      { key: '__ancho',  label: 'Ancho (mm) [AUTO]',   nota: '← Auto-calculado desde Medida. No editar.', ej1: ejAncho1,  ej2: ejAncho2  },
+      { key: '__perfil', label: 'Perfil (%) [AUTO]',   nota: '← Auto-calculado desde Medida. No editar.', ej1: ejPerfil1, ej2: ejPerfil2 },
+      { key: '__radio',  label: 'Radio (R) [AUTO]',    nota: '← Auto-calculado desde Medida. No editar.', ej1: ejRadio1,  ej2: ejRadio2  },
+    );
 
     fixedCols.push(
       { key: 'cargaMaxNeumatico', label: 'Carga Maxima Neumatico kg', nota: 'Kg por neumatico, ej: 615', ej1: 615, ej2: 1450 },
@@ -497,6 +510,9 @@ const generarTemplate = async (req, res, next) => {
       ['CAMPO', 'OBLIGATORIO', 'FORMATO / OPCIONES', 'DESCRIPCIÓN'],
       ['SKU',                'SÍ',  'Texto único',                       'Código único del producto. No puede repetirse.'],
       ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar. El sistema extrae automáticamente Ancho (195mm), Perfil (65%) y Radio (R15).'],
+      ['Ancho (mm) [AUTO]',  'No',  'Auto-calculado desde Medida',       'NO editar. El sistema lo calcula solo desde la columna Medida.'],
+      ['Perfil (%) [AUTO]',  'No',  'Auto-calculado desde Medida',       'NO editar. El sistema lo calcula solo desde la columna Medida.'],
+      ['Radio (R) [AUTO]',   'No',  'Auto-calculado desde Medida',       'NO editar. El sistema lo calcula solo desde la columna Medida.'],
       ['Marca',              'SÍ',  'Ej: BRIDGESTONE',                   'Nombre del fabricante.'],
       ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
@@ -507,7 +523,7 @@ const generarTemplate = async (req, res, next) => {
       ['Garantía',           'No',  'Texto (ej: 2 años)',                'Período de garantía del fabricante.'],
       ['Ficha Técnica',      'No',  'URL o texto',                       'URL o descripción técnica del producto.'],
       ['Índice de carga',    'No',  'Número (ej: 91)',                   'Índice de carga estándar.'],
-      ['Velocidad máxima',   'No',  'Letra (ej: H, V, S)',               'Código de velocidad máxima.'],
+      ['Índice de Velocidad', 'No',  'Letra (ej: H, V, S)',               'Código de velocidad. H=210km/h, V=240km/h, S=180km/h, T=190km/h, Y=300km/h.'],
       ...sedes.map(s  => [`Stock ${s.nombre}`, 'No', 'Número entero (ej: 10)', `Stock en sede ${s.nombre} (${s.codigoLocal}).`]),
       ...extraKeys.map(k => [extraKeyLabel(k), 'No', 'Texto libre', 'Campo personalizado del catálogo.']),
     ];
