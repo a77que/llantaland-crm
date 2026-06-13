@@ -344,7 +344,7 @@ export default function Citas() {
   const setCard = (patch) => { setFiltro(f => ({ ...f, ...patch })); setPage(1); };
 
   const CARDS = [
-    { label: 'Todas',     active: !filtro.rango && !filtro.estado, onClick: () => setFiltro({ rango: '', estado: '' }), color: 'var(--color-primary)' },
+    { label: 'Todas',     active: !filtro.rango && !filtro.estado, onClick: () => setFiltro({ rango: '', estado: '' }), color: '#1a2234' },
     { label: '📆 Hoy',    active: filtro.rango === 'hoy',    onClick: () => setCard({ rango: filtro.rango === 'hoy' ? '' : 'hoy' }),    color: '#0ea5e9' },
     { label: '⏭️ Mañana', active: filtro.rango === 'manana', onClick: () => setCard({ rango: filtro.rango === 'manana' ? '' : 'manana' }), color: '#6366f1' },
     { label: '📥 Recibido',  active: filtro.estado === 'RECIBIDO',  onClick: () => setCard({ estado: filtro.estado === 'RECIBIDO' ? '' : 'RECIBIDO' }),   color: '#3b82f6' },

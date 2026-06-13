@@ -51,6 +51,7 @@ export const productosApi = {
   compatibles: (params) => api.get('/productos/compatibles', { params }),
   marcas: () => api.get('/productos/marcas'),
   tipos: () => api.get('/productos/tipos'),
+  medidas: (q) => api.get('/productos/medidas', { params: q ? { q } : {} }),
   enriquecer: (id) => api.post(`/productos/${id}/enriquecer-ia`),
   subirImagen: (id, formData) => api.post(`/productos/${id}/imagenes`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

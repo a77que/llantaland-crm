@@ -374,7 +374,7 @@ function LoadSpeedSection({ indice_carga, velocidad_max, cargaMaxNeumatico, velo
 }
 
 // ── Modal principal ───────────────────────────────────────────────────────────
-export default function ProductoModal({ prodId, onClose, comparar = [], setComparar = () => {} }) {
+export default function ProductoModal({ prodId, onClose, comparar = [], setComparar = () => {}, ocultarGestion = false, onCotizar = null }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -615,24 +615,39 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
               );
             })()}
 
-            <button
-              onClick={() => { onClose(); navigate(`/inventario/${prodId}`); }}
-              style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
-            >
-              Editar →
-            </button>
-
+            {/* Crear cotización con esta llanta */}
             <button
               onClick={() => {
-                if (window.confirm(`⚠️ ¿Eliminar esta llanta del catálogo?\n\n${prod.marca} ${prod.nombreComercial || ''} ${prod.medida} (${prod.sku})\n\nDejará de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) {
-                  delMut.mutate();
-                }
+                if (onCotizar) { onCotizar(prod); }              // dentro de CotizacionNueva: seleccionar la llanta
+                else { onClose(); navigate('/cotizaciones/nueva', { state: { llantaId: prodId } }); } // desde inventario: abrir cotización nueva
               }}
-              disabled={delMut.isPending}
-              style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #dc2626', background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
+              style={{ padding:'9px 14px', borderRadius:9, border:'none', background:'#16a34a', color:'#fff', cursor:'pointer', fontSize:12, fontWeight:800, whiteSpace:'nowrap' }}
             >
-              {delMut.isPending ? '⏳' : '🗑️ Eliminar'}
+              📋 Cotizar esta llanta
             </button>
+
+            {/* Editar / Eliminar — solo en gestión de inventario, no al vender */}
+            {!ocultarGestion && (
+              <>
+                <button
+                  onClick={() => { onClose(); navigate(`/inventario/${prodId}`); }}
+                  style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
+                >
+                  Editar →
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`⚠️ ¿Eliminar esta llanta del catálogo?\n\n${prod.marca} ${prod.nombreComercial || ''} ${prod.medida} (${prod.sku})\n\nDejará de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) {
+                      delMut.mutate();
+                    }
+                  }}
+                  disabled={delMut.isPending}
+                  style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #dc2626', background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
+                >
+                  {delMut.isPending ? '⏳' : '🗑️ Eliminar'}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

@@ -199,9 +199,9 @@ export default function Cotizaciones() {
       <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
         {FILTROS.map(([val, lbl]) => (
           <button key={val} onClick={() => { setEstado(val); setPage(1); }} style={{
-            padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer',
+            padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer',
             background: estado === val ? 'var(--color-primary)' : 'var(--color-surface)',
-            color: estado === val ? '#f5c400' : 'var(--color-text-muted)',
+            color: estado === val ? '#000' : 'var(--color-text-muted)',
             border: `1.5px solid ${estado===val ? 'var(--color-primary)' : 'var(--color-border)'}`,
           }}>{lbl}</button>
         ))}

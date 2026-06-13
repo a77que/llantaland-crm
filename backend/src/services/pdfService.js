@@ -127,17 +127,25 @@ async function generarVenta(venta) {
         .text('TOTAL', 435, y + 5, { width: 65, align: 'right' });
       y += 20;
 
-      const nombreProd = [venta.marcaLlanta, venta.modeloLlanta].filter(Boolean).join(' ') || 'Llanta';
-      doc.rect(50, y, doc.page.width - 100, 26).fill('white');
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.texto)
-        .text(nombreProd, 62, y + 7)
-        .text(venta.medidaLlanta || '—', 240, y + 7, { width: 80 });
-      doc.font('Helvetica')
-        .text(String(venta.cantidad || 1), 320, y + 7, { width: 50, align: 'right' })
-        .text(fmt(venta.precioUnit), 370, y + 7, { width: 65, align: 'right' });
-      doc.font('Helvetica-Bold').fillColor('#16a34a')
-        .text(fmt(venta.precioTotal), 435, y + 7, { width: 65, align: 'right' });
-      y += 30;
+      // Una o varias llantas (itemsLlanta de la cotización) o la llanta única
+      const lineasV = Array.isArray(venta.itemsLlanta) && venta.itemsLlanta.length > 0
+        ? venta.itemsLlanta
+        : [{ marca: venta.marcaLlanta, modelo: venta.modeloLlanta, medida: venta.medidaLlanta, cantidad: venta.cantidad || 1, precioUnit: parseFloat(venta.precioUnit) }];
+      lineasV.forEach((it, idx) => {
+        const bg = idx % 2 === 0 ? 'white' : C.grisClaro;
+        doc.rect(50, y, doc.page.width - 100, 24).fill(bg);
+        const nombreProd = [it.marca, it.modelo].filter(Boolean).join(' ') || 'Llanta';
+        const cant = parseInt(it.cantidad || 1) || 1;
+        const pu = parseFloat(it.precioUnit || 0) || 0;
+        doc.fontSize(9.5).font('Helvetica-Bold').fillColor(C.texto)
+          .text(nombreProd, 62, y + 7, { width: 175 }).text(it.medida || '—', 240, y + 7, { width: 80 });
+        doc.font('Helvetica')
+          .text(String(cant), 320, y + 7, { width: 50, align: 'right' })
+          .text(fmt(pu), 370, y + 7, { width: 65, align: 'right' });
+        doc.font('Helvetica-Bold').fillColor(C.texto).text(fmt(pu * cant), 435, y + 7, { width: 65, align: 'right' });
+        y += 26;
+      });
+      y += 4;
 
       // Líneas de ítems de inventario si existen
       if (venta.items && venta.items.length > 0) {
@@ -243,16 +251,25 @@ async function generarCotizacion(cot) {
         .text('SUBTOTAL', 435, y + 5, { width: 65, align: 'right' });
       y += 20;
 
-      doc.rect(50, y, doc.page.width - 100, 26).fill('white');
-      const nombreProd = [cot.marcaLlanta, cot.modeloLlanta].filter(Boolean).join(' ') || 'Llanta';
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(C.texto)
-        .text(nombreProd, 62, y + 7).text(cot.medidaLlanta || '—', 240, y + 7, { width: 80 });
-      doc.font('Helvetica')
-        .text(String(cot.cantidad || 1), 320, y + 7, { width: 50, align: 'right' })
-        .text(fmt(cot.precioUnit), 370, y + 7, { width: 65, align: 'right' });
-      const sub = parseFloat(cot.precioUnit) * (cot.cantidad || 1);
-      doc.font('Helvetica-Bold').fillColor(C.texto).text(fmt(sub), 435, y + 7, { width: 65, align: 'right' });
-      y += 32;
+      // Una o varias llantas: usar cot.items si existe, si no el campo único
+      const lineas = Array.isArray(cot.items) && cot.items.length > 0
+        ? cot.items
+        : [{ marca: cot.marcaLlanta, modelo: cot.modeloLlanta, medida: cot.medidaLlanta, cantidad: cot.cantidad || 1, precioUnit: parseFloat(cot.precioUnit) }];
+      lineas.forEach((it, idx) => {
+        const bg = idx % 2 === 0 ? 'white' : C.grisClaro;
+        doc.rect(50, y, doc.page.width - 100, 24).fill(bg);
+        const nombreProd = [it.marca, it.modelo].filter(Boolean).join(' ') || 'Llanta';
+        const cant = parseInt(it.cantidad || 1) || 1;
+        const pu = parseFloat(it.precioUnit || 0) || 0;
+        doc.fontSize(9.5).font('Helvetica-Bold').fillColor(C.texto)
+          .text(nombreProd, 62, y + 7, { width: 175 }).text(it.medida || '—', 240, y + 7, { width: 80 });
+        doc.font('Helvetica')
+          .text(String(cant), 320, y + 7, { width: 50, align: 'right' })
+          .text(fmt(pu), 370, y + 7, { width: 65, align: 'right' });
+        doc.font('Helvetica-Bold').fillColor(C.texto).text(fmt(pu * cant), 435, y + 7, { width: 65, align: 'right' });
+        y += 26;
+      });
+      y += 6;
 
       // Descuento + Total
       if (cot.descuento && parseFloat(cot.descuento) > 0) {

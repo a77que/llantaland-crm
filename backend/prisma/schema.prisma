@@ -380,7 +380,7 @@ model Cotizacion {
   modeloAuto      String?
   anioAuto        Int?
 
-  // Producto cotizado
+  // Producto cotizado (campos principales = primer ítem, por compatibilidad)
   medidaLlanta    String?
   marcaLlanta     String?
   modeloLlanta    String?
@@ -388,6 +388,8 @@ model Cotizacion {
   precioUnit      Decimal          @db.Decimal(10, 2) @default(0)
   descuento       Decimal?         @db.Decimal(10, 2)
   precioTotal     Decimal          @db.Decimal(10, 2) @default(0)
+  // Ítems múltiples: [{ sku, medida, marca, modelo, cantidad, precioUnit }]
+  items           Json?
 
   // Datos de la cita (snapshot del lead)
   fechaCita        String?
@@ -445,6 +447,7 @@ model Venta {
   cantidad         Int           @default(1)
   precioUnit       Decimal       @db.Decimal(10, 2) @default(0)
   precioTotal      Decimal       @db.Decimal(10, 2) @default(0)
+  itemsLlanta      Json?         // múltiples llantas cotizadas: [{ sku, medida, marca, modelo, cantidad, precioUnit }]
 
   // Cotización origen
   cotizacionId     String?       @unique

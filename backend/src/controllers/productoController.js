@@ -177,6 +177,25 @@ const tipos = async (req, res, next) => {
   }
 };
 
+// Medidas distintas del catálogo (para autocompletado). Filtro opcional ?q=
+const medidas = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    const where = { activo: true };
+    if (q) where.medida = { contains: String(q), mode: 'insensitive' };
+    const result = await prisma.producto.findMany({
+      distinct: ['medida'],
+      select: { medida: true },
+      where,
+      orderBy: { medida: 'asc' },
+      take: 50,
+    });
+    res.json(result.map(r => r.medida).filter(Boolean));
+  } catch (err) {
+    next(err);
+  }
+};
+
 const TECH_FIELDS = [
   'indice_carga', 'velocidad_max', 'garantia',
   'cargaMaxNeumatico', 'velocidadMaxKmh',
@@ -312,4 +331,4 @@ Formato de ejemplo:
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, enriquecerConIA };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA };

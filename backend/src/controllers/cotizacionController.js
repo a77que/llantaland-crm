@@ -53,10 +53,25 @@ const crear = async (req, res, next) => {
       nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
       // Datos de cita ingresados en el CRM
       generarCita, fechaInstalacion, horaInstalacion, localInstalacion: localInstalacionBody,
+      // Múltiples llantas (opcional): [{ sku, medida, marca, modelo, cantidad, precioUnit }]
+      items: itemsBody,
     } = req.body;
 
-    const qty   = parseInt(cantidad || 1);
-    const pUnit = parseFloat(precioUnit || 0);
+    // Normalizar ítems: si vienen varios, usarlos; si no, construir uno desde los campos sueltos
+    let items = Array.isArray(itemsBody) && itemsBody.length > 0
+      ? itemsBody.map(it => ({
+          sku: it.sku || null,
+          medida: it.medida || null,
+          marca: it.marca || null,
+          modelo: it.modelo || null,
+          cantidad: parseInt(it.cantidad || 1) || 1,
+          precioUnit: parseFloat(it.precioUnit || 0) || 0,
+        }))
+      : null;
+
+    const primero = items ? items[0] : null;
+    const qty   = primero ? primero.cantidad : parseInt(cantidad || 1);
+    const pUnit = primero ? primero.precioUnit : parseFloat(precioUnit || 0);
     const desc  = descuento ? parseFloat(descuento) : 0;
     const quiereCita = generarCita === true || generarCita === 'true';
 
@@ -67,9 +82,14 @@ const crear = async (req, res, next) => {
       return res.status(400).json({ error: 'Precio requerido para cotización confirmada' });
     }
     if (desc < 0)   return res.status(400).json({ error: 'Descuento no puede ser negativo' });
-    if (desc > pUnit * qty) return res.status(400).json({ error: 'Descuento no puede superar el total' });
 
-    const total = Math.max(0, (pUnit * qty) - desc);
+    // Subtotal: suma de todos los ítems si hay varios, o el único ítem
+    const subtotal = items
+      ? items.reduce((a, it) => a + it.precioUnit * it.cantidad, 0)
+      : pUnit * qty;
+    if (desc > subtotal) return res.status(400).json({ error: 'Descuento no puede superar el total' });
+
+    const total = Math.max(0, subtotal - desc);
 
     const count  = await prisma.cotizacion.count();
     const numero = `COT-${String(count + 1).padStart(5, '0')}`;
@@ -102,9 +122,9 @@ const crear = async (req, res, next) => {
     const finalMarcaAuto = marcaAuto       || leadData.marcaAuto       || null;
     const finalModeloAuto= modeloAuto      || leadData.modeloAuto      || null;
     const finalAnioAuto  = anioAuto ? parseInt(anioAuto) : (leadData.anioAuto || null);
-    const finalMedida    = medidaLlanta    || leadData.medidaLlanta    || null;
-    const finalMarca     = marcaLlanta     || leadData.marcaLlanta     || null;
-    const finalModelo    = modeloLlanta    || leadData.modeloLlanta    || null;
+    const finalMedida    = (primero && primero.medida) || medidaLlanta || leadData.medidaLlanta || null;
+    const finalMarca     = (primero && primero.marca)  || marcaLlanta  || leadData.marcaLlanta  || null;
+    const finalModelo    = (primero && primero.modelo) || modeloLlanta || leadData.modeloLlanta || null;
     const finalFechaCita        = leadData.fechaCita        || null;
     const finalLocalInstalacion = localInstalacionBody || leadData.localInstalacion || null;
     const finalProvinciaDestino = leadData.provinciaDestino || null;
@@ -130,6 +150,7 @@ const crear = async (req, res, next) => {
           marcaLlanta:     finalMarca,
           modeloLlanta:    finalModelo,
           cantidad: qty, precioUnit: pUnit,
+          items:            items || undefined,
           descuento: desc > 0 ? desc : null,
           precioTotal: total,
           fechaCita:        finalFechaCita,
@@ -279,6 +300,7 @@ const convertirAVenta = async (req, res, next) => {
           cantidad:        cot.cantidad,
           precioUnit:      cot.precioUnit,
           precioTotal:     cot.precioTotal,
+          itemsLlanta:     cot.items || undefined,
           // Datos de la cita (propagados desde la cotización)
           fechaCita:        cot.fechaCita        || null,
           fechaInstalacion: cot.fechaInstalacion || null,
