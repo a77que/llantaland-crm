@@ -162,14 +162,14 @@ export default function CotizacionNueva() {
           {/* 1. Cliente */}
           <div style={S.card}>
             <div style={S.cardTitle}>1. Cliente</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr auto', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '170px 1fr auto', gap: 8, marginBottom: 12 }}>
               <select style={S.input} value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}>
                 <option value="DNI">DNI (nombres)</option>
                 <option value="RUC">RUC (razón social)</option>
                 <option value="CE">Carnet Ext.</option>
               </select>
-              <input style={S.input} value={numDoc} onChange={e => setNumDoc(e.target.value.replace(/\D/g, ''))} placeholder="Número de documento" onKeyDown={e => { if (e.key === 'Enter' && numDoc) lookupMut.mutate(); }} />
-              <button onClick={() => lookupMut.mutate()} disabled={!numDoc || lookupMut.isPending} style={S.btn('var(--color-primary)')}>
+              <input style={S.input} value={numDoc} onChange={e => setNumDoc(e.target.value.replace(/\D/g, ''))} placeholder="N° documento" onKeyDown={e => { if (e.key === 'Enter' && numDoc) lookupMut.mutate(); }} />
+              <button onClick={() => lookupMut.mutate()} disabled={!numDoc || lookupMut.isPending} style={{ ...S.btn('var(--color-primary)'), gridColumn: isMobile ? '1 / -1' : undefined }}>
                 <span style={{ color: '#000' }}>{lookupMut.isPending ? '...' : '🔍 Autorrellenar'}</span>
               </button>
             </div>
@@ -203,11 +203,11 @@ export default function CotizacionNueva() {
             )}
 
             {modoMedida === 'vehiculo' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px auto', gap: 8, marginBottom: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr 80px' : '1fr 1fr 90px auto', gap: 8, marginBottom: 12 }}>
                 <input style={S.input} value={veh.marca} onChange={e => setVeh(v => ({ ...v, marca: e.target.value }))} placeholder="Marca" />
                 <input style={S.input} value={veh.modelo} onChange={e => setVeh(v => ({ ...v, modelo: e.target.value }))} placeholder="Modelo" />
                 <input style={S.input} value={veh.anio} onChange={e => setVeh(v => ({ ...v, anio: e.target.value }))} placeholder="Año" />
-                <button onClick={() => versionesMut.mutate()} disabled={!veh.marca || !veh.modelo || versionesMut.isPending} style={S.btn('var(--color-primary)')}><span style={{ color: '#000' }}>{versionesMut.isPending ? '...' : 'Versiones'}</span></button>
+                <button onClick={() => versionesMut.mutate()} disabled={!veh.marca || !veh.modelo || versionesMut.isPending} style={{ ...S.btn('var(--color-primary)'), gridColumn: isMobile ? '1 / -1' : undefined }}><span style={{ color: '#000' }}>{versionesMut.isPending ? '...' : '🔍 Ver versiones'}</span></button>
               </div>
             )}
 
@@ -226,9 +226,9 @@ export default function CotizacionNueva() {
             )}
 
             {medida && (
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 700 }}>Medida: <strong>{medida}</strong></span>
-                <button onClick={() => { setBuscarActivo(true); setBuscarQuery(''); }} style={S.btn('#16a34a')}>🔍 Buscar en catálogo</button>
+                <button onClick={() => { setBuscarActivo(true); setBuscarQuery(''); }} style={{ ...S.btn('#16a34a'), flex: isMobile ? '1 1 100%' : undefined }}>🔍 Buscar en catálogo</button>
               </div>
             )}
           </div>

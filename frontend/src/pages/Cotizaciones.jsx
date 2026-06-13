@@ -228,6 +228,7 @@ export default function Cotizaciones() {
               <div style={{ fontSize:13, marginBottom:4 }}>{c.nombreCliente||'—'}</div>
               <div style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:8 }}>
                 {c.medidaLlanta && <span>🛞 {c.medidaLlanta} {c.marcaLlanta||''} × {c.cantidad}</span>}
+                {Array.isArray(c.items) && c.items.length > 1 && <span style={{ marginLeft:6, color:'var(--color-primary)', fontWeight:700 }}>+{c.items.length - 1} llanta(s) más</span>}
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span style={{ fontWeight:800, fontSize:16, color:'#16a34a' }}>{fmt(c.precioTotal)}</span>
@@ -262,6 +263,7 @@ export default function Cotizaciones() {
                   <td style={{ padding:'10px 12px', fontSize:13 }}>
                     {c.medidaLlanta && <div style={{ fontWeight:600 }}>{c.medidaLlanta}</div>}
                     {c.marcaLlanta && <div style={{ fontSize:11, color:'var(--color-text-muted)' }}>{c.marcaLlanta} {c.modeloLlanta||''}</div>}
+                    {Array.isArray(c.items) && c.items.length > 1 && <div style={{ fontSize:10, color:'var(--color-primary)', fontWeight:700 }}>+{c.items.length - 1} más</div>}
                   </td>
                   <td style={{ padding:'10px 12px', fontSize:13, textAlign:'center' }}>{c.cantidad}</td>
                   <td style={{ padding:'10px 12px', fontWeight:700, color:'#16a34a' }}>{fmt(c.precioTotal)}</td>
