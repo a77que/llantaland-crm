@@ -5,7 +5,13 @@ const errorHandler = (err, req, res, next) => {
   if (!isProd) {
     console.error(err.stack || err.message);
   } else {
-    console.error(`[ERROR] ${err.code || err.status || 500} — ${err.message}`);
+    console.error(`[ERROR] ${req.method} ${req.originalUrl} — ${err.code || err.status || 500} — ${err.message}`);
+    if (req.path.includes('/importar')) console.error(err.stack);
+  }
+
+  // Herramientas admin de importación: exponer el detalle real para diagnóstico
+  if (req.path.includes('/importar') && !err.status && !err.statusCode) {
+    return res.status(500).json({ error: `Importador: ${err.message}` + (err.code ? ` [${err.code}]` : '') });
   }
 
   // Errores Prisma conocidos

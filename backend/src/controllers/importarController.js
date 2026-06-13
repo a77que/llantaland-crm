@@ -126,18 +126,22 @@ const ejecutar = async (req, res, next) => {
     let actualizados = 0;
     const errores = [];
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const { row, filaExcel } = dataRows[i];
+    const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
+    const int = (v) => { const n = parseInt(v); return isNaN(n) ? null : n; };
+    const str = (v) => v != null && String(v).trim() !== '' ? String(v).trim() : null;
+    const eu  = (v) => { const s = str(v); return s ? s.toUpperCase().charAt(0) : null; };
+
+    // ── Fase 1: parsear y validar TODAS las filas (sin tocar la BD) ──
+    const validas = [];
+    for (const { row, filaExcel } of dataRows) {
       const record = {};
       for (const [colIdx, campo] of Object.entries(columnMap)) {
         if (!campo || campo === '_skip') continue;
         const valor = row[parseInt(colIdx)];
-        // No pisar un valor ya asignado con una celda vacía (columnas duplicadas en el mapeo)
         if (valor === undefined || valor === null || String(valor).trim() === '') continue;
         record[campo] = valor;
       }
 
-      // Normalizar precio: acepta precioRegular (plantilla nueva) o precio (legado)
       const precioRaw = record.precioRegular ?? record.precio;
       const faltantes = [];
       if (!record.sku) faltantes.push('SKU');
@@ -148,73 +152,81 @@ const ejecutar = async (req, res, next) => {
         errores.push({ fila: filaExcel, error: `Campos obligatorios faltantes: ${faltantes.join(', ')}` });
         continue;
       }
-
-      const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
-
-      // Validar que el precio sea numérico ANTES de tocar la BD (evita errores crípticos de Prisma)
       if (num(precioRaw) === null) {
         errores.push({ fila: filaExcel, error: `Precio Regular no es un número válido: "${precioRaw}". Usa solo números, sin símbolos de moneda (ej: 250.00)` });
         continue;
       }
-      const int = (v) => { const n = parseInt(v); return isNaN(n) ? null : n; };
-      const str = (v) => v != null && String(v).trim() !== '' ? String(v).trim() : null;
-      const eu  = (v) => { const s = str(v); return s ? s.toUpperCase().charAt(0) : null; };
 
-      try {
-        const productoData = {
-          sku:                   String(record.sku).trim(),
-          medida:                String(record.medida).trim(),
-          marca:                 String(record.marca).trim(),
-          nombreComercial:       str(record.nombreComercial),
-          grupo:                 str(record.grupo),
-          tipo:                  normalizarTipo(record.tipo),
-          precioRegular:         num(precioRaw),
-          precioOferta:          num(record.precioOferta) ?? undefined,
-          descuentoMaximo:       num(record.descuentoMaximo) ?? undefined,
-          garantia:              str(record.garantia),
-          fichaTecnica:          str(record.fichaTecnica),
-          indice_carga:          str(record.indice_carga),
-          velocidad_max:         str(record.velocidad_max),
-          cargaMaxNeumatico:     int(record.cargaMaxNeumatico),
-          velocidadMaxKmh:       int(record.velocidadMaxKmh),
-          eficienciaCombustible: eu(record.eficienciaCombustible),
-          eficienciaFrenado:     eu(record.eficienciaFrenado),
-          nivelRuido:            int(record.nivelRuido),
-          paisFabricacion:       str(record.paisFabricacion),
-          origenMarca:           str(record.origenMarca),
-          activo:                true, // re-importar un producto eliminado lo reactiva
-        };
+      const productoData = {
+        sku:                   String(record.sku).trim(),
+        medida:                String(record.medida).trim(),
+        marca:                 String(record.marca).trim(),
+        nombreComercial:       str(record.nombreComercial),
+        grupo:                 str(record.grupo),
+        tipo:                  normalizarTipo(record.tipo),
+        precioRegular:         num(precioRaw),
+        precioOferta:          num(record.precioOferta) ?? undefined,
+        descuentoMaximo:       num(record.descuentoMaximo) ?? undefined,
+        garantia:              str(record.garantia),
+        fichaTecnica:          str(record.fichaTecnica),
+        indice_carga:          str(record.indice_carga),
+        velocidad_max:         str(record.velocidad_max),
+        cargaMaxNeumatico:     int(record.cargaMaxNeumatico),
+        velocidadMaxKmh:       int(record.velocidadMaxKmh),
+        eficienciaCombustible: eu(record.eficienciaCombustible),
+        eficienciaFrenado:     eu(record.eficienciaFrenado),
+        nivelRuido:            int(record.nivelRuido),
+        paisFabricacion:       str(record.paisFabricacion),
+        origenMarca:           str(record.origenMarca),
+        activo:                true, // re-importar un producto eliminado lo reactiva
+      };
+      Object.keys(productoData).forEach(k => productoData[k] === undefined && delete productoData[k]);
 
-        // Quitar claves undefined para que Prisma no las toque en update
-        Object.keys(productoData).forEach(k => productoData[k] === undefined && delete productoData[k]);
-
-        const existing = await prisma.producto.findUnique({ where: { sku: productoData.sku } });
-        let producto;
-        if (existing) {
-          producto = await prisma.producto.update({ where: { sku: productoData.sku }, data: productoData });
-          actualizados++;
-        } else {
-          producto = await prisma.producto.create({ data: productoData });
-          creados++;
-        }
-
-        // Stock por sede: claves con formato stock_L0, stock_L1, ...
-        for (const [campo, valor] of Object.entries(record)) {
-          if (!campo.startsWith('stock_')) continue;
-          const codigoLocal = campo.replace('stock_', '').toUpperCase();
-          const cantidad = int(valor);
-          if (cantidad === null) continue;
-          const sedeId = sedeMap[codigoLocal];
-          if (!sedeId) continue;
-          await prisma.stock.upsert({
-            where: { productoId_sedeId: { productoId: producto.id, sedeId } },
-            update: { cantidad },
-            create: { productoId: producto.id, sedeId, cantidad },
-          });
-        }
-      } catch (rowErr) {
-        errores.push({ fila: filaExcel, error: explicarErrorPrisma(rowErr) });
+      // Stock por sede pre-resuelto a { sedeId, cantidad }
+      const stockEntries = [];
+      for (const [campo, valor] of Object.entries(record)) {
+        if (!campo.startsWith('stock_')) continue;
+        const cantidad = int(valor);
+        if (cantidad === null) continue;
+        const sedeId = sedeMap[campo.replace('stock_', '').toUpperCase()];
+        if (sedeId) stockEntries.push({ sedeId, cantidad });
       }
+
+      validas.push({ filaExcel, sku: productoData.sku, productoData, stockEntries });
+    }
+
+    // ── Fase 2: una sola consulta para saber qué SKUs ya existen ──
+    const skus = [...new Set(validas.map(v => v.sku))];
+    const existentes = new Set();
+    const TAM_IN = 1000; // dividir el IN para no exceder límites de parámetros
+    for (let i = 0; i < skus.length; i += TAM_IN) {
+      const lote = await prisma.producto.findMany({ where: { sku: { in: skus.slice(i, i + TAM_IN) } }, select: { sku: true } });
+      lote.forEach(p => existentes.add(p.sku));
+    }
+
+    // ── Fase 3: escribir en BD en lotes paralelos (rápido para miles de filas) ──
+    const CONCURRENCIA = 20;
+    for (let i = 0; i < validas.length; i += CONCURRENCIA) {
+      const lote = validas.slice(i, i + CONCURRENCIA);
+      await Promise.all(lote.map(async (v) => {
+        try {
+          const yaExiste = existentes.has(v.sku);
+          const producto = yaExiste
+            ? await prisma.producto.update({ where: { sku: v.sku }, data: v.productoData })
+            : await prisma.producto.create({ data: v.productoData });
+          if (yaExiste) actualizados++; else creados++;
+
+          for (const { sedeId, cantidad } of v.stockEntries) {
+            await prisma.stock.upsert({
+              where: { productoId_sedeId: { productoId: producto.id, sedeId } },
+              update: { cantidad },
+              create: { productoId: producto.id, sedeId, cantidad },
+            });
+          }
+        } catch (rowErr) {
+          errores.push({ fila: v.filaExcel, error: explicarErrorPrisma(rowErr) });
+        }
+      }));
     }
 
     res.json({ creados, actualizados, errores, total: dataRows.length });
@@ -504,92 +516,96 @@ const aplicarUpdate = async (req, res, next) => {
     let noEncontrados = 0;
     const errores = [];
     const noEncontradosLista = []; // valores de match que no existen en el CRM
-    const resultadosFila = [];     // estado por fila para el reporte Excel
+    const resultadosFila = new Array(dataRows.length); // estado por fila (alineado por índice)
     const cambiosMuestra = []; // máx 10 para mostrar preview
 
+    // ── Pre-cargar productos activos en memoria (1 consulta, match insensible a mayúsculas) ──
+    const todosProd = await prisma.producto.findMany({ where: { activo: true }, include: { stocks: true } });
+    const porMatch = new Map();
+    for (const p of todosProd) {
+      const key = String(p[matchCampoCRM] ?? '').trim().toLowerCase();
+      if (key && !porMatch.has(key)) porMatch.set(key, p);
+    }
+
+    // ── Fase 1: planificar cada fila (sin escribir) ──
+    const aActualizar = []; // { producto, datosProducto, datosStock }
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
       const valorMatch = String(row[matchIdx] ?? '').trim();
-      if (!valorMatch) { resultadosFila.push({ estado: 'vacio', detalle: 'Sin valor en la columna de match' }); continue; }
+      if (!valorMatch) { resultadosFila[i] = { estado: 'vacio', detalle: 'Sin valor en la columna de match' }; continue; }
 
-      try {
-        // Buscar producto
-        const producto = await prisma.producto.findFirst({
-          where: { activo: true, [matchCampoCRM]: { equals: valorMatch, mode: 'insensitive' } },
-          include: { stocks: { include: { sede: true } } },
-        });
+      const producto = porMatch.get(valorMatch.toLowerCase());
+      if (!producto) {
+        noEncontrados++;
+        if (noEncontradosLista.length < 200) noEncontradosLista.push({ fila: i + 2, valor: valorMatch });
+        resultadosFila[i] = { estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` };
+        continue;
+      }
 
-        if (!producto) {
-          noEncontrados++;
-          if (noEncontradosLista.length < 200) noEncontradosLista.push({ fila: i + 2, valor: valorMatch });
-          resultadosFila.push({ estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` });
-          continue;
-        }
-
-        const datosProducto = {};
-        const datosStock = {};
-
-        for (const [colIdxStr, campoCRM] of Object.entries(updateMapeo)) {
-          const colIdx = parseInt(colIdxStr);
-          const valorArchivo = String(row[colIdx] ?? '').trim();
-          if (!valorArchivo) continue;
-
-          if (campoCRM.startsWith('stock_')) {
-            const codigoLocal = campoCRM.replace('stock_', '').toUpperCase();
-            const sedeId = sedeMap[codigoLocal];
-            const qty = parseInt(valorArchivo) || 0;
-            if (sedeId) datosStock[sedeId] = Math.max(0, qty); // stock nunca negativo
-          } else if (campoCRM === 'precioRegular' || campoCRM === 'precioOferta') {
-            const num = parseFloat(String(valorArchivo).replace(',', '.'));
-            if (!isNaN(num)) datosProducto[campoCRM] = num;
-          } else if (['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'].includes(campoCRM)) {
-            const num = parseInt(valorArchivo);
-            if (!isNaN(num)) datosProducto[campoCRM] = num;
-          } else if (campoCRM === 'tipo') {
-            datosProducto.tipo = normalizarTipo(valorArchivo);
-          } else if (campoCRM === 'eficienciaCombustible' || campoCRM === 'eficienciaFrenado') {
-            datosProducto[campoCRM] = valorArchivo.toUpperCase().charAt(0); // etiqueta EU: una sola letra
-          } else {
-            datosProducto[campoCRM] = valorArchivo;
-          }
-        }
-
-        // Muestra para preview (primeros 10)
-        if (cambiosMuestra.length < 10) {
-          cambiosMuestra.push({
-            matchValor: valorMatch,
-            sku: producto.sku,
-            medida: producto.medida,
-            marca: producto.marca,
-            cambiosProducto: datosProducto,
-            cambiosStock: Object.entries(datosStock).map(([sedeId, qty]) => {
-              const sede = sedes.find(s => s.id === sedeId);
-              const stockActual = producto.stocks.find(st => st.sedeId === sedeId)?.cantidad ?? 0;
-              return { sede: sede?.nombre || sedeId, codigoLocal: sede?.codigoLocal, antes: stockActual, despues: qty };
-            }),
-          });
-        }
-
-        if (!dryRun) {
-          if (Object.keys(datosProducto).length > 0) {
-            await prisma.producto.update({ where: { id: producto.id }, data: datosProducto });
-          }
-          for (const [sedeId, cantidad] of Object.entries(datosStock)) {
-            await prisma.stock.upsert({
-              where: { productoId_sedeId: { productoId: producto.id, sedeId } },
-              update: { cantidad },
-              create: { productoId: producto.id, sedeId, cantidad, stockMinimo: 3 },
-            });
-          }
-          actualizados++;
+      const datosProducto = {};
+      const datosStock = {};
+      for (const [colIdxStr, campoCRM] of Object.entries(updateMapeo)) {
+        const valorArchivo = String(row[parseInt(colIdxStr)] ?? '').trim();
+        if (!valorArchivo) continue;
+        if (campoCRM.startsWith('stock_')) {
+          const sedeId = sedeMap[campoCRM.replace('stock_', '').toUpperCase()];
+          if (sedeId) datosStock[sedeId] = Math.max(0, parseInt(valorArchivo) || 0);
+        } else if (campoCRM === 'precioRegular' || campoCRM === 'precioOferta') {
+          const n = parseFloat(String(valorArchivo).replace(',', '.'));
+          if (!isNaN(n)) datosProducto[campoCRM] = n;
+        } else if (['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'].includes(campoCRM)) {
+          const n = parseInt(valorArchivo);
+          if (!isNaN(n)) datosProducto[campoCRM] = n;
+        } else if (campoCRM === 'tipo') {
+          datosProducto.tipo = normalizarTipo(valorArchivo);
+        } else if (campoCRM === 'eficienciaCombustible' || campoCRM === 'eficienciaFrenado') {
+          datosProducto[campoCRM] = valorArchivo.toUpperCase().charAt(0);
         } else {
-          actualizados++; // en dry run contamos igualmente
+          datosProducto[campoCRM] = valorArchivo;
         }
-        resultadosFila.push({ estado: 'actualizado', detalle: dryRun ? 'Se actualizará' : 'Actualizado correctamente' });
-      } catch (rowErr) {
-        const msg = explicarErrorPrisma(rowErr);
-        errores.push({ fila: i + 2, valor: valorMatch, error: msg });
-        resultadosFila.push({ estado: 'error', detalle: msg });
+      }
+
+      if (cambiosMuestra.length < 10) {
+        cambiosMuestra.push({
+          matchValor: valorMatch, sku: producto.sku, medida: producto.medida, marca: producto.marca,
+          cambiosProducto: datosProducto,
+          cambiosStock: Object.entries(datosStock).map(([sedeId, qty]) => {
+            const sede = sedes.find(s => s.id === sedeId);
+            const stockActual = producto.stocks.find(st => st.sedeId === sedeId)?.cantidad ?? 0;
+            return { sede: sede?.nombre || sedeId, codigoLocal: sede?.codigoLocal, antes: stockActual, despues: qty };
+          }),
+        });
+      }
+
+      actualizados++;
+      resultadosFila[i] = { estado: 'actualizado', detalle: dryRun ? 'Se actualizará' : 'Actualizado correctamente' };
+      if (!dryRun) aActualizar.push({ idx: i, valorMatch, producto, datosProducto, datosStock });
+    }
+
+    // ── Fase 2: escribir en BD en lotes paralelos (solo si no es dry run) ──
+    if (!dryRun) {
+      const CONCURRENCIA = 20;
+      for (let i = 0; i < aActualizar.length; i += CONCURRENCIA) {
+        const lote = aActualizar.slice(i, i + CONCURRENCIA);
+        await Promise.all(lote.map(async ({ idx, valorMatch, producto, datosProducto, datosStock }) => {
+          try {
+            if (Object.keys(datosProducto).length > 0) {
+              await prisma.producto.update({ where: { id: producto.id }, data: datosProducto });
+            }
+            for (const [sedeId, cantidad] of Object.entries(datosStock)) {
+              await prisma.stock.upsert({
+                where: { productoId_sedeId: { productoId: producto.id, sedeId } },
+                update: { cantidad },
+                create: { productoId: producto.id, sedeId, cantidad, stockMinimo: 3 },
+              });
+            }
+          } catch (rowErr) {
+            const msg = explicarErrorPrisma(rowErr);
+            errores.push({ fila: idx + 2, valor: valorMatch, error: msg });
+            resultadosFila[idx] = { estado: 'error', detalle: msg };
+            actualizados--;
+          }
+        }));
       }
     }
 

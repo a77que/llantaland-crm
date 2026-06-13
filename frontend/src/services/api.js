@@ -119,19 +119,14 @@ export const clientesApi = {
   crear:   (data)   => api.post('/clientes', data),
 };
 
+// Importaciones masivas: archivos grandes (miles de filas) tardan más → timeout amplio
+const IMPORT_OPTS = { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 };
+
 export const importarApi = {
-  template: () => api.get('/importar/template', { responseType: 'blob' }),
-  exportarCatalogo: () => api.get('/importar/exportar', { responseType: 'blob' }),
-  preview: (formData) => api.post('/importar/preview', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  ejecutar: (formData) => api.post('/importar/ejecutar', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  previewUpdate: (formData) => api.post('/importar/preview-update', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  aplicarUpdate: (formData) => api.post('/importar/aplicar-update', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
+  template: () => api.get('/importar/template', { responseType: 'blob', timeout: 120000 }),
+  exportarCatalogo: () => api.get('/importar/exportar', { responseType: 'blob', timeout: 120000 }),
+  preview: (formData) => api.post('/importar/preview', formData, IMPORT_OPTS),
+  ejecutar: (formData) => api.post('/importar/ejecutar', formData, IMPORT_OPTS),
+  previewUpdate: (formData) => api.post('/importar/preview-update', formData, IMPORT_OPTS),
+  aplicarUpdate: (formData) => api.post('/importar/aplicar-update', formData, IMPORT_OPTS),
 };
