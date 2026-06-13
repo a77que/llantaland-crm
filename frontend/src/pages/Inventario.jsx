@@ -41,29 +41,26 @@ const COLUMNAS_FIJAS = [
   { key: 'paisFabricacion', label: 'Pais Fabricacion', group: 'Origen' },
   { key: 'origenMarca',     label: 'Origen Marca',     group: 'Origen' },
   { key: 'stockTotal',      label: 'Stock Total',     group: 'Stock' },
-  { key: 'stock_L0',        label: 'Almacén Central', group: 'Stock' },
-  { key: 'stock_L1',        label: 'Santa Anita',     group: 'Stock' },
-  { key: 'stock_L2',        label: 'Surco',           group: 'Stock' },
-  { key: 'stock_L3',        label: 'Surquillo',       group: 'Stock' },
-  { key: 'stock_L4',        label: 'Miraflores',      group: 'Stock' },
-  { key: 'stock_L5',        label: 'Pueblo Libre',    group: 'Stock' },
+  // Las columnas de stock por almacén (stock_LX) se generan dinámicamente desde las sedes
   { key: 'sku',             label: 'SKU',             group: 'Producto' },
   { key: 'tipo',            label: 'Tipo',            group: 'Producto' },
 ];
 
 const STORAGE_KEY = 'inventario_columnas_v2';
 const STORAGE_CUSTOM_KEY = 'inventario_columnas_custom';
+const STORAGE_STOCK_KNOWN = 'inventario_stock_known'; // almacenes ya vistos (para mostrar los nuevos automáticamente)
 
+// Columnas visibles por defecto (sin stock por almacén; esas se agregan dinámicamente al cargar sedes)
 const defaultVisible = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) return JSON.parse(saved);
-  return COLUMNAS_FIJAS.filter(c => [
+  return [
     'medida','ancho','perfil','radio',
     'marca','nombreComercial','grupo','precioRegular','precioOferta','descuentoMaximo',
     'indice_carga','velocidad_max','cargaMaxNeumatico','velocidadMaxKmh',
     'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
-    'stockTotal','stock_L0','stock_L1','stock_L2','stock_L3','stock_L4','stock_L5'
-  ].includes(c.key)).map(c => c.key);
+    'stockTotal',
+  ];
 };
 
 function getStockLocal(producto, codigoLocal) {
@@ -97,11 +94,12 @@ function StockCell({ value }) {
 const TIPO_ICONO = { texto:'📝', numero:'🔢', select:'📋', fecha:'📅', booleano:'✅' };
 const TIPO_LABEL = { texto:'Texto', numero:'Número', select:'Opciones', fecha:'Fecha', booleano:'Sí/No' };
 
-function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, onClose }) {
+function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, columnasFijas, onClose }) {
   const [nuevaCol, setNuevaCol] = useState('');
   const [tipoNuevaCol, setTipoNuevaCol] = useState('texto');
   const [opcionesNuevaCol, setOpcionesNuevaCol] = useState('');
-  const groups = [...new Set(COLUMNAS_FIJAS.map(c => c.group))];
+  const cols = columnasFijas || COLUMNAS_FIJAS;
+  const groups = [...new Set(cols.map(c => c.group))];
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }} onClick={onClose}>
@@ -116,7 +114,7 @@ function GestorColumnas({ visibles, onToggle, onCrear, onEliminar, customCols, o
           <div key={group} style={{ marginBottom:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:'#f5c400', textTransform:'uppercase', letterSpacing:1.5, marginBottom:8, borderBottom:'1px solid var(--color-border)', paddingBottom:4 }}>{group}</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-              {COLUMNAS_FIJAS.filter(c => c.group === group).map(col => (
+              {cols.filter(c => c.group === group).map(col => (
                 <label key={col.key} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', borderRadius:8, background:'var(--color-bg)', cursor:col.required?'default':'pointer', opacity:col.required?.5:1 }}>
                   <input
                     type="checkbox"
@@ -585,15 +583,45 @@ export default function Inventario() {
   const productos = data?.data || [];
   const total = data?.total || 0;
 
-  // Todas las columnas (fijas + custom)
+  // Columnas de stock por almacén — generadas dinámicamente desde las sedes activas
+  const stockCols = useMemo(
+    () => sedesData.filter(s => s.codigoLocal).map(s => ({ key: `stock_${s.codigoLocal}`, label: s.nombre, group: 'Stock' })),
+    [sedesData]
+  );
+
+  // Columnas del sistema (fijas) con las de stock insertadas justo después de "Stock Total"
+  const columnasSistema = useMemo(() => {
+    const out = [];
+    for (const c of COLUMNAS_FIJAS) {
+      out.push(c);
+      if (c.key === 'stockTotal') out.push(...stockCols);
+    }
+    return out;
+  }, [stockCols]);
+
+  // Mostrar automáticamente los almacenes nuevos (y recordar los ya vistos para no reponer los ocultados)
+  useEffect(() => {
+    if (!stockCols.length) return;
+    const sedeKeys = stockCols.map(c => c.key);
+    let known = [];
+    try { known = JSON.parse(localStorage.getItem(STORAGE_STOCK_KNOWN) || '[]'); } catch { /* */ }
+    const faltan = sedeKeys.filter(k => !known.includes(k) && !visibles.includes(k));
+    if (faltan.length) {
+      setVisibles(v => { const next = [...new Set([...v, ...faltan])]; localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); return next; });
+    }
+    const nuevoKnown = [...new Set([...known, ...sedeKeys])];
+    if (nuevoKnown.length !== known.length) localStorage.setItem(STORAGE_STOCK_KNOWN, JSON.stringify(nuevoKnown));
+  }, [stockCols]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Todas las columnas (sistema + stock dinámico + personalizadas)
   const todasColumnas = [
-    ...COLUMNAS_FIJAS,
+    ...columnasSistema,
     ...customCols.map(c => ({ ...c, group: 'Personalizado' })),
   ];
   const columnasVisibles = todasColumnas.filter(c => visibles.includes(c.key));
 
   const toggleColumna = (key) => {
-    const col = COLUMNAS_FIJAS.find(c => c.key === key);
+    const col = columnasSistema.find(c => c.key === key);
     if (col?.required) return;
     setVisibles(v => {
       const next = v.includes(key) ? v.filter(k => k !== key) : [...v, key];
@@ -835,7 +863,7 @@ export default function Inventario() {
         <GestorColumnas
           visibles={visibles} onToggle={toggleColumna}
           onCrear={crearColumna} onEliminar={eliminarColumna}
-          customCols={customCols} onClose={() => setShowGestor(false)}
+          customCols={customCols} columnasFijas={columnasSistema} onClose={() => setShowGestor(false)}
         />
       )}
 
