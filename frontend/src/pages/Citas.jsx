@@ -7,10 +7,10 @@ import { useCitasNotification } from '../context/CitasNotificationContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
 
-// Genera y abre el PDF de la cotización vinculada a la cita
-async function abrirPdfCotizacion(cotId) {
+// Genera y abre el PDF de la cita (usa la cotización si existe, si no lo arma desde los datos del cliente)
+async function abrirPdfCita(citaId) {
   try {
-    const r = await cotizacionesApi.generarPdf(cotId);
+    const r = await citasApi.generarPdf(citaId);
     if (r?.pdfUrl) window.open(r.pdfUrl, '_blank');
   } catch (e) { toast.error(e?.error || 'No se pudo generar el PDF'); }
 }
@@ -276,8 +276,8 @@ function CitaCard({ cita, onCotizar, onAgendar, isNueva }) {
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <BotonWhatsApp telefono={cita.telefono} label="WhatsApp" style={{ flex: 1, justifyContent: 'center', padding: '10px' }} />
-        {cita.cotizacion && <button onClick={() => abrirPdfCotizacion(cita.cotizacion.id)} style={{ flex: 1, padding: '10px', background: 'var(--color-bg)', border: '1.5px solid var(--color-border)', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: 'var(--color-text)' }}>📄 PDF</button>}
-        {cita.cotizacion && <BotonEnviarPdfWhatsApp telefono={cita.telefono} tipo="cotización" pdfFn={() => cotizacionesApi.generarPdf(cita.cotizacion.id)} style={{ flex: 1, justifyContent: 'center', padding: '10px' }} />}
+        <button onClick={() => abrirPdfCita(cita.id)} style={{ flex: 1, padding: '10px', background: 'var(--color-bg)', border: '1.5px solid var(--color-border)', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', color: 'var(--color-text)' }}>📄 PDF</button>
+        <BotonEnviarPdfWhatsApp telefono={cita.telefono} tipo="documento" pdfFn={() => citasApi.generarPdf(cita.id)} style={{ flex: 1, justifyContent: 'center', padding: '10px' }} />
       </div>
     </div>
   );
@@ -396,8 +396,8 @@ export default function Citas() {
           <button onClick={() => setModalAgendar(c)} title="Agendar" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, cursor: 'pointer' }}>🗓️</button>
           <button onClick={() => setModalCita(c)} style={{ background: '#f5c400', color: '#000', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>📋 Cotizar</button>
           <BotonWhatsApp telefono={c.telefono} label="" />
-          {c.cotizacion && <button onClick={() => abrirPdfCotizacion(c.cotizacion.id)} title="Crear PDF" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, cursor: 'pointer' }}>📄</button>}
-          {c.cotizacion && <BotonEnviarPdfWhatsApp telefono={c.telefono} tipo="cotización" pdfFn={() => cotizacionesApi.generarPdf(c.cotizacion.id)} style={{ padding: '5px 8px' }} />}
+          <button onClick={() => abrirPdfCita(c.id)} title="Crear PDF" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, cursor: 'pointer' }}>📄</button>
+          <BotonEnviarPdfWhatsApp telefono={c.telefono} tipo="documento" pdfFn={() => citasApi.generarPdf(c.id)} style={{ padding: '5px 8px' }} />
         </div>
       );
       default: return null;

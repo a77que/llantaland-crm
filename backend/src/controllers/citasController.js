@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const pdfService = require('../services/pdfService');
 const prisma = new PrismaClient();
 
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
@@ -179,4 +180,41 @@ const actualizar = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, poll, actualizar, derivarEstadoCita, CITAS_PASOS };
+// Genera un PDF de la cita por cliente. Si la cita tiene una cotización, usa esa;
+// si no, sintetiza el documento desde los datos del lead/cita.
+const generarPdf = async (req, res, next) => {
+  try {
+    const lead = await prisma.leadCRM.findUnique({
+      where: { id: req.params.id },
+      include: { cotizaciones: { orderBy: { createdAt: 'desc' }, take: 1, include: { usuario: { select: { nombre: true } } } } },
+    });
+    if (!lead) return res.status(404).json({ error: 'Cita no encontrada' });
+
+    let cot = lead.cotizaciones?.[0] || null;
+    if (!cot) {
+      // Documento sintetizado a partir de los datos de la cita/lead
+      const cant = lead.cantidadLlantas || 1;
+      const pUnit = lead.precioLlanta ? parseFloat(lead.precioLlanta) : 0;
+      cot = {
+        numero: `CITA-${String(lead.id).slice(-6).toUpperCase()}`,
+        createdAt: new Date(),
+        estado: 'BORRADOR',
+        usuario: { nombre: req.usuario?.nombre || '' },
+        nombreCliente: lead.nombreCliente, telefonoCliente: lead.telefono, dniCe: lead.dniCe,
+        marcaAuto: lead.marcaAuto, modeloAuto: lead.modeloAuto, anioAuto: lead.anioAuto,
+        medidaLlanta: lead.medidaDetectada, marcaLlanta: lead.marcaLlanta, modeloLlanta: lead.modeloLlanta,
+        cantidad: cant, precioUnit: pUnit, precioTotal: pUnit * cant,
+        fechaInstalacion: lead.fechaInstalacion, horaInstalacion: lead.horaInstalacion,
+        localInstalacion: lead.localInstalacion || lead.localAsignado || null,
+        provinciaDestino: lead.provinciaDestino, fechaCita: lead.fechaCita,
+        notas: null, items: null,
+      };
+    }
+    const filename = await pdfService.generarCotizacion(cot);
+    res.json({ pdfUrl: `/uploads/${filename}` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, poll, actualizar, generarPdf, derivarEstadoCita, CITAS_PASOS };
