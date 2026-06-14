@@ -224,23 +224,48 @@ const crear = async (req, res, next) => {
 
 const actualizar = async (req, res, next) => {
   try {
-    const { cantidad, precioUnit, descuento, ...rest } = req.body;
+    const { cantidad, precioUnit, descuento, items: itemsBody, ...rest } = req.body;
     const data = { ...rest };
     if (cantidad   !== undefined) data.cantidad   = parseInt(cantidad);
     if (precioUnit !== undefined) data.precioUnit = parseFloat(precioUnit);
     if (descuento  !== undefined) data.descuento  = parseFloat(descuento) || null;
 
+    // Ítems múltiples editados: normalizar y derivar campos principales
+    let items = null;
+    if (Array.isArray(itemsBody)) {
+      items = itemsBody
+        .filter(it => it && (it.medida || it.marca))
+        .map(it => ({
+          sku: it.sku || null, medida: it.medida || null, marca: it.marca || null,
+          modelo: it.modelo || null, cantidad: parseInt(it.cantidad || 1) || 1,
+          precioUnit: parseFloat(it.precioUnit || 0) || 0,
+        }));
+      data.items = items;
+      if (items.length > 0) {
+        const p = items[0];
+        data.medidaLlanta = p.medida; data.marcaLlanta = p.marca; data.modeloLlanta = p.modelo;
+        data.cantidad = p.cantidad; data.precioUnit = p.precioUnit;
+      }
+    }
+
     const cot = await prisma.cotizacion.findUnique({
       where: { id: req.params.id },
-      select: { cantidad: true, precioUnit: true, descuento: true, leadId: true,
+      select: { cantidad: true, precioUnit: true, descuento: true, leadId: true, items: true,
                 medidaLlanta: true, marcaLlanta: true, modeloLlanta: true,
                 nombreCliente: true, dniCe: true, marcaAuto: true, modeloAuto: true, anioAuto: true },
     });
     if (cot) {
-      const qty   = data.cantidad   ?? cot.cantidad;
-      const pUnit = data.precioUnit ?? parseFloat(cot.precioUnit);
-      const disc  = data.descuento  ?? (cot.descuento ? parseFloat(cot.descuento) : 0);
-      data.precioTotal = Math.max(0, pUnit * qty - disc);
+      const disc = data.descuento ?? (cot.descuento ? parseFloat(cot.descuento) : 0);
+      // Total: suma de ítems (nuevos o existentes) o el producto único
+      const itemsParaTotal = items || (Array.isArray(cot.items) ? cot.items : null);
+      if (itemsParaTotal && itemsParaTotal.length > 0) {
+        const sub = itemsParaTotal.reduce((a, it) => a + (parseFloat(it.precioUnit) || 0) * (parseInt(it.cantidad) || 1), 0);
+        data.precioTotal = Math.max(0, sub - disc);
+      } else {
+        const qty   = data.cantidad   ?? cot.cantidad;
+        const pUnit = data.precioUnit ?? parseFloat(cot.precioUnit);
+        data.precioTotal = Math.max(0, pUnit * qty - disc);
+      }
     }
 
     const updated = await prisma.cotizacion.update({ where: { id: req.params.id }, data });
