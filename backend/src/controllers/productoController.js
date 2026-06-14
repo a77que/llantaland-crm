@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const { paginar } = require('../utils/helpers');
+const { normalizarMedida, pareceMedida } = require('../utils/medida');
 
 const prisma = new PrismaClient();
 
@@ -22,7 +23,7 @@ const listar = async (req, res, next) => {
     const { skip, take } = paginar(page, limit);
     const where = { activo: true };
 
-    if (medida) where.medida = { contains: medida, mode: 'insensitive' };
+    if (medida) where.medida = { contains: normalizarMedida(medida), mode: 'insensitive' };
     if (marca)  where.marca  = { contains: marca,  mode: 'insensitive' };
     if (tipo)   where.tipo   = tipo;
     if (q) {
@@ -33,6 +34,12 @@ const listar = async (req, res, next) => {
         { nombreComercial:{ contains: q, mode: 'insensitive' } },
         { grupo:          { contains: q, mode: 'insensitive' } },
       ];
+      // Si el término parece una medida, buscar también su forma canónica
+      // para aceptar "145 / 65 r 16", "145-65-16", etc.
+      if (pareceMedida(q)) {
+        const qm = normalizarMedida(q);
+        if (qm) where.OR.push({ medida: { contains: qm, mode: 'insensitive' } });
+      }
     }
 
     const sortField = SORT_FIELDS[orderBy] || 'createdAt';
@@ -126,7 +133,7 @@ const compatibles = async (req, res, next) => {
     const { medida } = req.query;
     if (!medida) return res.status(400).json({ error: 'medida requerida' });
     const productos = await prisma.producto.findMany({
-      where: { activo: true, medida: { contains: medida, mode: 'insensitive' } },
+      where: { activo: true, medida: { contains: normalizarMedida(medida), mode: 'insensitive' } },
       include: { stocks: { include: { sede: true } } },
     });
     res.json(productos);
@@ -182,7 +189,7 @@ const medidas = async (req, res, next) => {
   try {
     const { q } = req.query;
     const where = { activo: true };
-    if (q) where.medida = { contains: String(q), mode: 'insensitive' };
+    if (q) where.medida = { contains: pareceMedida(q) ? normalizarMedida(q) : String(q), mode: 'insensitive' };
     const result = await prisma.producto.findMany({
       distinct: ['medida'],
       select: { medida: true },

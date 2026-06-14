@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { leadsApi, cotizacionesApi } from '../services/api';
+import { BotonWhatsApp } from '../components/WhatsAppButtons';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useLeadsNotification } from '../context/LeadsNotificationContext';
 
@@ -53,28 +54,15 @@ function LeadDetalle({ lead, onClose, isMobile }) {
   const navigate = useNavigate();
   if (!lead) return null;
 
-  const crearCotizacion = async () => {
-    try {
-      const data = await cotizacionesApi.crear({
-        leadId:          lead.id,
-        telefonoCliente: lead.telefono,
-        nombreCliente:   lead.nombreCliente,
-        dniCe:           lead.dniCe,
-        marcaAuto:       lead.marcaAuto,
-        modeloAuto:      lead.modeloAuto,
-        anioAuto:        lead.anioAuto,
-        medidaLlanta:    lead.medidaDetectada,
-        marcaLlanta:     lead.marcaLlanta,
-        modeloLlanta:    lead.modeloLlanta,
-        cantidad:        lead.cantidadLlantas || 4,
-        precioUnit:      lead.precioLlanta || '',
-      });
-      toast.success(`Cotización ${data.numero} creada`);
-      onClose();
-      navigate('/cotizaciones');
-    } catch (e) {
-      toast.error(e?.error || 'Error al crear cotización');
-    }
+  // Abrir el flujo completo de cotización con los datos del lead precargados (desde cualquier paso)
+  const crearCotizacion = () => {
+    onClose();
+    navigate('/cotizaciones/nueva', { state: {
+      leadId: lead.id,
+      cliente: { nombre: lead.nombreCliente, telefono: lead.telefono, dniCe: lead.dniCe },
+      vehiculo: { marca: lead.marcaAuto, modelo: lead.modeloAuto, anio: lead.anioAuto },
+      medida: lead.medidaDetectada || '',
+    } });
   };
   const local = lead.localInstalacion || lead.localAsignado;
   const localNombre = local?.Nombre || local?.nombre || '—';
@@ -159,6 +147,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <button onClick={crearCotizacion} style={{ flex:1, padding:'13px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
               📋 Crear Cotización
             </button>
+            <BotonWhatsApp telefono={lead.telefono} label="WhatsApp" size="lg" />
             <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
               Ver cotizaciones →
             </button>

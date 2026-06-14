@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { cotizacionesApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
 
 const S = {
   card: { background: '#fff', borderRadius: 10, padding: 20, boxShadow: 'var(--shadow)', border: '1px solid var(--color-border)', marginBottom: 16 },
@@ -34,11 +35,6 @@ export default function CotizacionDetalle() {
     onError: (e) => toast.error(e?.error || 'Error'),
   });
 
-  const waMutation = useMutation({
-    mutationFn: () => cotizacionesApi.whatsapp(id),
-    onSuccess: () => { toast.success('Marcado como enviado por WhatsApp'); qc.invalidateQueries(['cotizacion', id]); },
-  });
-
   if (isLoading) return <LoadingSpinner fullPage />;
   if (!cot) return <div>Cotización no encontrada</div>;
 
@@ -53,7 +49,8 @@ export default function CotizacionDetalle() {
         <span style={S.badge(ESTADO_COLORS[cot.estado] || '#64748b')}>{cot.estado}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button style={S.btn('#64748b')} onClick={() => pdfMutation.mutate()} disabled={pdfMutation.isPending}>📄 PDF</button>
-          {!cot.whatsappEnviado && <button style={S.btn('#25d366')} onClick={() => waMutation.mutate()}>📱 WhatsApp</button>}
+          {cot.telefonoCliente && <BotonWhatsApp telefono={cot.telefonoCliente} label="WhatsApp" size="lg" />}
+          {cot.telefonoCliente && <BotonEnviarPdfWhatsApp telefono={cot.telefonoCliente} tipo="cotización" pdfFn={() => cotizacionesApi.generarPdf(id)} size="lg" />}
           {cot.estado !== 'ACEPTADA' && cot.estado !== 'RECHAZADA' && (
             <button style={S.btn('#16a34a')} onClick={() => convertirMutation.mutate()} disabled={convertirMutation.isPending}>
               💰 Convertir a venta

@@ -3,6 +3,7 @@
  * Cada endpoint corresponde a una operación de hoja del flujo.
  */
 const { PrismaClient } = require('@prisma/client');
+const { normalizarMedida } = require('../utils/medida');
 const prisma = new PrismaClient();
 
 // ─── CRM SHEET ───────────────────────────────────────────────────────────────
@@ -99,13 +100,22 @@ const listarPrecios = async (req, res, next) => {
   try {
     const { medida } = req.query;
     const where = { activo: true };
-    if (medida) where.medida = { equals: medida, mode: 'insensitive' };
+    // Normalizar la medida: "145 / 65 r 16", "145/65r16", "145-65-16" → "145/65R16"
+    const medidaNorm = medida ? normalizarMedida(medida) : null;
+    if (medidaNorm) where.medida = { equals: medidaNorm, mode: 'insensitive' };
 
-    const productos = await prisma.producto.findMany({
+    let productos = await prisma.producto.findMany({
       where,
       include: { stocks: { include: { sede: true } } },
       orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
     });
+
+    // Fallback robusto: si no hubo match exacto pero pidieron medida, comparar normalizando
+    // también los valores guardados (cubre datos antiguos con espacios/minúsculas).
+    if (medidaNorm && productos.length === 0) {
+      const todos = await prisma.producto.findMany({ where: { activo: true }, include: { stocks: { include: { sede: true } } } });
+      productos = todos.filter(p => normalizarMedida(p.medida) === medidaNorm);
+    }
 
     // Nombres exactos que usa el flujo n8n en MOD | Cruzar Distrito y Stock
     const STOCK_KEY_MAP = {

@@ -29,17 +29,22 @@ export default function CotizacionNueva() {
   const location = useLocation();
   const isMobile = useIsMobileOrTablet();
 
+  const pre = location.state || {}; // precarga desde lead/inventario
+
   // ── Cliente ──
   const [tipoDoc, setTipoDoc] = useState('DNI');
-  const [numDoc, setNumDoc] = useState('');
-  const [cliente, setCliente] = useState({ nombre: '', telefono: '', dniCe: '' });
+  const [numDoc, setNumDoc] = useState(pre.cliente?.dniCe || '');
+  const [cliente, setCliente] = useState({
+    nombre: pre.cliente?.nombre || '', telefono: pre.cliente?.telefono || '', dniCe: pre.cliente?.dniCe || '',
+  });
+  const [leadId] = useState(pre.leadId || null);
 
   // ── Vehículo / medida ──
   const [modoMedida, setModoMedida] = useState('directa');
   const [placa, setPlaca] = useState('');
-  const [veh, setVeh] = useState({ marca: '', modelo: '', anio: '' });
+  const [veh, setVeh] = useState({ marca: pre.vehiculo?.marca || '', modelo: pre.vehiculo?.modelo || '', anio: pre.vehiculo?.anio || '' });
   const [versiones, setVersiones] = useState([]);
-  const [medida, setMedida] = useState('');
+  const [medida, setMedida] = useState(pre.medida || '');
 
   // ── Catálogo / llantas elegidas (múltiples) ──
   const [buscarQuery, setBuscarQuery] = useState('');
@@ -130,6 +135,7 @@ export default function CotizacionNueva() {
       const sede = sedes.find(s => s.id === sedeCita);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
       return cotizacionesApi.crear({
+        leadId: leadId || undefined,
         nombreCliente: cliente.nombre, telefonoCliente: cliente.telefono, dniCe: cliente.dniCe,
         marcaAuto: veh.marca, modeloAuto: veh.modelo, anioAuto: veh.anio,
         items: items.map(i => ({

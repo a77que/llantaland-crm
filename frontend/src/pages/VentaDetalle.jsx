@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { ventasApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
 
 const ESTADO_COLOR = { PENDIENTE: '#ca8a04', COMPLETADA: '#16a34a', ANULADA: '#dc2626' };
 const TIPO_ICON   = { whatsapp: '📱', tienda: '🏪', web: '🌐' };
@@ -70,13 +71,17 @@ export default function VentaDetalle() {
           </span>
           {venta.rankingLead && <span style={{ fontSize: 14 }}>{RANKING_ICON[venta.rankingLead]}</span>}
         </div>
-        <button
-          onClick={() => pdfMut.mutate()}
-          disabled={pdfMut.isPending}
-          style={{ padding: '8px 16px', background: '#f5c400', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-        >
-          {pdfMut.isPending ? '⏳ Generando...' : '📄 Descargar PDF'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => pdfMut.mutate()}
+            disabled={pdfMut.isPending}
+            style={{ padding: '8px 16px', background: '#f5c400', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+          >
+            {pdfMut.isPending ? '⏳ Generando...' : '📄 Descargar PDF'}
+          </button>
+          {venta.telefonoCliente && <BotonWhatsApp telefono={venta.telefonoCliente} label="WhatsApp" size="lg" />}
+          {venta.telefonoCliente && <BotonEnviarPdfWhatsApp telefono={venta.telefonoCliente} tipo="comprobante" pdfFn={() => ventasApi.generarPdf(id)} size="lg" />}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 14 }}>

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { leadsApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../hooks/useAuth';
+import { BotonWhatsApp } from '../components/WhatsAppButtons';
 
 const PASO_OPCIONES = [
   'nuevo','esperando_medida','esperando_version_auto','info_tecnica',
@@ -186,7 +187,8 @@ export default function ClienteDetalle() {
           </div>
         </div>
         {!editando && (
-          <div style={{ display:'flex', gap:8 }}>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <BotonWhatsApp telefono={c.telefono} label="WhatsApp" size="lg" />
             <button onClick={()=>setEditando(true)} style={{ padding:'8px 16px', border:'1.5px solid #f5c400', borderRadius:8, background:'#fffbeb', color:'#d4a900', fontSize:13, fontWeight:700, cursor:'pointer' }}>
               ✏️ Editar
             </button>
