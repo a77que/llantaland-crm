@@ -468,7 +468,9 @@ function mapSheetToLead(body) {
   const parseJson = v => { if (!v) return undefined; if (typeof v === 'object') return v; try { return JSON.parse(v); } catch { return v; } };
 
   if (body.Paso_Actual !== undefined) data.pasoActual = body.Paso_Actual;
-  if (body.Medida_Detectada !== undefined) data.medidaDetectada = body.Medida_Detectada;
+  // Guardar la medida siempre en forma canónica ("195 / 65 R 15" → "195/65R15")
+  // para que las comparaciones del flujo n8n coincidan con el catálogo del CRM.
+  if (body.Medida_Detectada !== undefined) data.medidaDetectada = body.Medida_Detectada ? normalizarMedida(body.Medida_Detectada) : body.Medida_Detectada;
   if (body.Precio !== undefined) data.precioLlanta = body.Precio ? parseFloat(body.Precio) : null;
   if (body.Ranking !== undefined) data.ranking = body.Ranking || null;
   if (body.Tipo_Servicio !== undefined) data.tipoServicio = body.Tipo_Servicio;
