@@ -150,11 +150,6 @@ export default function Clientes() {
     keepPreviousData: true,
   });
 
-  const { data: resumen } = useQuery({
-    queryKey: ['leads-resumen'],
-    queryFn: leadsApi.resumen,
-  });
-
   const { isAdmin } = useAuth();
 
   const actualizarMut = useMutation({
@@ -220,23 +215,6 @@ export default function Clientes() {
           <div style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:2 }}>{total} clientes · ordenado por {sortBy} {sortDir==='asc'?'↑':'↓'}</div>
         </div>
       </div>
-
-      {/* Stats */}
-      {resumen && (
-        <div style={{ display:'flex', gap:10, marginBottom:16, overflowX:'auto', paddingBottom:4, scrollbarWidth:'none' }}>
-          {[
-            { num:resumen.total, label:'Total',      color:'var(--color-primary)' },
-            { num:resumen.hoy,   label:'Hoy',        color:'#3b82f6' },
-            ...(resumen.porRanking||[]).filter(r=>r.ranking).map(r=>({ num:r._count, label:`${RANKING_ICON[r.ranking]} ${r.ranking}`, color:RANKING_COLOR[r.ranking] })),
-            ...(resumen.porPaso||[]).filter(p=>p.pasoActual==='completado').map(p=>({ num:p._count, label:'Completados', color:'#22c55e' })),
-          ].map((s,i) => (
-            <div key={i} style={{ flexShrink:0, background:'var(--color-surface)', border:'1px solid var(--color-border)', borderRadius:10, padding:'10px 16px', textAlign:'center', minWidth:80 }}>
-              <div style={{ fontSize: isMobile?18:22, fontWeight:800, color:s.color }}>{s.num}</div>
-              <div style={{ fontSize:10, color:'var(--color-text-muted)', marginTop:2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Filtros */}
       <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
