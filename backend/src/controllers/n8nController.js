@@ -466,28 +466,27 @@ const guardarColaReintento = async (req, res, next) => {
 // Pasos que NO cuentan como "carrito abandonado" (no hay nada que recuperar)
 const PASOS_NO_RECUPERABLES = new Set([
   'nuevo', 'completado', 'finalizado', 'venta_registrada', 'opt_out', 'cancelado',
+  'sin_stock', // su medida no tiene stock: no hay nada que recuperar
 ]);
 
 // Nombre amable de cada paso para mostrarlo en el recordatorio al cliente.
-// Cualquier paso no listado cae al texto genérico.
+// Cubre los pasos reales del flujo; cualquier otro cae al texto genérico.
 const PASO_AMIGABLE = {
-  esperando_medida:            'buscando la medida de tu llanta',
-  esperando_version:           'eligiendo la versión de tu vehículo',
-  esperando_version_auto:      'eligiendo la versión de tu vehículo',
-  esperando_eleccion_llanta:   'eligiendo tu llanta',
-  esperando_eleccion_marca:    'eligiendo la marca de tu llanta',
-  esperando_eleccion:          'eligiendo tu llanta',
-  esperando_datos_cliente:     'registrando tus datos',
-  esperando_nombre:            'registrando tu nombre',
-  esperando_dni:               'registrando tu documento',
-  esperando_distrito:          'indicando tu distrito',
-  esperando_tipo_servicio:     'eligiendo cómo recibir tu llanta',
-  esperando_local:             'eligiendo el local de instalación',
-  esperando_local_destino:     'eligiendo el local de instalación',
-  esperando_eleccion_b:        'eligiendo el local de instalación',
-  esperando_confirmacion:      'confirmando tu cita',
-  esperando_provincia:         'indicando tu provincia',
-  lima_lista:                  'eligiendo tu tienda en Lima',
+  esperando_medida:             'buscando la medida de tu llanta',
+  esperando_version_auto:       'eligiendo la versión de tu vehículo',
+  esperando_eleccion_llanta:    'eligiendo tu llanta',
+  esperando_eleccion_marca:     'eligiendo la marca de tu llanta',
+  esperando_info_tecnica:       'revisando la información técnica de tus llantas',
+  info_tecnica:                 'revisando la información técnica de tus llantas',
+  esperando_datos_cliente:      'registrando tus datos',
+  esperando_destino:            'eligiendo cómo quieres recibir tus llantas',
+  esperando_distrito:           'indicando tu distrito',
+  esperando_provincia_destino:  'indicando tu provincia',
+  esperando_local_cliente:      'eligiendo tu local',
+  esperando_local_destino:      'eligiendo el local de instalación',
+  esperando_eleccion_b:         'eligiendo el local de instalación',
+  esperando_eleccion_local_lima:'eligiendo tu tienda en Lima',
+  esperando_confirmacion:       'confirmando tu cita',
 };
 
 // Ventanas de tiempo por nivel: [desde_min, hasta_min) de inactividad
