@@ -268,14 +268,12 @@ export default function Clientes() {
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {clientes.map(c => (
             <div key={c.id} style={{ background:'var(--color-surface)', borderRadius:12, padding:'13px 15px', border:'1px solid var(--color-border)', borderLeft:`4px solid ${PASO_COLOR[c.pasoActual]||'#64748b'}` }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+              <div style={{ marginBottom:4 }}>
                 <span style={{ fontWeight:700, fontSize:14 }}>{c.nombreCliente||c.telefono}</span>
-                <span style={badge(PASO_COLOR[c.pasoActual]||'#64748b')}>{PASO_LABEL[c.pasoActual]||c.pasoActual}</span>
               </div>
-              {c.nombreCliente && <div style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:4 }}>📞 {c.telefono}</div>}
-              <div style={{ display:'flex', gap:10, fontSize:12, color:'var(--color-text-muted)', marginBottom:8 }}>
-                {c.medidaDetectada && <span>🛞 {c.medidaDetectada}</span>}
-                {c.ranking && <span style={{ color:RANKING_COLOR[c.ranking] }}>{RANKING_ICON[c.ranking]} {c.ranking}</span>}
+              <div style={{ fontSize:12, color:'var(--color-text-muted)', marginBottom:8, display:'flex', flexDirection:'column', gap:2 }}>
+                <span>📞 {c.telefono}{c.dniCe ? ` · 🪪 ${c.dniCe}` : ''}</span>
+                {[c.marcaAuto,c.modeloAuto,c.anioAuto].filter(Boolean).length>0 && <span>🚗 {[c.marcaAuto,c.modeloAuto,c.anioAuto].filter(Boolean).join(' ')}</span>}
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => setEditCliente(c)} style={{ flex:1, padding:'6px', border:'1.5px solid #f5c400', borderRadius:7, background:'#fffbeb', color:'#d4a900', fontSize:12, fontWeight:700, cursor:'pointer' }}>✏️ Editar</button>
@@ -295,12 +293,9 @@ export default function Clientes() {
               <tr>
                 <SortTh colKey="nombreCliente" label="Cliente" />
                 <SortTh colKey="telefono" label="Teléfono" />
+                <th style={{ textAlign:'left', padding:'10px 14px', fontSize:11, fontWeight:700, color:'var(--color-text-muted)', textTransform:'uppercase', background:'var(--color-bg)', borderBottom:'1px solid var(--color-border)', whiteSpace:'nowrap' }}>Documento</th>
                 <SortTh colKey="marcaAuto" label="Vehículo" />
-                <SortTh colKey="medidaDetectada" label="Medida" />
-                <SortTh colKey="pasoActual" label="Estado" />
-                <SortTh colKey="ranking" label="Ranking" />
-                <SortTh colKey="fechaCita" label="Cita" />
-                <SortTh colKey="updatedAt" label="Actualizado" />
+                <SortTh colKey="updatedAt" label="Registrado" />
                 <th style={{ textAlign:'left', padding:'10px 14px', fontSize:11, fontWeight:700, color:'var(--color-text-muted)', textTransform:'uppercase', background:'var(--color-bg)', borderBottom:'1px solid var(--color-border)', whiteSpace:'nowrap' }}>Acciones</th>
               </tr>
             </thead>
@@ -311,12 +306,9 @@ export default function Clientes() {
                   onMouseLeave={e=>e.currentTarget.style.background=''}>
                   <td style={{ padding:'10px 14px', fontWeight:600 }}>{c.nombreCliente||<span style={{color:'var(--color-text-muted)',fontWeight:400}}>Sin nombre</span>}</td>
                   <td style={{ padding:'10px 14px', fontSize:13 }}>{c.telefono}</td>
+                  <td style={{ padding:'10px 14px', fontSize:13, color:'var(--color-text-muted)' }}>{c.dniCe||'—'}</td>
                   <td style={{ padding:'10px 14px', fontSize:13, color:'var(--color-text-muted)' }}>{[c.marcaAuto,c.modeloAuto,c.anioAuto].filter(Boolean).join(' ')||'—'}</td>
-                  <td style={{ padding:'10px 14px', fontSize:13 }}>{c.medidaDetectada||'—'}</td>
-                  <td style={{ padding:'10px 14px' }}><span style={badge(PASO_COLOR[c.pasoActual]||'#64748b')}>{PASO_LABEL[c.pasoActual]||c.pasoActual}</span></td>
-                  <td style={{ padding:'10px 14px' }}>{c.ranking?<span style={{color:RANKING_COLOR[c.ranking],fontWeight:700}}>{RANKING_ICON[c.ranking]} {c.ranking}</span>:'—'}</td>
-                  <td style={{ padding:'10px 14px', fontSize:12, color:'var(--color-text-muted)' }}>{c.fechaCita||'—'}</td>
-                  <td style={{ padding:'10px 14px', fontSize:12, color:'var(--color-text-muted)' }}>{new Date(c.updatedAt).toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+                  <td style={{ padding:'10px 14px', fontSize:12, color:'var(--color-text-muted)' }}>{new Date(c.timestamp||c.updatedAt).toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'})}</td>
                   <td style={{ padding:'10px 14px', whiteSpace:'nowrap' }}>
                     <button
                       onClick={() => setEditCliente(c)}

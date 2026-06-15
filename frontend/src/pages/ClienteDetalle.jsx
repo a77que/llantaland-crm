@@ -2,10 +2,16 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { leadsApi } from '../services/api';
+import { leadsApi, cotizacionesApi, ventasApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../hooks/useAuth';
-import { BotonWhatsApp } from '../components/WhatsAppButtons';
+import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
+
+// Abre el PDF (de cotización o venta) en una pestaña
+async function abrirPdf(fn) {
+  try { const r = await fn(); if (r?.pdfUrl) window.open(r.pdfUrl, '_blank'); }
+  catch (e) { toast.error(e?.error || 'No se pudo generar el PDF'); }
+}
 
 const PASO_OPCIONES = [
   'nuevo','esperando_medida','esperando_version_auto','info_tecnica',
@@ -163,11 +169,27 @@ export default function ClienteDetalle() {
   const nMsgs  = c.historial?.length     || 0;
   const totalComprado = (c.ventas||[]).reduce((s,v)=>s+parseFloat(v.precioTotal||0),0);
 
+  // Citas: la del propio lead + las que tengan fecha de instalación desde cotizaciones
+  const citasCot = (c.cotizaciones||[]).filter(q => q.fechaInstalacion || q.fechaCita);
+  const tieneCitaLead = c.fechaInstalacion || c.fechaCita || c.localInstalacion || c.localAsignado;
+  const nCitas = (tieneCitaLead ? 1 : 0) + citasCot.length;
+
+  // "Comprando ahora": tiene un producto de interés y aún no convirtió en venta
+  const comprandoAhora = (c.medidaDetectada || c.marcaLlanta) && c.pasoActual !== 'completado';
+
+  const irACotizar = () => navigate('/cotizaciones/nueva', { state: {
+    leadId: c.id,
+    cliente: { nombre: c.nombreCliente, telefono: c.telefono, dniCe: c.dniCe },
+    vehiculo: { marca: c.marcaAuto, modelo: c.modeloAuto, anio: c.anioAuto },
+    medida: c.medidaDetectada || '',
+  } });
+
   const TABS = [
     { id:'info',   label:'📋 Información' },
     { id:'hist',   label:`💬 Chat (${nMsgs})` },
     { id:'cots',   label:`📄 Cotizaciones (${nCots})` },
     { id:'ventas', label:`💰 Ventas (${nVentas})` },
+    { id:'citas',  label:`📅 Citas (${nCitas})` },
   ];
 
   return (
@@ -205,6 +227,31 @@ export default function ClienteDetalle() {
           </div>
         )}
       </div>
+
+      {/* Comprando ahora / en proceso */}
+      {!editando && (
+        <div style={{ background: comprandoAhora ? '#fffbeb' : 'var(--color-surface)', border:`1.5px solid ${comprandoAhora ? '#fde68a' : 'var(--color-border)'}`, borderRadius:12, padding:'14px 16px', marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:11, fontWeight:800, color: comprandoAhora ? '#b45309' : 'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>
+              🛒 {comprandoAhora ? 'Comprando ahora / en proceso' : 'Sin compra en proceso'}
+            </div>
+            {comprandoAhora ? (
+              <div style={{ fontSize:14, fontWeight:600 }}>
+                {c.medidaDetectada && <span>🛞 {c.medidaDetectada}</span>}
+                {c.marcaLlanta && <span> · {c.marcaLlanta} {c.modeloLlanta||''}</span>}
+                {c.cantidadLlantas && <span> · ×{c.cantidadLlantas}</span>}
+                {c.precioLlanta && <span style={{ color:'#16a34a' }}> · {fmt(c.precioLlanta)}</span>}
+                <span style={{ marginLeft:8, fontSize:11, color:'var(--color-text-muted)' }}>({PASO_LABEL[c.pasoActual]||c.pasoActual})</span>
+              </div>
+            ) : (
+              <div style={{ fontSize:13, color:'var(--color-text-muted)' }}>Genera una cotización nueva para este cliente cuando quieras.</div>
+            )}
+          </div>
+          <button onClick={irACotizar} style={{ padding:'11px 18px', background:'#16a34a', color:'#fff', border:'none', borderRadius:10, fontSize:14, fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
+            📋 Generar cotización
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display:'flex', borderBottom:'2px solid var(--color-border)', marginBottom:20, overflowX:'auto', scrollbarWidth:'none' }}>
@@ -299,12 +346,17 @@ export default function ClienteDetalle() {
                 <span style={badge(ESTADO_COT[q.estado]||'#64748b')}>{q.estado}</span>
               </div>
               {q.medidaLlanta && <div style={{ fontSize:13, color:'var(--color-text-muted)', marginBottom:6 }}>🛞 {q.medidaLlanta} {q.marcaLlanta||''} × {q.cantidad}</div>}
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                 <span style={{ fontWeight:800, fontSize:16, color:'#16a34a' }}>{fmt(q.precioTotal)}</span>
                 <div style={{ display:'flex', gap:8, alignItems:'center', fontSize:12, color:'var(--color-text-muted)' }}>
                   <span>{q.usuario?.nombre} · {new Date(q.createdAt).toLocaleDateString('es-PE')}</span>
                   {q.venta && <Link to={`/ventas/${q.venta.id}`} style={{ padding:'3px 10px', background:'#8b5cf620', color:'#8b5cf6', border:'1px solid #8b5cf640', borderRadius:6, fontSize:11, fontWeight:700 }}>Ver venta →</Link>}
                 </div>
+              </div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <Link to={`/cotizaciones/${q.id}`} style={{ padding:'7px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:12, fontWeight:700, color:'var(--color-text)' }}>👁️ Ver</Link>
+                <button onClick={()=>abrirPdf(()=>cotizacionesApi.generarPdf(q.id))} style={{ padding:'7px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', color:'var(--color-text)' }}>📄 PDF</button>
+                {c.telefono && <BotonEnviarPdfWhatsApp telefono={c.telefono} tipo="cotización" pdfFn={()=>cotizacionesApi.generarPdf(q.id)} />}
               </div>
             </div>
           ))}
@@ -325,9 +377,14 @@ export default function ClienteDetalle() {
                     <span style={badge(ESTADO_VENTA[v.estado]||'#64748b')}>{v.estado}</span>
                   </div>
                   {v.medidaLlanta && <div style={{ fontSize:13, color:'var(--color-text-muted)', marginBottom:6 }}>🛞 {v.medidaLlanta} {v.marcaLlanta||''} × {v.cantidad} {v.fechaCita&&<span style={{marginLeft:8}}>📅 {v.fechaCita}</span>}</div>}
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                     <span style={{ fontWeight:900, fontSize:18, color:'#16a34a' }}>{fmt(v.precioTotal)}</span>
                     <span style={{ fontSize:12, color:'var(--color-text-muted)' }}>{v.usuario?.nombre} · {new Date(v.createdAt).toLocaleDateString('es-PE')}</span>
+                  </div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    <Link to={`/ventas/${v.id}`} style={{ padding:'7px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:12, fontWeight:700, color:'var(--color-text)' }}>👁️ Ver</Link>
+                    <button onClick={()=>abrirPdf(()=>ventasApi.generarPdf(v.id))} style={{ padding:'7px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', color:'var(--color-text)' }}>📄 PDF</button>
+                    {c.telefono && <BotonEnviarPdfWhatsApp telefono={c.telefono} tipo="comprobante" pdfFn={()=>ventasApi.generarPdf(v.id)} />}
                   </div>
                 </div>
               ))}
@@ -335,6 +392,52 @@ export default function ClienteDetalle() {
                 <span style={{ color:'rgba(255,255,255,.8)', fontSize:13, fontWeight:600 }}>Total invertido</span>
                 <span style={{ color:'#f5c400', fontSize:22, fontWeight:900 }}>{fmt(totalComprado)}</span>
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* CITAS */}
+      {tab==='citas' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {nCitas === 0 ? (
+            <div style={{ textAlign:'center', padding:60, color:'var(--color-text-muted)' }}><div style={{fontSize:36}}>📅</div><div style={{marginTop:10,fontWeight:600}}>Sin citas registradas</div></div>
+          ) : (
+            <>
+              {tieneCitaLead && (
+                <div style={{ background:'var(--color-surface)', borderRadius:12, padding:'14px 16px', border:'1px solid var(--color-border)', borderLeft:'4px solid #f59e0b' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                    <span style={{ fontWeight:700 }}>🗓️ Cita actual</span>
+                    {c.estadoCita && <span style={badge(c.estadoCita==='ENTREGADO'?'#16a34a':c.estadoCita==='ATENDIDO'?'#f59e0b':'#3b82f6')}>{c.estadoCita}</span>}
+                  </div>
+                  <div style={{ fontSize:13, color:'var(--color-text)', display:'flex', flexDirection:'column', gap:3 }}>
+                    {(local?.Nombre||local?.nombre) && <span>📍 {local.Nombre||local.nombre}</span>}
+                    {c.fechaInstalacion && <span>📅 {new Date(c.fechaInstalacion).toLocaleDateString('es-PE',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'})}{c.horaInstalacion?` · ${c.horaInstalacion}`:''}</span>}
+                    {!c.fechaInstalacion && c.fechaCita && <span>📅 {c.fechaCita}</span>}
+                    {c.medidaDetectada && <span style={{ color:'var(--color-text-muted)' }}>🛞 {c.medidaDetectada} {c.marcaLlanta||''}</span>}
+                  </div>
+                  <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                    <BotonWhatsApp telefono={c.telefono} label="WhatsApp" />
+                  </div>
+                </div>
+              )}
+              {citasCot.map(q => (
+                <div key={q.id} style={{ background:'var(--color-surface)', borderRadius:12, padding:'14px 16px', border:'1px solid var(--color-border)', borderLeft:`4px solid ${ESTADO_COT[q.estado]||'#64748b'}` }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                    <span style={{ fontWeight:700, color:'var(--color-primary)' }}>{q.numero}</span>
+                    <span style={badge(ESTADO_COT[q.estado]||'#64748b')}>{q.estado}</span>
+                  </div>
+                  <div style={{ fontSize:13, color:'var(--color-text)' }}>
+                    📅 {q.fechaInstalacion ? new Date(q.fechaInstalacion).toLocaleDateString('es-PE',{weekday:'long',day:'2-digit',month:'2-digit'}) : q.fechaCita}{q.horaInstalacion?` · ${q.horaInstalacion}`:''}
+                    {q.medidaLlanta && <span style={{ color:'var(--color-text-muted)' }}> · 🛞 {q.medidaLlanta}</span>}
+                  </div>
+                  <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                    <Link to={`/cotizaciones/${q.id}`} style={{ padding:'7px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:12, fontWeight:700, color:'var(--color-text)' }}>👁️ Ver</Link>
+                    <button onClick={()=>abrirPdf(()=>cotizacionesApi.generarPdf(q.id))} style={{ padding:'7px 12px', background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', color:'var(--color-text)' }}>📄 PDF</button>
+                    {c.telefono && <BotonEnviarPdfWhatsApp telefono={c.telefono} tipo="cita" pdfFn={()=>cotizacionesApi.generarPdf(q.id)} />}
+                  </div>
+                </div>
+              ))}
             </>
           )}
         </div>
