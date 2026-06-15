@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const XLSXStyle = require('xlsx-js-style');
 const prisma = new PrismaClient();
 
 const stockCritico = async (req, res, next) => {
@@ -12,6 +13,76 @@ const stockCritico = async (req, res, next) => {
       },
     });
     res.json(alertas);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Exporta a Excel las llantas SIN STOCK o SIN PRECIO definido.
+ * GET /api/admin/stock-critico/export?tipo=sin-stock|sin-precio
+ */
+const exportarStockCritico = async (req, res, next) => {
+  try {
+    const tipo = req.query.tipo === 'sin-precio' ? 'sin-precio' : 'sin-stock';
+
+    const sedes = await prisma.sede.findMany({
+      where: { activo: true }, orderBy: { codigoLocal: 'asc' },
+      select: { id: true, nombre: true, codigoLocal: true },
+    });
+
+    const productos = await prisma.producto.findMany({
+      where: { activo: true },
+      include: { stocks: { include: { sede: true } } },
+      orderBy: [{ marca: 'asc' }, { medida: 'asc' }],
+    });
+
+    const stockTotal = (p) => p.stocks.reduce((s, x) => s + (x.cantidad || 0), 0);
+    const precioReg = (p) => (p.precioRegular == null ? 0 : parseFloat(p.precioRegular));
+
+    const filtrados = tipo === 'sin-precio'
+      ? productos.filter(p => !precioReg(p) || precioReg(p) <= 0)
+      : productos.filter(p => stockTotal(p) <= 0);
+
+    // Encabezados
+    const headBase = ['SKU', 'Medida', 'Marca', 'Nombre Comercial', 'Tipo', 'Grupo',
+      'Precio Regular', 'Precio Oferta', 'Stock Total'];
+    const headSedes = sedes.map(s => `Stock ${s.codigoLocal || ''} ${s.nombre}`.trim());
+    const header = [...headBase, ...headSedes];
+
+    const rows = filtrados.map(p => {
+      const porSede = sedes.map(s => {
+        const st = p.stocks.find(x => x.sedeId === s.id);
+        return st ? st.cantidad : 0;
+      });
+      return [
+        p.sku, p.medida, p.marca, p.nombreComercial || '', p.tipo || '', p.grupo || '',
+        precioReg(p), p.precioOferta == null ? '' : parseFloat(p.precioOferta), stockTotal(p),
+        ...porSede,
+      ];
+    });
+
+    // Construir hoja con estilo de encabezado
+    const aoa = [header, ...rows];
+    const ws = XLSXStyle.utils.aoa_to_sheet(aoa);
+    const azul = { fill: { fgColor: { rgb: tipo === 'sin-precio' ? 'B45309' : 'B91C1C' } },
+      font: { color: { rgb: 'FFFFFF' }, bold: true }, alignment: { horizontal: 'center' } };
+    for (let c = 0; c < header.length; c++) {
+      const ref = XLSXStyle.utils.encode_cell({ r: 0, c });
+      if (ws[ref]) ws[ref].s = azul;
+    }
+    ws['!cols'] = header.map((h, i) => ({ wch: i === 3 ? 28 : Math.max(10, h.length + 2) }));
+
+    const wb = XLSXStyle.utils.book_new();
+    const hojaNombre = tipo === 'sin-precio' ? 'Sin Precio' : 'Sin Stock';
+    XLSXStyle.utils.book_append_sheet(wb, ws, hojaNombre);
+
+    const buf = XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const fecha = new Date().toISOString().slice(0, 10);
+    const fname = `llantas_${tipo}_${fecha}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    res.send(buf);
   } catch (err) {
     next(err);
   }
@@ -108,4 +179,4 @@ const seedCitasTest = async (req, res, next) => {
   }
 };
 
-module.exports = { stockCritico, resumen, seedCitasTest };
+module.exports = { stockCritico, exportarStockCritico, resumen, seedCitasTest };

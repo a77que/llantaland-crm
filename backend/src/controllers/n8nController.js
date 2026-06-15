@@ -100,9 +100,10 @@ const listarPrecios = async (req, res, next) => {
   try {
     const { medida } = req.query;
     const where = { activo: true };
-    // Normalizar la medida: "145 / 65 r 16", "145/65r16", "145-65-16" → "145/65R16"
+    // Clave canónica: "145 / 65 r 16", "165R13C", "35X12,5R20", "650R16", "195/50ZR15" → forma única.
+    // Coincidencia INCLUSIVA por medidaNorm (la Z/RF/C/LT se descartan en la clave).
     const medidaNorm = medida ? normalizarMedida(medida) : null;
-    if (medidaNorm) where.medida = { equals: medidaNorm, mode: 'insensitive' };
+    if (medidaNorm) where.medidaNorm = { equals: medidaNorm, mode: 'insensitive' };
 
     let productos = await prisma.producto.findMany({
       where,
@@ -110,8 +111,8 @@ const listarPrecios = async (req, res, next) => {
       orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
     });
 
-    // Fallback robusto: si no hubo match exacto pero pidieron medida, comparar normalizando
-    // también los valores guardados (cubre datos antiguos con espacios/minúsculas).
+    // Fallback robusto: si no hubo match (p.ej. producto aún sin medidaNorm backfilleado),
+    // comparar normalizando en memoria los valores guardados.
     if (medidaNorm && productos.length === 0) {
       const todos = await prisma.producto.findMany({ where: { activo: true }, include: { stocks: { include: { sede: true } } } });
       productos = todos.filter(p => normalizarMedida(p.medida) === medidaNorm);

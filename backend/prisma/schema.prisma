@@ -154,7 +154,8 @@ model Sede {
 model Producto {
   id              String       @id @default(cuid())
   sku             String       @unique
-  medida          String                         // e.g. "195/65R15"
+  medida          String                         // e.g. "195/65R15" (forma original/visible)
+  medidaNorm      String?                        // clave canónica de búsqueda (normalizarMedida)
   marca           String
   nombreComercial String?                        // Nombre_Comercial en sheet
   grupo           String?                        // Grupo (Turismo, SUV, etc.)
@@ -187,6 +188,7 @@ model Producto {
   itemsVenta  ItemVenta[]
 
   @@index([medida])
+  @@index([medidaNorm])
   @@index([marca])
   @@index([activo])
   @@map("productos")

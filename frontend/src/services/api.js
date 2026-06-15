@@ -98,6 +98,7 @@ export const adminApi = {
   descuentos: (params) => api.get('/admin/descuentos', { params }),
   marcarLeido: (id) => api.put(`/admin/descuentos/${id}/leida`),
   stockCritico: () => api.get('/admin/stock-critico'),
+  exportarStock: (tipo) => api.get('/admin/stock-critico/export', { params: { tipo }, responseType: 'blob', timeout: 120000 }),
   resumen: (params) => api.get('/admin/resumen', { params }),
 };
 

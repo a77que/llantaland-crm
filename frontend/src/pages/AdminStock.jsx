@@ -12,14 +12,49 @@ const S = {
 };
 
 export default function AdminStock() {
+  const [descargando, setDescargando] = React.useState(null);
   const { data: alertas, isLoading } = useQuery({
     queryKey: ['stock-critico'],
     queryFn: adminApi.stockCritico,
   });
 
+  const descargar = async (tipo) => {
+    setDescargando(tipo);
+    try {
+      const blob = await adminApi.exportarStock(tipo);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `llantas_${tipo}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(tipo === 'sin-precio' ? 'Reporte de llantas sin precio descargado' : 'Reporte de llantas sin stock descargado');
+    } catch (e) {
+      toast.error('No se pudo generar el reporte');
+    } finally {
+      setDescargando(null);
+    }
+  };
+
+  const btn = (activo) => ({
+    padding: '9px 14px', borderRadius: 8, border: '1px solid var(--color-border)',
+    background: activo ? '#94a3b8' : '#fff', color: '#0f172a', fontWeight: 600, fontSize: 13,
+    cursor: activo ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+  });
+
   return (
     <div>
-      <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20 }}>Alertas de Stock Crítico</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Alertas de Stock Crítico</h1>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button style={btn(descargando === 'sin-stock')} disabled={!!descargando} onClick={() => descargar('sin-stock')}>
+            📥 {descargando === 'sin-stock' ? 'Generando…' : 'Descargar sin stock'}
+          </button>
+          <button style={btn(descargando === 'sin-precio')} disabled={!!descargando} onClick={() => descargar('sin-precio')}>
+            📥 {descargando === 'sin-precio' ? 'Generando…' : 'Descargar sin precio'}
+          </button>
+        </div>
+      </div>
 
       {isLoading ? <LoadingSpinner fullPage /> : (
         <>

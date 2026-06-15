@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const XLSXStyle = require('xlsx-js-style');
 const { PrismaClient } = require('@prisma/client');
+const { normalizarMedida } = require('../utils/medida');
 
 const prisma = new PrismaClient();
 
@@ -160,6 +161,7 @@ const ejecutar = async (req, res, next) => {
       const productoData = {
         sku:                   String(record.sku).trim(),
         medida:                String(record.medida).trim(),
+        medidaNorm:            normalizarMedida(String(record.medida).trim()),
         marca:                 String(record.marca).trim(),
         nombreComercial:       str(record.nombreComercial),
         grupo:                 str(record.grupo),
@@ -564,6 +566,8 @@ const aplicarUpdate = async (req, res, next) => {
           datosProducto[campoCRM] = valorArchivo;
         }
       }
+      // Si se actualiza la medida, recalcular su clave canónica de búsqueda
+      if (datosProducto.medida) datosProducto.medidaNorm = normalizarMedida(datosProducto.medida);
 
       if (cambiosMuestra.length < 10) {
         cambiosMuestra.push({

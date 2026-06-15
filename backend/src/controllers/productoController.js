@@ -22,25 +22,40 @@ const listar = async (req, res, next) => {
     const { medida, marca, tipo, sedeId, q, page, limit, orderBy, orderDir } = req.query;
     const { skip, take } = paginar(page, limit);
     const where = { activo: true };
+    const and = [];
 
-    if (medida) where.medida = { contains: normalizarMedida(medida), mode: 'insensitive' };
+    // Búsqueda por medida: usa la clave canónica (medidaNorm) para que cualquier
+    // formato (ZR, RF, C, LT, X, numérico, compactos, espacios) coincida de forma
+    // inclusiva. Fallback a `medida` por si algún producto aún no tiene medidaNorm.
+    if (medida) {
+      const norm = normalizarMedida(medida);
+      and.push({ OR: [
+        { medidaNorm: { contains: norm, mode: 'insensitive' } },
+        { medida:     { contains: norm, mode: 'insensitive' } },
+      ]});
+    }
     if (marca)  where.marca  = { contains: marca,  mode: 'insensitive' };
     if (tipo)   where.tipo   = tipo;
     if (q) {
-      where.OR = [
+      const or = [
         { sku:            { contains: q, mode: 'insensitive' } },
         { medida:         { contains: q, mode: 'insensitive' } },
         { marca:          { contains: q, mode: 'insensitive' } },
         { nombreComercial:{ contains: q, mode: 'insensitive' } },
         { grupo:          { contains: q, mode: 'insensitive' } },
       ];
-      // Si el término parece una medida, buscar también su forma canónica
-      // para aceptar "145 / 65 r 16", "145-65-16", etc.
+      // Si el término parece una medida, buscar también su clave canónica
+      // para aceptar "145 / 65 r 16", "165R13C", "35X12,5R20", "650R16", etc.
       if (pareceMedida(q)) {
         const qm = normalizarMedida(q);
-        if (qm) where.OR.push({ medida: { contains: qm, mode: 'insensitive' } });
+        if (qm) {
+          or.push({ medidaNorm: { contains: qm, mode: 'insensitive' } });
+          or.push({ medida:     { contains: qm, mode: 'insensitive' } });
+        }
       }
+      and.push({ OR: or });
     }
+    if (and.length) where.AND = and;
 
     const sortField = SORT_FIELDS[orderBy] || 'createdAt';
     const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
@@ -81,7 +96,9 @@ const obtener = async (req, res, next) => {
 
 const crear = async (req, res, next) => {
   try {
-    const producto = await prisma.producto.create({ data: req.body });
+    const data = { ...req.body };
+    if (data.medida) data.medidaNorm = normalizarMedida(data.medida);
+    const producto = await prisma.producto.create({ data });
     res.status(201).json(producto);
   } catch (err) {
     next(err);
@@ -90,9 +107,11 @@ const crear = async (req, res, next) => {
 
 const actualizar = async (req, res, next) => {
   try {
+    const data = { ...req.body };
+    if (data.medida) data.medidaNorm = normalizarMedida(data.medida);
     const producto = await prisma.producto.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
     });
     res.json(producto);
   } catch (err) {
@@ -132,8 +151,15 @@ const compatibles = async (req, res, next) => {
   try {
     const { medida } = req.query;
     if (!medida) return res.status(400).json({ error: 'medida requerida' });
+    const norm = normalizarMedida(medida);
     const productos = await prisma.producto.findMany({
-      where: { activo: true, medida: { contains: normalizarMedida(medida), mode: 'insensitive' } },
+      where: {
+        activo: true,
+        OR: [
+          { medidaNorm: { contains: norm, mode: 'insensitive' } },
+          { medida:     { contains: norm, mode: 'insensitive' } },
+        ],
+      },
       include: { stocks: { include: { sede: true } } },
     });
     res.json(productos);
@@ -189,7 +215,17 @@ const medidas = async (req, res, next) => {
   try {
     const { q } = req.query;
     const where = { activo: true };
-    if (q) where.medida = { contains: pareceMedida(q) ? normalizarMedida(q) : String(q), mode: 'insensitive' };
+    if (q) {
+      if (pareceMedida(q)) {
+        const norm = normalizarMedida(q);
+        where.OR = [
+          { medidaNorm: { contains: norm, mode: 'insensitive' } },
+          { medida:     { contains: norm, mode: 'insensitive' } },
+        ];
+      } else {
+        where.medida = { contains: String(q), mode: 'insensitive' };
+      }
+    }
     const result = await prisma.producto.findMany({
       distinct: ['medida'],
       select: { medida: true },
