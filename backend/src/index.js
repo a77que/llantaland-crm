@@ -89,7 +89,7 @@ app.use('/api/importar', importarRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/clientes', clienteRoutes);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-13-cotizacion-multi-v11', timestamp: new Date() }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-15-medidas-familias-v12', timestamp: new Date() }));
 
 
 app.use(errorHandler);
