@@ -245,6 +245,10 @@ model LeadCRM {
   pasoActual             String      @default("nuevo")
   intentosMedida         Int         @default(0)
   emailSeguimientoEnviado Boolean    @default(false)
+  // Recuperación de carrito (recordatorios automáticos 15min / 3h / 21h)
+  recordatorio15         Boolean     @default(false)
+  recordatorio3h         Boolean     @default(false)
+  recordatorio21h        Boolean     @default(false)
   hashMensaje            String?     // deduplicación
 
   // Producto / llanta de interés

@@ -461,6 +461,123 @@ const guardarColaReintento = async (req, res, next) => {
   }
 };
 
+// ─── RECUPERACIÓN DE CARRITO (RECORDATORIOS) ─────────────────────────────────
+
+// Pasos que NO cuentan como "carrito abandonado" (no hay nada que recuperar)
+const PASOS_NO_RECUPERABLES = new Set([
+  'nuevo', 'completado', 'finalizado', 'venta_registrada', 'opt_out', 'cancelado',
+]);
+
+// Nombre amable de cada paso para mostrarlo en el recordatorio al cliente.
+// Cualquier paso no listado cae al texto genérico.
+const PASO_AMIGABLE = {
+  esperando_medida:            'buscando la medida de tu llanta',
+  esperando_version:           'eligiendo la versión de tu vehículo',
+  esperando_version_auto:      'eligiendo la versión de tu vehículo',
+  esperando_eleccion_llanta:   'eligiendo tu llanta',
+  esperando_eleccion_marca:    'eligiendo la marca de tu llanta',
+  esperando_eleccion:          'eligiendo tu llanta',
+  esperando_datos_cliente:     'registrando tus datos',
+  esperando_nombre:            'registrando tu nombre',
+  esperando_dni:               'registrando tu documento',
+  esperando_distrito:          'indicando tu distrito',
+  esperando_tipo_servicio:     'eligiendo cómo recibir tu llanta',
+  esperando_local:             'eligiendo el local de instalación',
+  esperando_local_destino:     'eligiendo el local de instalación',
+  esperando_eleccion_b:        'eligiendo el local de instalación',
+  esperando_confirmacion:      'confirmando tu cita',
+  esperando_provincia:         'indicando tu provincia',
+  lima_lista:                  'eligiendo tu tienda en Lima',
+};
+
+// Ventanas de tiempo por nivel: [desde_min, hasta_min) de inactividad
+const NIVELES_RECORDATORIO = {
+  '15m': { campo: 'recordatorio15',  desde: 15,   hasta: 180 },    // 15 min – 3 h
+  '3h':  { campo: 'recordatorio3h',  desde: 180,  hasta: 1260 },   // 3 h – 21 h
+  '21h': { campo: 'recordatorio21h', desde: 1260, hasta: 10080 },  // 21 h – 7 días
+};
+
+/**
+ * LISTAR CARRITOS ABANDONADOS POR NIVEL
+ * GET /api/n8n/recordatorios?nivel=15m|3h|21h
+ * Devuelve los leads que dejaron el flujo a medias dentro de la ventana del
+ * nivel y que aún no recibieron ese recordatorio.
+ */
+const listarRecordatorios = async (req, res, next) => {
+  try {
+    const nivel = String(req.query.nivel || '').trim();
+    const cfg = NIVELES_RECORDATORIO[nivel];
+    if (!cfg) {
+      return res.status(400).json({ error: 'nivel inválido (usa 15m, 3h o 21h)' });
+    }
+    const ahora = Date.now();
+    const limiteReciente = new Date(ahora - cfg.desde * 60 * 1000); // updatedAt <= esto
+    const limiteAntiguo  = new Date(ahora - cfg.hasta * 60 * 1000); // updatedAt >  esto
+
+    const leads = await prisma.leadCRM.findMany({
+      where: {
+        [cfg.campo]: false,
+        updatedAt: { lte: limiteReciente, gt: limiteAntiguo },
+        pasoActual: { notIn: Array.from(PASOS_NO_RECUPERABLES) },
+      },
+      select: {
+        telefono: true, nombreCliente: true, pasoActual: true,
+        medidaDetectada: true, respuestaBot: true, updatedAt: true,
+      },
+      take: 200,
+    });
+
+    // No molestar si hay un agente humano atendiendo ese chat
+    const activos = await prisma.humanTakeover.findMany({
+      where: { agenteActivo: true, telefono: { in: leads.map(l => l.telefono) } },
+      select: { telefono: true },
+    });
+    const enAgente = new Set(activos.map(a => a.telefono));
+
+    const items = leads
+      .filter(l => !enAgente.has(l.telefono))
+      .map(l => ({
+        Telefono:        l.telefono,
+        Nombre_Cliente:  l.nombreCliente || '',
+        Paso_Actual:     l.pasoActual,
+        Paso_Amigable:   PASO_AMIGABLE[l.pasoActual] || 'eligiendo tus llantas',
+        Medida_Detectada: l.medidaDetectada || '',
+        Respuesta_Bot:   l.respuestaBot || '',
+        Nivel:           nivel,
+      }));
+
+    res.json({ nivel, total: items.length, items });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * MARCAR RECORDATORIO ENVIADO
+ * POST /api/n8n/recordatorios/marcar  body: { telefono, nivel }
+ * Usa SQL crudo para NO actualizar updatedAt (así no se reinicia la ventana
+ * de inactividad y los niveles siguientes siguen disparando a su tiempo).
+ */
+const marcarRecordatorio = async (req, res, next) => {
+  try {
+    const telefono = String(req.body.telefono || '').trim();
+    const nivel = String(req.body.nivel || '').trim();
+    const cfg = NIVELES_RECORDATORIO[nivel];
+    if (!telefono || !cfg) {
+      return res.status(400).json({ error: 'telefono y nivel (15m, 3h, 21h) requeridos' });
+    }
+    // columna física en la tabla (camelCase tal cual la define Prisma)
+    const columna = { '15m': 'recordatorio15', '3h': 'recordatorio3h', '21h': 'recordatorio21h' }[nivel];
+    await prisma.$executeRawUnsafe(
+      `UPDATE "leads_crm" SET "${columna}" = true WHERE "telefono" = $1`,
+      telefono,
+    );
+    res.json({ ok: true, telefono, nivel });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── HELPERS DE MAPEO ────────────────────────────────────────────────────────
 
 function mapSheetToLead(body) {
@@ -483,6 +600,14 @@ function mapSheetToLead(body) {
   if (body.Intentos_Medida !== undefined) data.intentosMedida = parseInt(body.Intentos_Medida) || 0;
   if (body.Respuesta_Bot !== undefined) data.respuestaBot = body.Respuesta_Bot;
   if (body.Mensaje_Cliente !== undefined) data.mensajeCliente = body.Mensaje_Cliente;
+  // Recuperación de carrito: si el cliente vuelve a interactuar (cambia de paso
+  // o envía un mensaje), se limpian los flags para poder recordarle de nuevo
+  // si vuelve a abandonar el flujo más adelante.
+  if (body.Paso_Actual !== undefined || body.Mensaje_Cliente !== undefined) {
+    data.recordatorio15 = false;
+    data.recordatorio3h = false;
+    data.recordatorio21h = false;
+  }
   if (body.Hash_Mensaje !== undefined) data.hashMensaje = body.Hash_Mensaje;
   if (body.Estado_Logistica !== undefined) data.estadoLogistica = body.Estado_Logistica;
   if (body.Calendar_Event_ID !== undefined) data.calendarEventId = body.Calendar_Event_ID;
@@ -553,4 +678,5 @@ module.exports = {
   guardarLogistica, listarLogistica, actualizarLogistica,
   registrarVenta,
   guardarColaReintento,
+  listarRecordatorios, marcarRecordatorio,
 };

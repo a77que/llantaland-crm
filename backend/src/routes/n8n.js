@@ -14,6 +14,7 @@ const {
   guardarLogistica, listarLogistica, actualizarLogistica,
   registrarVenta,
   guardarColaReintento,
+  listarRecordatorios, marcarRecordatorio,
 } = require('../controllers/n8nController');
 
 router.use(n8nAuth);
@@ -52,5 +53,9 @@ router.post('/ventas',             registrarVenta);
 
 // ── Cola de reintentos (hoja Cola_Reintentos) ─────────────────
 router.post('/cola-reintentos',    guardarColaReintento);
+
+// ── Recuperación de carrito (recordatorios 15min / 3h / 21h) ──
+router.get('/recordatorios',          listarRecordatorios);  // ?nivel=15m|3h|21h
+router.post('/recordatorios/marcar',  marcarRecordatorio);   // { telefono, nivel }
 
 module.exports = router;
