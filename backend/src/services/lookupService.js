@@ -22,6 +22,9 @@ async function consultar(tipoDoc, numDoc) {
   if (!url) {
     return { encontrado: false, datos: {}, rawJson: null, mensaje: `API de ${tipoDoc} no configurada` };
   }
+  if (!key) {
+    return { encontrado: false, datos: {}, rawJson: null, mensaje: `Falta el token de la API de ${tipoDoc}. Cárgalo en Config APIs (el mismo token de la placa sirve para DNI/RUC en Factiliza).` };
+  }
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -35,7 +38,10 @@ async function consultar(tipoDoc, numDoc) {
     const resp = await fetch(endpoint, { headers, signal: AbortSignal.timeout(8000) });
 
     if (!resp.ok) {
-      return { encontrado: false, datos: {}, rawJson: null, mensaje: `No se encontró ${tipoDoc}: ${numDoc}` };
+      const detalle = (resp.status === 401 || resp.status === 403)
+        ? `Token inválido o sin permiso para ${tipoDoc} (HTTP ${resp.status}). Revisa el token en Config APIs.`
+        : `No se encontró ${tipoDoc}: ${numDoc} (HTTP ${resp.status})`;
+      return { encontrado: false, datos: {}, rawJson: null, mensaje: detalle };
     }
 
     const rawJson = await resp.json();

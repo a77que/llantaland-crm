@@ -91,7 +91,7 @@ app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-15-medidas-familias-v12', timestamp: new Date() }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-16-busqueda-factiliza-v13', timestamp: new Date() }));
 
 
 app.use(errorHandler);
