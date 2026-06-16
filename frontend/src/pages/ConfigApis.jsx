@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import { adminApi } from '../services/api';
+
+const ESTADO_UI = {
+  ok:             { color: '#16a34a', bg: '#dcfce7', icon: '✅', txt: 'Funcionando' },
+  responde:       { color: '#16a34a', bg: '#dcfce7', icon: '✅', txt: 'Conectada' },
+  configurada:    { color: '#2563eb', bg: '#dbeafe', icon: 'ℹ️', txt: 'Configurada' },
+  error:          { color: '#dc2626', bg: '#fee2e2', icon: '❌', txt: 'Error' },
+  no_configurada: { color: '#b45309', bg: '#fef3c7', icon: '⚠️', txt: 'No configurada' },
+};
 
 const S = {
   card: { background: '#fff', borderRadius: 10, padding: 24, boxShadow: 'var(--shadow)', border: '1px solid var(--color-border)', marginBottom: 16 },
@@ -21,6 +30,21 @@ export default function ConfigApis() {
 
   const set = (f) => (e) => setForm((prev) => ({ ...prev, [f]: e.target.value }));
 
+  const [diag, setDiag] = useState(null);
+  const [probando, setProbando] = useState(false);
+
+  const probar = async () => {
+    setProbando(true);
+    try {
+      const r = await adminApi.diagnosticoApis();
+      setDiag(r.apis);
+    } catch (e) {
+      toast.error('No se pudo ejecutar el diagnóstico');
+    } finally {
+      setProbando(false);
+    }
+  };
+
   const handleSave = () => {
     toast.success('Para aplicar los cambios, actualiza las variables de entorno en tu archivo .env y reinicia el servidor.');
   };
@@ -31,6 +55,36 @@ export default function ConfigApis() {
 
       <div style={S.info}>
         ℹ️ Las claves de API se guardan en las variables de entorno del servidor, no en la base de datos. Edita el archivo .env del backend y reinicia el servicio para aplicar cambios.
+      </div>
+
+      {/* Probador en vivo */}
+      <div style={{ ...S.card, marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={S.cardTitle}>Estado de las APIs de búsqueda</div>
+          <button style={{ ...S.btn, marginTop: 0, opacity: probando ? 0.7 : 1 }} onClick={probar} disabled={probando}>
+            {probando ? 'Probando…' : '🔍 Probar conexión'}
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 0 }}>
+          Hace una consulta de prueba real a cada servicio (DNI, RUC, CE, placa e IA de versiones) y muestra si responden.
+        </p>
+        {diag && (
+          <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+            {Object.values(diag).map((a) => {
+              const ui = ESTADO_UI[a.estado] || ESTADO_UI.error;
+              return (
+                <div key={a.servicio} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 8, background: ui.bg }}>
+                  <span style={{ fontSize: 16 }}>{ui.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{a.servicio}</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{a.mensaje}</div>
+                  </div>
+                  <span style={{ fontWeight: 700, fontSize: 12, color: ui.color, whiteSpace: 'nowrap' }}>{ui.txt}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: 20 }}>

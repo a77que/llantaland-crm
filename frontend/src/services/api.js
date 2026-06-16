@@ -99,7 +99,14 @@ export const adminApi = {
   marcarLeido: (id) => api.put(`/admin/descuentos/${id}/leida`),
   stockCritico: () => api.get('/admin/stock-critico'),
   exportarStock: (tipo) => api.get('/admin/stock-critico/export', { params: { tipo }, responseType: 'blob', timeout: 120000 }),
+  diagnosticoApis: () => api.get('/admin/diagnostico-apis', { timeout: 60000 }),
   resumen: (params) => api.get('/admin/resumen', { params }),
+};
+
+export const usuariosApi = {
+  listar:     ()          => api.get('/usuarios'),
+  crear:      (data)      => api.post('/usuarios', data),
+  actualizar: (id, data)  => api.put(`/usuarios/${id}`, data),
 };
 
 export const citasApi = {

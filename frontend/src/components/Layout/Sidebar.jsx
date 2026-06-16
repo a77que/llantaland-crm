@@ -14,6 +14,7 @@ const NAV = [
   { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: null, imgIcon: '/OsoLogoSVG.svg' },
   { section: 'Inventario', to: '/almacenes',     label: 'Almacenes',             icon: '🏪' },
   { section: 'Admin',      to: '/admin/stock',   label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
+  { section: 'Admin',      to: '/admin/usuarios',label: 'Usuarios',              icon: '👤', adminOnly: true },
   { section: 'Admin',      to: '/importar',      label: 'Importar / Actualizar', icon: '📂', adminOnly: true },
   { section: 'Admin',      to: '/config/apis',   label: 'Config APIs',           icon: '⚙️', adminOnly: true },
 ];

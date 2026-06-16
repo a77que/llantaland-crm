@@ -24,6 +24,7 @@ import Facturacion from './pages/Facturacion';
 import AdminStock from './pages/AdminStock';
 import Importar from './pages/Importar';
 import ConfigApis from './pages/ConfigApis';
+import Usuarios from './pages/Usuarios';
 
 export default function App() {
   const token = useAuthStore((s) => s.token);
@@ -52,6 +53,7 @@ export default function App() {
 
             <Route element={<AdminRoute />}>
               <Route path="admin/stock" element={<AdminStock />} />
+              <Route path="admin/usuarios" element={<Usuarios />} />
               <Route path="importar" element={<Importar />} />
               <Route path="config/apis" element={<ConfigApis />} />
             </Route>

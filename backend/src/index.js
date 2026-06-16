@@ -36,6 +36,7 @@ const citasRoutes = require('./routes/citas');
 const importarRoutes = require('./routes/importar');
 const vehiculoRoutes = require('./routes/vehiculos');
 const clienteRoutes = require('./routes/clientes');
+const usuarioRoutes = require('./routes/usuarios');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -88,6 +89,7 @@ app.use('/api/citas', citasRoutes);
 app.use('/api/importar', importarRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/clientes', clienteRoutes);
+app.use('/api/usuarios', usuarioRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-15-medidas-familias-v12', timestamp: new Date() }));
 
