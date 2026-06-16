@@ -134,11 +134,11 @@ export default function ConfigApis() {
 
       {/* Placa */}
       <div style={S.card}>
-        <div style={S.cardTitle}>Consulta de placa (Factiliza u otro proveedor)</div>
+        <div style={S.cardTitle}>Consulta de placa</div>
         <div style={S.grid}>
           <div style={S.group}>
             <label style={S.label}>URL del endpoint</label>
-            <input style={S.input} value={form.factilizaUrl} onChange={set('factilizaUrl')} placeholder="https://api.factiliza.com/v1/placa/info" />
+            <input style={S.input} value={form.factilizaUrl} onChange={set('factilizaUrl')} placeholder="https://api.tu-proveedor.com/placa/{placa}" />
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Usa {'{placa}'} donde va la placa (o se agrega al final). Cámbiala si cambias de proveedor.</span>
           </div>
           <div style={S.group}>

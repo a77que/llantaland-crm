@@ -221,13 +221,13 @@ const diagnosticoApis = async (req, res, next) => {
 
   // ── Placa (Factiliza) ────────────────────────────────────────
   if (!cfg.factilizaToken) {
-    out.placa = { servicio: 'Consulta de placa (Factiliza)', configurada: false, estado: 'no_configurada', mensaje: 'Falta el token de Factiliza' };
+    out.placa = { servicio: 'Consulta de placa', configurada: false, estado: 'no_configurada', mensaje: 'Falta el token de la API de placa' };
   } else {
     try {
       const r = await vehiculoService.consultarPlaca('ABC123'); // placa de prueba
-      out.placa = { servicio: 'Consulta de placa (Factiliza)', configurada: true, estado: r.encontrado ? 'ok' : 'responde',
+      out.placa = { servicio: 'Consulta de placa', configurada: true, estado: r.encontrado ? 'ok' : 'responde',
         mensaje: r.encontrado ? 'Consulta exitosa (datos recibidos)' : (r.mensaje || 'La API respondió (placa de prueba no hallada, es normal)') };
-    } catch (e) { out.placa = { servicio: 'Consulta de placa (Factiliza)', configurada: true, estado: 'error', mensaje: e.message }; }
+    } catch (e) { out.placa = { servicio: 'Consulta de placa', configurada: true, estado: 'error', mensaje: e.message }; }
   }
 
   // ── IA versiones (Groq → Gemini) ─────────────────────────────
