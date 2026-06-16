@@ -2,11 +2,13 @@
 // 1) Placa → datos del vehículo (Factiliza, igual que el flujo n8n)
 // 2) Marca + Modelo + Año → versiones con su medida de llanta (IA: Groq o Gemini)
 
+const { getConfigApis } = require('./apiConfigService');
+
 const FACTILIZA_URL = 'https://api.factiliza.com/v1/placa/info';
 
 // Consulta una placa peruana y devuelve marca, modelo y año si la API responde.
 async function consultarPlaca(placa) {
-  const token = process.env.FACTILIZA_TOKEN;
+  const token = (await getConfigApis()).factilizaToken;
   const limpia = String(placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!limpia) return { encontrado: false, mensaje: 'Placa vacía' };
   if (!token) return { encontrado: false, mensaje: 'API de placa no configurada (FACTILIZA_TOKEN)' };
@@ -46,7 +48,8 @@ async function consultarPlaca(placa) {
 
 // Llama a una IA (Groq → Gemini fallback) para listar versiones de un vehículo y su medida.
 async function llamarIA(prompt) {
-  const groqKey = process.env.GROQ_API_KEY;
+  const cfg = await getConfigApis();
+  const groqKey = cfg.groqKey;
   if (groqKey) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -68,7 +71,7 @@ async function llamarIA(prompt) {
     } catch (e) { console.warn('[vehiculo] Groq falló:', e.message); }
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = cfg.geminiKey;
   if (geminiKey) {
     try {
       const r = await fetch(

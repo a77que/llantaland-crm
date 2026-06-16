@@ -1,18 +1,20 @@
 const { mapApiToCrm } = require('../config/apiMapping');
+const { getConfigApis } = require('./apiConfigService');
 
 async function consultar(tipoDoc, numDoc) {
   const tipo = tipoDoc.toLowerCase();
+  const cfg = await getConfigApis();
   let url, key;
 
   if (tipo === 'dni') {
-    url = process.env.API_DNI_URL;
-    key = process.env.API_DNI_KEY;
+    url = cfg.dniUrl;
+    key = cfg.dniKey;
   } else if (tipo === 'ruc') {
-    url = process.env.API_RUC_URL;
-    key = process.env.API_RUC_KEY;
+    url = cfg.rucUrl;
+    key = cfg.rucKey;
   } else if (tipo === 'ce') {
-    url = process.env.API_CE_URL;
-    key = process.env.API_CE_KEY;
+    url = cfg.ceUrl;
+    key = cfg.ceKey;
   } else {
     return { encontrado: false, datos: {}, rawJson: null, mensaje: 'Tipo de documento no soportado para búsqueda automática' };
   }

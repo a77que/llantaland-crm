@@ -546,6 +546,22 @@ model ConfigSunat {
   @@map("config_sunat")
 }
 
+// Config de APIs externas de búsqueda (DNI/RUC/CE, placa, IA). Fila única.
+model ConfigApiBusqueda {
+  id             String   @id @default(cuid())
+  dniUrl         String?
+  dniKey         String?
+  rucUrl         String?
+  rucKey         String?
+  ceUrl          String?
+  ceKey          String?
+  factilizaToken String?
+  groqKey        String?
+  geminiKey      String?
+  updatedAt      DateTime @updatedAt
+  @@map("config_api_busqueda")
+}
+
 // ─── ALERTAS ─────────────────────────────────────────────────────────────────
 
 model AlertaStock {

@@ -100,6 +100,8 @@ export const adminApi = {
   stockCritico: () => api.get('/admin/stock-critico'),
   exportarStock: (tipo) => api.get('/admin/stock-critico/export', { params: { tipo }, responseType: 'blob', timeout: 120000 }),
   diagnosticoApis: () => api.get('/admin/diagnostico-apis', { timeout: 60000 }),
+  getConfigApis: () => api.get('/admin/config-apis'),
+  saveConfigApis: (data) => api.post('/admin/config-apis', data),
   resumen: (params) => api.get('/admin/resumen', { params }),
 };
 

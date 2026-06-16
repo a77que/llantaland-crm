@@ -187,11 +187,13 @@ const seedCitasTest = async (req, res, next) => {
 const diagnosticoApis = async (req, res, next) => {
   const lookupService = require('../services/lookupService');
   const vehiculoService = require('../services/vehiculoService');
+  const { getConfigApis } = require('../services/apiConfigService');
+  const cfg = await getConfigApis();
 
   const out = {};
 
   // ── DNI ──────────────────────────────────────────────────────
-  if (!process.env.API_DNI_URL) {
+  if (!cfg.dniUrl) {
     out.dni = { servicio: 'Consulta DNI', configurada: false, estado: 'no_configurada', mensaje: 'Falta API_DNI_URL en las variables de entorno' };
   } else {
     try {
@@ -202,7 +204,7 @@ const diagnosticoApis = async (req, res, next) => {
   }
 
   // ── RUC (RUC público real para confirmar respuesta con datos) ─
-  if (!process.env.API_RUC_URL) {
+  if (!cfg.rucUrl) {
     out.ruc = { servicio: 'Consulta RUC', configurada: false, estado: 'no_configurada', mensaje: 'Falta API_RUC_URL en las variables de entorno' };
   } else {
     try {
@@ -213,13 +215,13 @@ const diagnosticoApis = async (req, res, next) => {
   }
 
   // ── CE (solo verificación de configuración) ──────────────────
-  out.ce = process.env.API_CE_URL
+  out.ce = cfg.ceUrl
     ? { servicio: 'Consulta CE', configurada: true, estado: 'configurada', mensaje: 'Configurada (pruébala con un carné real desde una cotización)' }
-    : { servicio: 'Consulta CE', configurada: false, estado: 'no_configurada', mensaje: 'Falta API_CE_URL en las variables de entorno' };
+    : { servicio: 'Consulta CE', configurada: false, estado: 'no_configurada', mensaje: 'Falta la URL de la API de CE' };
 
   // ── Placa (Factiliza) ────────────────────────────────────────
-  if (!process.env.FACTILIZA_TOKEN) {
-    out.placa = { servicio: 'Consulta de placa (Factiliza)', configurada: false, estado: 'no_configurada', mensaje: 'Falta FACTILIZA_TOKEN en las variables de entorno' };
+  if (!cfg.factilizaToken) {
+    out.placa = { servicio: 'Consulta de placa (Factiliza)', configurada: false, estado: 'no_configurada', mensaje: 'Falta el token de Factiliza' };
   } else {
     try {
       const r = await vehiculoService.consultarPlaca('ABC123'); // placa de prueba
@@ -229,9 +231,9 @@ const diagnosticoApis = async (req, res, next) => {
   }
 
   // ── IA versiones (Groq → Gemini) ─────────────────────────────
-  const iaConfig = !!(process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY);
+  const iaConfig = !!(cfg.groqKey || cfg.geminiKey);
   if (!iaConfig) {
-    out.ia = { servicio: 'IA de versiones (Groq/Gemini)', configurada: false, estado: 'no_configurada', mensaje: 'Falta GROQ_API_KEY y GEMINI_API_KEY' };
+    out.ia = { servicio: 'IA de versiones (Groq/Gemini)', configurada: false, estado: 'no_configurada', mensaje: 'Falta la clave de Groq y de Gemini' };
   } else {
     try {
       const r = await vehiculoService.buscarVersiones('Toyota', 'Corolla', '2020');
@@ -244,4 +246,63 @@ const diagnosticoApis = async (req, res, next) => {
   res.json({ generado: new Date(), apis: out });
 };
 
-module.exports = { stockCritico, exportarStockCritico, diagnosticoApis, resumen, seedCitasTest };
+/**
+ * Lee la config de APIs de búsqueda para edición.
+ * Devuelve las URLs en claro y las claves SOLO como booleano "configurada" (nunca el valor).
+ * GET /api/admin/config-apis
+ */
+const getConfigApiBusqueda = async (req, res, next) => {
+  try {
+    const row = (await prisma.configApiBusqueda.findFirst()) || {};
+    const has = (db, env) => !!((db && String(db).trim()) || env);
+    res.json({
+      dniUrl: row.dniUrl || process.env.API_DNI_URL || '',
+      rucUrl: row.rucUrl || process.env.API_RUC_URL || '',
+      ceUrl:  row.ceUrl  || process.env.API_CE_URL  || '',
+      dniKeySet:         has(row.dniKey, process.env.API_DNI_KEY),
+      rucKeySet:         has(row.rucKey, process.env.API_RUC_KEY),
+      ceKeySet:          has(row.ceKey, process.env.API_CE_KEY),
+      factilizaTokenSet: has(row.factilizaToken, process.env.FACTILIZA_TOKEN),
+      groqKeySet:        has(row.groqKey, process.env.GROQ_API_KEY),
+      geminiKeySet:      has(row.geminiKey, process.env.GEMINI_API_KEY),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Guarda la config de APIs. Las URLs se actualizan siempre (permite vaciarlas).
+ * Las claves SOLO se actualizan si se envía un valor no vacío (dejar en blanco = no cambiar).
+ * POST /api/admin/config-apis
+ */
+const saveConfigApiBusqueda = async (req, res, next) => {
+  try {
+    const b = req.body || {};
+    const data = {};
+    // URLs (siempre se setean si vienen definidas, aceptan vacío para limpiar)
+    ['dniUrl', 'rucUrl', 'ceUrl'].forEach(k => { if (b[k] !== undefined) data[k] = String(b[k]).trim() || null; });
+    // Claves/tokens (solo si trae valor no vacío)
+    [['dniKey'], ['rucKey'], ['ceKey'], ['factilizaToken'], ['groqKey'], ['geminiKey']].forEach(([k]) => {
+      if (b[k] !== undefined && String(b[k]).trim() !== '') data[k] = String(b[k]).trim();
+    });
+
+    const existing = await prisma.configApiBusqueda.findFirst();
+    const row = existing
+      ? await prisma.configApiBusqueda.update({ where: { id: existing.id }, data })
+      : await prisma.configApiBusqueda.create({ data });
+
+    // Refrescar cache para que aplique de inmediato (sin reiniciar el servidor)
+    try { require('../services/apiConfigService').invalidarCacheApis(); } catch {}
+
+    res.json({ ok: true, updatedAt: row.updatedAt });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  stockCritico, exportarStockCritico, diagnosticoApis,
+  getConfigApiBusqueda, saveConfigApiBusqueda,
+  resumen, seedCitasTest,
+};
