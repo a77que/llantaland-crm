@@ -223,13 +223,6 @@ export default function Clientes() {
           placeholder="Buscar por teléfono o nombre..."
           value={q} onChange={e => setParam('q', e.target.value)}
         />
-        <select
-          style={{ padding:'10px 12px', fontSize:13, border:'1.5px solid var(--color-border)', borderRadius:10, background:'var(--color-surface)', color:'var(--color-text)' }}
-          value={paso} onChange={e => setParam('paso', e.target.value)}
-        >
-          <option value="">Todos los estados</option>
-          {Object.entries(PASO_LABEL).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
       </div>
 
       {/* Lista */}
