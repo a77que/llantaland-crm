@@ -35,12 +35,12 @@ export default function ConfigApis() {
   const { data: cfg, isLoading } = useQuery({ queryKey: ['config-apis'], queryFn: adminApi.getConfigApis });
 
   const [form, setForm] = useState({
-    dniUrl: '', rucUrl: '', ceUrl: '',
+    dniUrl: '', rucUrl: '', ceUrl: '', factilizaUrl: '',
     dniKey: '', rucKey: '', ceKey: '',
     factilizaToken: '', groqKey: '', geminiKey: '',
   });
   useEffect(() => {
-    if (cfg) setForm((f) => ({ ...f, dniUrl: cfg.dniUrl || '', rucUrl: cfg.rucUrl || '', ceUrl: cfg.ceUrl || '' }));
+    if (cfg) setForm((f) => ({ ...f, dniUrl: cfg.dniUrl || '', rucUrl: cfg.rucUrl || '', ceUrl: cfg.ceUrl || '', factilizaUrl: cfg.factilizaUrl || '' }));
   }, [cfg]);
 
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
@@ -48,7 +48,7 @@ export default function ConfigApis() {
   const guardar = useMutation({
     mutationFn: () => {
       // URLs siempre; claves solo si se escribió algo (vacío = no cambiar)
-      const payload = { dniUrl: form.dniUrl, rucUrl: form.rucUrl, ceUrl: form.ceUrl };
+      const payload = { dniUrl: form.dniUrl, rucUrl: form.rucUrl, ceUrl: form.ceUrl, factilizaUrl: form.factilizaUrl };
       ['dniKey', 'rucKey', 'ceKey', 'factilizaToken', 'groqKey', 'geminiKey'].forEach((k) => {
         if (form[k] && form[k].trim()) payload[k] = form[k].trim();
       });
@@ -134,11 +134,18 @@ export default function ConfigApis() {
 
       {/* Placa */}
       <div style={S.card}>
-        <div style={S.cardTitle}>Consulta de placa (Factiliza)</div>
-        <div style={S.group}>
-          <label style={S.label}>Token de Factiliza</label>
-          <input style={S.input} type="password" value={form.factilizaToken} onChange={set('factilizaToken')} placeholder={keyPlaceholder(cfg?.factilizaTokenSet)} />
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Detecta marca/modelo/año desde la placa en Cotización Nueva.</span>
+        <div style={S.cardTitle}>Consulta de placa (Factiliza u otro proveedor)</div>
+        <div style={S.grid}>
+          <div style={S.group}>
+            <label style={S.label}>URL del endpoint</label>
+            <input style={S.input} value={form.factilizaUrl} onChange={set('factilizaUrl')} placeholder="https://api.factiliza.com/v1/placa/info" />
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Usa {'{placa}'} donde va la placa (o se agrega al final). Cámbiala si cambias de proveedor.</span>
+          </div>
+          <div style={S.group}>
+            <label style={S.label}>Token / API Key</label>
+            <input style={S.input} type="password" value={form.factilizaToken} onChange={set('factilizaToken')} placeholder={keyPlaceholder(cfg?.factilizaTokenSet)} />
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Se envía como <code>Authorization: Bearer</code>.</span>
+          </div>
         </div>
       </div>
 

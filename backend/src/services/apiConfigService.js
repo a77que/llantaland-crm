@@ -24,6 +24,7 @@ async function getConfigApis() {
     rucKey:         pick(row.rucKey,         process.env.API_RUC_KEY),
     ceUrl:          pick(row.ceUrl,          process.env.API_CE_URL),
     ceKey:          pick(row.ceKey,          process.env.API_CE_KEY),
+    factilizaUrl:   pick(row.factilizaUrl,   process.env.FACTILIZA_URL) || 'https://api.factiliza.com/v1/placa/info',
     factilizaToken: pick(row.factilizaToken, process.env.FACTILIZA_TOKEN),
     groqKey:        pick(row.groqKey,        process.env.GROQ_API_KEY),
     geminiKey:      pick(row.geminiKey,      process.env.GEMINI_API_KEY),

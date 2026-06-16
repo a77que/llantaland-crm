@@ -4,17 +4,21 @@
 
 const { getConfigApis } = require('./apiConfigService');
 
-const FACTILIZA_URL = 'https://api.factiliza.com/v1/placa/info';
-
 // Consulta una placa peruana y devuelve marca, modelo y año si la API responde.
 async function consultarPlaca(placa) {
-  const token = (await getConfigApis()).factilizaToken;
+  const cfg = await getConfigApis();
+  const token = cfg.factilizaToken;
+  const baseUrl = cfg.factilizaUrl; // configurable por si cambia de proveedor
   const limpia = String(placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!limpia) return { encontrado: false, mensaje: 'Placa vacía' };
-  if (!token) return { encontrado: false, mensaje: 'API de placa no configurada (FACTILIZA_TOKEN)' };
+  if (!token) return { encontrado: false, mensaje: 'API de placa no configurada (falta el token)' };
+  if (!baseUrl) return { encontrado: false, mensaje: 'API de placa no configurada (falta la URL)' };
+
+  // Soporta {placa} en la URL o se agrega al final (estilo Factiliza)
+  const endpoint = baseUrl.includes('{placa}') ? baseUrl.replace('{placa}', limpia) : `${baseUrl}/${limpia}`;
 
   try {
-    const resp = await fetch(`${FACTILIZA_URL}/${limpia}`, {
+    const resp = await fetch(endpoint, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(9000),
     });
@@ -56,7 +60,7 @@ async function llamarIA(prompt) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'llama-3.1-8b-instant', // mismo modelo barato que usa el flujo n8n
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.2, max_tokens: 800,
           response_format: { type: 'json_object' },
@@ -75,7 +79,7 @@ async function llamarIA(prompt) {
   if (geminiKey) {
     try {
       const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -259,6 +259,7 @@ const getConfigApiBusqueda = async (req, res, next) => {
       dniUrl: row.dniUrl || process.env.API_DNI_URL || '',
       rucUrl: row.rucUrl || process.env.API_RUC_URL || '',
       ceUrl:  row.ceUrl  || process.env.API_CE_URL  || '',
+      factilizaUrl: row.factilizaUrl || process.env.FACTILIZA_URL || 'https://api.factiliza.com/v1/placa/info',
       dniKeySet:         has(row.dniKey, process.env.API_DNI_KEY),
       rucKeySet:         has(row.rucKey, process.env.API_RUC_KEY),
       ceKeySet:          has(row.ceKey, process.env.API_CE_KEY),
@@ -281,7 +282,7 @@ const saveConfigApiBusqueda = async (req, res, next) => {
     const b = req.body || {};
     const data = {};
     // URLs (siempre se setean si vienen definidas, aceptan vacío para limpiar)
-    ['dniUrl', 'rucUrl', 'ceUrl'].forEach(k => { if (b[k] !== undefined) data[k] = String(b[k]).trim() || null; });
+    ['dniUrl', 'rucUrl', 'ceUrl', 'factilizaUrl'].forEach(k => { if (b[k] !== undefined) data[k] = String(b[k]).trim() || null; });
     // Claves/tokens (solo si trae valor no vacío)
     [['dniKey'], ['rucKey'], ['ceKey'], ['factilizaToken'], ['groqKey'], ['geminiKey']].forEach(([k]) => {
       if (b[k] !== undefined && String(b[k]).trim() !== '') data[k] = String(b[k]).trim();
