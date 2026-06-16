@@ -17,17 +17,22 @@ async function getConfigApis() {
   try { row = (await prisma.configApiBusqueda.findFirst()) || {}; } catch { row = {}; }
   const pick = (dbVal, envVal) => (dbVal && String(dbVal).trim()) ? dbVal : (envVal || null);
 
+  const factTo = pick(row.factilizaToken, process.env.FACTILIZA_TOKEN);
+  // Endpoints de Factiliza por defecto (mismo proveedor que la placa). Si no hay URL/clave
+  // propia configurada, se usan estos con el token de Factiliza → funciona sin config extra.
+  const F = 'https://api.factiliza.com/v1';
+
   _cache = {
-    dniUrl:         pick(row.dniUrl,         process.env.API_DNI_URL),
-    dniKey:         pick(row.dniKey,         process.env.API_DNI_KEY),
-    rucUrl:         pick(row.rucUrl,         process.env.API_RUC_URL),
-    rucKey:         pick(row.rucKey,         process.env.API_RUC_KEY),
-    ceUrl:          pick(row.ceUrl,          process.env.API_CE_URL),
-    ceKey:          pick(row.ceKey,          process.env.API_CE_KEY),
-    factilizaUrl:   pick(row.factilizaUrl,   process.env.FACTILIZA_URL) || 'https://api.factiliza.com/v1/placa/info',
-    factilizaToken: pick(row.factilizaToken, process.env.FACTILIZA_TOKEN),
-    groqKey:        pick(row.groqKey,        process.env.GROQ_API_KEY),
-    geminiKey:      pick(row.geminiKey,      process.env.GEMINI_API_KEY),
+    dniUrl:         pick(row.dniUrl, process.env.API_DNI_URL) || `${F}/dni/info/{numero}`,
+    dniKey:         pick(row.dniKey, process.env.API_DNI_KEY) || factTo,
+    rucUrl:         pick(row.rucUrl, process.env.API_RUC_URL) || `${F}/ruc/info/{numero}`,
+    rucKey:         pick(row.rucKey, process.env.API_RUC_KEY) || factTo,
+    ceUrl:          pick(row.ceUrl,  process.env.API_CE_URL)  || `${F}/cee/info/{numero}`,
+    ceKey:          pick(row.ceKey,  process.env.API_CE_KEY)  || factTo,
+    factilizaUrl:   pick(row.factilizaUrl, process.env.FACTILIZA_URL) || `${F}/placa/info`,
+    factilizaToken: factTo,
+    groqKey:        pick(row.groqKey,   process.env.GROQ_API_KEY),
+    geminiKey:      pick(row.geminiKey, process.env.GEMINI_API_KEY),
   };
   _cacheTs = Date.now();
   return _cache;

@@ -3,6 +3,7 @@
 // 2) Marca + Modelo + Año → versiones con su medida de llanta (IA: Groq o Gemini)
 
 const { getConfigApis } = require('./apiConfigService');
+const { normalizarMedida } = require('../utils/medida');
 
 // Consulta una placa peruana y devuelve marca, modelo y año si la API responde.
 async function consultarPlaca(placa) {
@@ -119,9 +120,12 @@ Responde ÚNICAMENTE con un JSON válido con esta forma exacta:
   ]
 }
 Reglas:
-- Usa el formato estándar de medida: ANCHO/PERFILRARO (ej: 205/55R16).
+- Acepta cualquier formato de medida (métrico 205/55R16, comercial 205/65R16C, sin perfil 165R13, pulgadas 7.50R16 o 31X10.50R15).
 - Si una versión tiene varias medidas según el aro, lista cada una como una entrada separada.
 - Si no estás seguro del año, da las versiones más comunes de ese modelo.
+- SIEMPRE devuelve al menos UNA entrada. Si NO puedes determinar versiones específicas,
+  devuelve una sola entrada con "version": "GENERAL" y la medida de neumático original
+  más común para ese modelo/año. Nunca devuelvas la lista vacía.
 - Máximo 8 versiones, las más relevantes. No inventes versiones inexistentes.`;
 
   const datos = await llamarIA(prompt);
@@ -129,17 +133,14 @@ Reglas:
     return { encontrado: false, mensaje: 'No se pudieron obtener las versiones', versiones: [] };
   }
 
-  // Normalizar y validar formato de medida
-  const reMedida = /(\d{3})\s*\/\s*(\d{2,3})\s*[Rr]\s*(\d{2})/;
+  // Normalizar la medida de cada versión (acepta TODAS las familias)
+  const reCanon = /^(\d{3}\/\d{2,3}R\d{2}(?:\.\d)?|\d{2}X[\d.]+R\d{2}|\d\.\d{2}R\d{2}|\d{3}R\d{2})$/;
   const versiones = datos.versiones
     .map(v => {
-      const m = String(v.medida || '').match(reMedida);
-      if (!m) return null;
-      return {
-        version: String(v.version || '').slice(0, 80) || 'Estándar',
-        medida: `${m[1]}/${m[2]}R${m[3]}`,
-        aro: parseInt(m[3]),
-      };
+      const norm = normalizarMedida(String(v.medida || ''));
+      if (!norm || !reCanon.test(norm)) return null;
+      const aro = (norm.match(/R(\d{2})/) || [])[1];
+      return { version: String(v.version || '').slice(0, 80) || 'Estándar', medida: norm, aro: aro ? parseInt(aro) : null };
     })
     .filter(Boolean);
 
@@ -151,7 +152,11 @@ Reglas:
     seen.add(k); return true;
   });
 
-  return { encontrado: unicas.length > 0, versiones: unicas };
+  // ¿Es resultado genérico? (la IA no halló versiones concretas y devolvió la medida de fábrica)
+  const generico = unicas.length > 0 && unicas.every(v => /^general$/i.test(v.version));
+  if (generico) unicas.forEach(v => { v.version = 'Medida de tu vehículo'; });
+
+  return { encontrado: unicas.length > 0, versiones: unicas, generico };
 }
 
 module.exports = { consultarPlaca, buscarVersiones };

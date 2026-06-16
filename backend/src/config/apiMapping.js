@@ -1,57 +1,65 @@
 /**
- * Mapeo de campos del JSON externo de cada API al modelo Cliente de Prisma.
- * Modifica este archivo cuando obtengas el JSON real de tu proveedor de API.
- *
- * Para campos compuestos usa un array: ['apellidoPaterno', 'apellidoMaterno']
- * El sistema los unirá con un espacio.
+ * Mapeo del JSON externo de cada API (DNI/RUC/CE) al modelo Cliente.
+ * Robusto: lee desde `data`/`result` si el proveedor envuelve la respuesta, y prueba
+ * varios nombres de campo (Factiliza, apis-net, snake_case y camelCase).
  */
-const apiMapping = {
+
+// Candidatos de nombre de campo por dato (se usa el primero que tenga valor)
+const CANDIDATOS = {
   dni: {
-    nombre: 'nombres',
-    apellidos: ['apellidoPaterno', 'apellidoMaterno'],
-    direccion: 'direccion',
-  },
-  ruc: {
-    razonSocial: 'razonSocial',
-    direccion: 'direccion',
-    // campos extras disponibles en apiRawJson: condicion, estado, tipoContribuyente
+    nombres:   ['nombres', 'nombre', 'prenombres', 'first_name', 'firstName'],
+    apePat:    ['apellido_paterno', 'apellidoPaterno', 'ape_paterno', 'apellidoPat'],
+    apeMat:    ['apellido_materno', 'apellidoMaterno', 'ape_materno', 'apellidoMat'],
+    completo:  ['nombre_completo', 'nombreCompleto', 'full_name', 'fullName'],
+    direccion: ['direccion', 'direccion_completa', 'domicilio', 'address'],
   },
   ce: {
-    nombre: 'nombres',
-    apellidos: ['apellidoPaterno', 'apellidoMaterno'],
-    // campos extras disponibles en apiRawJson: pais, fechaVencimiento
+    nombres:   ['nombres', 'nombre', 'first_name'],
+    apePat:    ['apellido_paterno', 'apellidoPaterno'],
+    apeMat:    ['apellido_materno', 'apellidoMaterno'],
+    completo:  ['nombre_completo', 'nombreCompleto', 'full_name'],
+    direccion: ['direccion', 'domicilio', 'address'],
+  },
+  ruc: {
+    razon:     ['nombre_o_razon_social', 'razon_social', 'razonSocial', 'nombre', 'nombre_completo'],
+    direccion: ['direccion', 'direccion_completa', 'domicilio', 'address'],
   },
 };
 
-/**
- * Extrae el valor de un campo del objeto fuente.
- * Acepta string (un campo) o array (múltiples campos → concatena).
- */
-function extractField(source, fieldDef) {
-  if (!fieldDef || !source) return undefined;
-  if (Array.isArray(fieldDef)) {
-    return fieldDef.map((f) => source[f] || '').join(' ').trim() || undefined;
+function pick(src, candidatos) {
+  for (const c of candidatos) {
+    const v = src?.[c];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
   }
-  return source[fieldDef] || undefined;
+  return undefined;
+}
+
+function clean(obj) {
+  const o = {};
+  for (const [k, v] of Object.entries(obj)) if (v !== undefined) o[k] = v;
+  return o;
 }
 
 /**
- * Mapea el JSON crudo de la API al objeto de cliente para Prisma.
  * @param {string} tipoDoc - 'dni' | 'ruc' | 'ce'
- * @param {object} rawJson - JSON completo devuelto por la API externa
- * @returns {object} campos mapeados para upsert del cliente
+ * @param {object} rawJson - JSON completo de la API externa
+ * @returns {object} { nombre?, apellidos?, razonSocial?, direccion? }
  */
 function mapApiToCrm(tipoDoc, rawJson) {
-  const tipo = tipoDoc.toLowerCase();
-  const mapping = apiMapping[tipo];
-  if (!mapping) return {};
+  const tipo = String(tipoDoc).toLowerCase();
+  // La data suele venir anidada en .data / .result / .response
+  const src = (rawJson && (rawJson.data || rawJson.result || rawJson.response)) || rawJson || {};
 
-  const result = {};
-  for (const [crmField, sourceField] of Object.entries(mapping)) {
-    const value = extractField(rawJson, sourceField);
-    if (value !== undefined) result[crmField] = value;
+  if (tipo === 'ruc') {
+    return clean({ razonSocial: pick(src, CANDIDATOS.ruc.razon), direccion: pick(src, CANDIDATOS.ruc.direccion) });
   }
-  return result;
+
+  const c = CANDIDATOS[tipo] || CANDIDATOS.dni;
+  let nombre = pick(src, c.nombres);
+  const apellidos = [pick(src, c.apePat), pick(src, c.apeMat)].filter(Boolean).join(' ') || undefined;
+  // Si el proveedor solo da el nombre completo, úsalo como nombre
+  if (!nombre && !apellidos) nombre = pick(src, c.completo);
+  return clean({ nombre, apellidos, direccion: pick(src, c.direccion) });
 }
 
-module.exports = { apiMapping, mapApiToCrm };
+module.exports = { mapApiToCrm };

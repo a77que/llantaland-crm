@@ -123,9 +123,18 @@ export default function CotizacionNueva() {
   const versionesMut = useMutation({
     mutationFn: (v) => vehiculosApi.versiones(v || veh),
     onSuccess: (r) => {
-      if (!r.encontrado || !r.versiones?.length) { toast.error(r.mensaje || 'Sin versiones'); setVersiones([]); return; }
+      if (!r.encontrado || !r.versiones?.length) { toast.error(r.mensaje || 'No se pudo obtener la medida'); setVersiones([]); return; }
       setVersiones(r.versiones);
-      toast.success(`${r.versiones.length} versiones encontradas`);
+      // Si no hay versiones específicas, el backend devuelve la medida de fábrica (genérico):
+      // seleccionarla directa y avisar "no encontré versiones pero aquí está tu medida".
+      if (r.generico || r.versiones.length === 1) {
+        setMedida(r.versiones[0].medida);
+        toast.success(r.generico
+          ? `No encontré versiones, pero la medida de tu vehículo es ${r.versiones[0].medida} 🛞`
+          : `Medida: ${r.versiones[0].medida}`);
+      } else {
+        toast.success(`${r.versiones.length} versiones encontradas`);
+      }
     },
     onError: (e) => toast.error(e?.error || 'Error al buscar versiones'),
   });
@@ -174,7 +183,7 @@ export default function CotizacionNueva() {
                 <option value="RUC">RUC (razón social)</option>
                 <option value="CE">Carnet Ext.</option>
               </select>
-              <input style={S.input} value={numDoc} onChange={e => setNumDoc(e.target.value.replace(/\D/g, ''))} placeholder="N° documento" onKeyDown={e => { if (e.key === 'Enter' && numDoc) lookupMut.mutate(); }} />
+              <input style={S.input} value={numDoc} onChange={e => setNumDoc(tipoDoc === 'CE' ? e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') : e.target.value.replace(/\D/g, ''))} placeholder="N° documento" onKeyDown={e => { if (e.key === 'Enter' && numDoc) lookupMut.mutate(); }} />
               <button onClick={() => lookupMut.mutate()} disabled={!numDoc || lookupMut.isPending} style={{ ...S.btn('var(--color-primary)'), gridColumn: isMobile ? '1 / -1' : undefined }}>
                 <span style={{ color: '#000' }}>{lookupMut.isPending ? '...' : '🔍 Autorrellenar'}</span>
               </button>

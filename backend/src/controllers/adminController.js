@@ -253,19 +253,20 @@ const diagnosticoApis = async (req, res, next) => {
  */
 const getConfigApiBusqueda = async (req, res, next) => {
   try {
-    const row = (await prisma.configApiBusqueda.findFirst()) || {};
-    const has = (db, env) => !!((db && String(db).trim()) || env);
+    const cfg = await require('../services/apiConfigService').getConfigApis();
     res.json({
-      dniUrl: row.dniUrl || process.env.API_DNI_URL || '',
-      rucUrl: row.rucUrl || process.env.API_RUC_URL || '',
-      ceUrl:  row.ceUrl  || process.env.API_CE_URL  || '',
-      factilizaUrl: row.factilizaUrl || process.env.FACTILIZA_URL || 'https://api.factiliza.com/v1/placa/info',
-      dniKeySet:         has(row.dniKey, process.env.API_DNI_KEY),
-      rucKeySet:         has(row.rucKey, process.env.API_RUC_KEY),
-      ceKeySet:          has(row.ceKey, process.env.API_CE_KEY),
-      factilizaTokenSet: has(row.factilizaToken, process.env.FACTILIZA_TOKEN),
-      groqKeySet:        has(row.groqKey, process.env.GROQ_API_KEY),
-      geminiKeySet:      has(row.geminiKey, process.env.GEMINI_API_KEY),
+      // URLs efectivas (incluye los valores por defecto de Factiliza)
+      dniUrl: cfg.dniUrl || '',
+      rucUrl: cfg.rucUrl || '',
+      ceUrl:  cfg.ceUrl  || '',
+      factilizaUrl: cfg.factilizaUrl || '',
+      // Claves: solo si están resueltas (nunca se devuelve el valor)
+      dniKeySet:         !!cfg.dniKey,
+      rucKeySet:         !!cfg.rucKey,
+      ceKeySet:          !!cfg.ceKey,
+      factilizaTokenSet: !!cfg.factilizaToken,
+      groqKeySet:        !!cfg.groqKey,
+      geminiKeySet:      !!cfg.geminiKey,
     });
   } catch (err) {
     next(err);
