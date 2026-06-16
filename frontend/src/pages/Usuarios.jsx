@@ -53,7 +53,8 @@ export default function Usuarios() {
       </div>
 
       {isLoading ? <LoadingSpinner fullPage /> : (
-        <table style={S.table}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ ...S.table, minWidth: 560 }}>
           <thead>
             <tr>
               <th style={S.th}>Nombre</th>
@@ -88,6 +89,7 @@ export default function Usuarios() {
             {!usuarios?.length && <tr><td colSpan={5} style={{ ...S.td, textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>Sin usuarios</td></tr>}
           </tbody>
         </table>
+        </div>
       )}
 
       {modal && (

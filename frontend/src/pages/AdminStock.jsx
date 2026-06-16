@@ -59,7 +59,8 @@ export default function AdminStock() {
       {isLoading ? <LoadingSpinner fullPage /> : (
         <>
           <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>{alertas?.length || 0} alertas activas</div>
-          <table style={S.table}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ ...S.table, minWidth: 640 }}>
             <thead>
               <tr>
                 <th style={S.th}>Producto</th>
@@ -91,6 +92,7 @@ export default function AdminStock() {
               )}
             </tbody>
           </table>
+          </div>
         </>
       )}
     </div>

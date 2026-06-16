@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { adminApi } from '../services/api';
+import { useIsMobile } from '../hooks/useIsMobile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const ESTADO_UI = {
@@ -32,6 +33,8 @@ const SERVICIOS = [
 
 export default function ConfigApis() {
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
+  const gridStyle = { ...S.grid, gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr' };
   const { data: cfg, isLoading } = useQuery({ queryKey: ['config-apis'], queryFn: adminApi.getConfigApis });
 
   const [form, setForm] = useState({
@@ -118,7 +121,7 @@ export default function ConfigApis() {
       {SERVICIOS.map((sv) => (
         <div key={sv.urlKey} style={S.card}>
           <div style={S.cardTitle}>{sv.titulo}</div>
-          <div style={S.grid}>
+          <div style={gridStyle}>
             <div style={S.group}>
               <label style={S.label}>URL del endpoint</label>
               <input style={S.input} value={form[sv.urlKey]} onChange={set(sv.urlKey)} placeholder={sv.placeholder} />
@@ -135,7 +138,7 @@ export default function ConfigApis() {
       {/* Placa */}
       <div style={S.card}>
         <div style={S.cardTitle}>Consulta de placa</div>
-        <div style={S.grid}>
+        <div style={gridStyle}>
           <div style={S.group}>
             <label style={S.label}>URL del endpoint</label>
             <input style={S.input} value={form.factilizaUrl} onChange={set('factilizaUrl')} placeholder="https://api.tu-proveedor.com/placa/{placa}" />
@@ -152,7 +155,7 @@ export default function ConfigApis() {
       {/* IA */}
       <div style={S.card}>
         <div style={S.cardTitle}>IA de versiones de vehículo (medida por marca/modelo/año)</div>
-        <div style={S.grid}>
+        <div style={gridStyle}>
           <div style={S.group}>
             <label style={S.label}>Groq API Key (principal)</label>
             <input style={S.input} type="password" value={form.groqKey} onChange={set('groqKey')} placeholder={keyPlaceholder(cfg?.groqKeySet)} />
