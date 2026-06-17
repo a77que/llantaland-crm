@@ -47,14 +47,21 @@ export function BotonEnviarPdfWhatsApp({ telefono, pdfFn, tipo = 'documento', me
 
   const enviar = async (e) => {
     e.stopPropagation();
+    if (cargando) return;
+    // Abrir la pestaña AHORA (gesto del usuario) para que el navegador/el celular
+    // no la bloquee. Luego se redirige a WhatsApp cuando el PDF está listo.
+    const win = window.open('', '_blank');
     setCargando(true);
     try {
       const r = await pdfFn();
-      const url = r?.pdfUrl?.startsWith('http') ? r.pdfUrl : `${window.location.origin}${r?.pdfUrl || ''}`;
       if (!r?.pdfUrl) throw new Error('No se generó el PDF');
+      const url = r.pdfUrl.startsWith('http') ? r.pdfUrl : `${window.location.origin}${r.pdfUrl}`;
       const texto = `${mensajeBase || `Hola, te comparto tu ${tipo} de Llantaland`}:\n${url}`;
-      window.open(waLink(tel, texto), '_blank');
+      const link = waLink(tel, texto);
+      if (win && !win.closed) win.location.href = link;
+      else window.location.href = link; // fallback si la pestaña fue bloqueada
     } catch (err) {
+      if (win && !win.closed) win.close();
       toast.error(err?.error || err?.message || 'No se pudo generar el PDF');
     } finally {
       setCargando(false);
