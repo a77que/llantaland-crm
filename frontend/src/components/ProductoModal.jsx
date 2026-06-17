@@ -374,7 +374,7 @@ function LoadSpeedSection({ indice_carga, velocidad_max, cargaMaxNeumatico, velo
 }
 
 // ── Modal principal ───────────────────────────────────────────────────────────
-export default function ProductoModal({ prodId, onClose, comparar = [], setComparar = () => {}, ocultarGestion = false, onCotizar = null }) {
+export default function ProductoModal({ prodId, onClose, comparar = [], setComparar = () => {}, ocultarGestion = false, onCotizar = null, onVerComparacion = () => {} }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -581,37 +581,29 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
               <div style={{ fontSize:12, color:'#16a34a', fontWeight:700 }}>✅ Ficha completa</div>
             )}
 
-            {/* Botón comparar */}
+            {/* Botones comparar — se pueden marcar VARIAS llantas (no solo 2) */}
             {(() => {
               const estaEnComparar = comparar.includes(prodId);
-              const hayOtra = comparar.length === 1 && !estaEnComparar;
-              if (hayOtra) {
-                return (
-                  <button
-                    onClick={() => setComparar(prev => [...prev, prodId])}
-                    style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #f59e0b', background:'#fffbeb', color:'#92400e', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
-                  >
-                    ⚖️ Comparar con la anterior
-                  </button>
-                );
-              }
-              if (estaEnComparar) {
-                return (
-                  <button
-                    onClick={() => setComparar(prev => prev.filter(id => id !== prodId))}
-                    style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #16a34a', background:'#f0fdf4', color:'#166534', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
-                  >
-                    ✅ Marcada · Quitar
-                  </button>
-                );
-              }
+              const marcadas = comparar.length;
               return (
-                <button
-                  onClick={() => setComparar([prodId])}
-                  style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', color:'var(--color-text)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
-                >
-                  📌 Marcar para comparar
-                </button>
+                <>
+                  <button
+                    onClick={() => setComparar(prev => estaEnComparar ? prev.filter(id => id !== prodId) : [...prev, prodId])}
+                    style={estaEnComparar
+                      ? { padding:'9px 12px', borderRadius:9, border:'2px solid #16a34a', background:'#f0fdf4', color:'#166534', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }
+                      : { padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', color:'var(--color-text)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
+                  >
+                    {estaEnComparar ? '✅ Marcada · Quitar' : '📌 Marcar para comparar'}
+                  </button>
+                  {marcadas >= 2 && (
+                    <button
+                      onClick={() => onVerComparacion()}
+                      style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #f59e0b', background:'#fffbeb', color:'#92400e', cursor:'pointer', fontSize:12, fontWeight:800, whiteSpace:'nowrap' }}
+                    >
+                      ⚖️ Comparar ({marcadas})
+                    </button>
+                  )}
+                </>
               );
             })()}
 

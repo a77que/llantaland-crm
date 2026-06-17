@@ -54,6 +54,7 @@ export default function CotizacionNueva() {
   const [notas, setNotas] = useState('');
   const [modalProdId, setModalProdId] = useState(null);
   const [comparar, setComparar] = useState([]);
+  const [verComparador, setVerComparador] = useState(false);
 
   // ── Cita ──
   const [generarCita, setGenerarCita] = useState(false);
@@ -253,7 +254,13 @@ export default function CotizacionNueva() {
             <div style={S.card}>
               <div style={S.cardTitle}>3. Agregar llantas del catálogo</div>
               <input style={{ ...S.input, marginBottom: 12 }} value={buscarQuery} onChange={e => setBuscarQuery(e.target.value)} placeholder="Filtrar por medida, marca, SKU..." />
-              {comparar.length === 1 && <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, marginBottom: 8 }}>📌 1 llanta marcada — abre otra para comparar</div>}
+              {comparar.length >= 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700 }}>📌 {comparar.length} llanta{comparar.length !== 1 ? 's' : ''} marcada{comparar.length !== 1 ? 's' : ''} para comparar</span>
+                  {comparar.length >= 2 && <button onClick={() => { setModalProdId(null); setVerComparador(true); }} style={{ padding: '5px 11px', borderRadius: 7, border: '2px solid #f59e0b', background: '#fffbeb', color: '#92400e', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>⚖️ Comparar ({comparar.length})</button>}
+                  <button onClick={() => { setComparar([]); setVerComparador(false); }} style={{ padding: '5px 9px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-muted)', fontSize: 12, cursor: 'pointer' }}>✕ Limpiar</button>
+                </div>
+              )}
               <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr style={{ background: 'var(--color-bg)' }}>
@@ -367,9 +374,12 @@ export default function CotizacionNueva() {
         <ProductoModal prodId={modalProdId} onClose={() => setModalProdId(null)} comparar={comparar}
           ocultarGestion
           onCotizar={(prod) => { addLlanta(prod); setModalProdId(null); }}
-          setComparar={(fn) => { const next = typeof fn === 'function' ? fn(comparar) : fn; setComparar(next); if (next.length === 2) setModalProdId(null); }} />
+          onVerComparacion={() => { setModalProdId(null); setVerComparador(true); }}
+          setComparar={(fn) => { const next = typeof fn === 'function' ? fn(comparar) : fn; setComparar(next); }} />
       )}
-      {comparar.length === 2 && !modalProdId && <ComparadorModal ids={comparar} onClose={() => setComparar([])} />}
+      {verComparador && comparar.length >= 2 && !modalProdId && (
+        <ComparadorModal ids={comparar} onClose={() => { setVerComparador(false); setComparar([]); }} />
+      )}
     </div>
   );
 }

@@ -519,7 +519,8 @@ export default function Inventario() {
   const [showGestor, setShowGestor] = useState(false);
   // Modal de detalle y comparador
   const [modalProdId, setModalProdId] = useState(null);
-  const [comparar, setComparar] = useState([]); // hasta 2 IDs para comparar
+  const [comparar, setComparar] = useState([]); // varios IDs para comparar
+  const [verComparador, setVerComparador] = useState(false);
   // Edición masiva
   const [modoEdicion, setModoEdicion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
@@ -988,10 +989,11 @@ export default function Inventario() {
         </div>
       )}
 
-      {/* Badge comparación activa */}
-      {comparar.length === 1 && !modalProdId && (
+      {/* Badge comparación activa — se pueden marcar VARIAS llantas */}
+      {comparar.length >= 1 && !modalProdId && !verComparador && (
         <div style={{ position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)', background:'#1a2234', border:'2px solid #f59e0b', borderRadius:12, padding:'10px 18px', display:'flex', alignItems:'center', gap:12, zIndex:300, boxShadow:'0 8px 24px rgba(0,0,0,.4)', whiteSpace:'nowrap' }}>
-          <span style={{ fontSize:13, color:'#f59e0b', fontWeight:700 }}>📌 1 llanta marcada — abre otra para comparar</span>
+          <span style={{ fontSize:13, color:'#f59e0b', fontWeight:700 }}>📌 {comparar.length} marcada{comparar.length !== 1 ? 's' : ''}{comparar.length < 2 ? ' — marca otra para comparar' : ''}</span>
+          {comparar.length >= 2 && <button onClick={() => setVerComparador(true)} style={{ padding:'4px 11px', borderRadius:6, border:'2px solid #f59e0b', background:'#f59e0b', color:'#000', cursor:'pointer', fontSize:12, fontWeight:800 }}>⚖️ Comparar ({comparar.length})</button>}
           <button onClick={() => setComparar([])} style={{ padding:'4px 10px', borderRadius:6, border:'1px solid #f59e0b', background:'transparent', color:'#f59e0b', cursor:'pointer', fontSize:12, fontWeight:700 }}>✕ Cancelar</button>
         </div>
       )}
@@ -1001,16 +1003,16 @@ export default function Inventario() {
           prodId={modalProdId}
           onClose={() => setModalProdId(null)}
           comparar={comparar}
+          onVerComparacion={() => { setModalProdId(null); setVerComparador(true); }}
           setComparar={(fn) => {
             const next = typeof fn === 'function' ? fn(comparar) : fn;
             setComparar(next);
-            if (next.length === 2) setModalProdId(null);
           }}
         />
       )}
 
-      {comparar.length === 2 && !modalProdId && (
-        <ComparadorModal ids={comparar} onClose={() => setComparar([])} />
+      {verComparador && comparar.length >= 2 && !modalProdId && (
+        <ComparadorModal ids={comparar} onClose={() => { setVerComparador(false); setComparar([]); }} />
       )}
     </div>
   );
