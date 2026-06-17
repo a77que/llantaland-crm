@@ -540,7 +540,7 @@ export default function Leads() {
         /* Vista cards en móvil */
         <div>
           {leads.map(lead => (
-            <LeadCard key={lead.id} lead={lead} isNuevo={nuevosIds.has(lead.id)} onClick={() => { setSelectedId(lead.id); marcarVisto(lead.id); }} />
+            <LeadCard key={lead.id} lead={lead} isNuevo={nuevosIds.has(lead.id) && !((lead._count?.cotizaciones || 0) > 0)} onClick={() => { setSelectedId(lead.id); marcarVisto(lead.id); }} />
           ))}
         </div>
       ) : (
@@ -584,8 +584,10 @@ export default function Leads() {
             <tbody>
               {leads.map(lead => {
                 const local = lead.localInstalacion || lead.localAsignado;
-                const isNuevo = nuevosIds.has(lead.id);
                 const tieneCot = (lead._count?.cotizaciones || 0) > 0;
+                // "Nuevo" es por dispositivo (localStorage); si ya tiene cotización (atendido,
+                // dato del servidor) no se resalta como nuevo en NINGÚN dispositivo → consistente.
+                const isNuevo = nuevosIds.has(lead.id) && !tieneCot;
                 return (
                   <tr key={lead.id}
                     style={{ cursor: 'pointer', background: isNuevo ? '#fff8e1' : '', outline: isNuevo ? '2px solid #f5c400' : 'none', outlineOffset: '-1px' }}
