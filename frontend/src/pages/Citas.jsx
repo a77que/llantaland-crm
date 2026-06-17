@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { citasApi, cotizacionesApi, sedesApi } from '../services/api';
 import { useCitasNotification } from '../context/CitasNotificationContext';
@@ -310,8 +310,19 @@ function GestorColumnas({ visibles, onToggle, onClose }) {
 
 export default function Citas() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { marcarTodosVistos, nuevasIds, count } = useCitasNotification();
+
+  // Enviar a cotizar = ir a la página de Cotización Nueva (con APIs de DNI/RUC/CE) con los datos precargados
+  const irACotizar = (cita) => {
+    navigate('/cotizaciones/nueva', { state: {
+      leadId: cita.id,
+      cliente: { nombre: cita.nombreCliente, telefono: cita.telefono, dniCe: cita.dniCe },
+      vehiculo: { marca: cita.marcaAuto, modelo: cita.modeloAuto, anio: cita.anioAuto },
+      medida: cita.medidaDetectada || cita.medida || '',
+    } });
+  };
 
   const [page, setPage]         = useState(1);
   const [q, setQ]               = useState('');
@@ -394,7 +405,7 @@ export default function Citas() {
       case 'accion': return (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           <button onClick={() => setModalAgendar(c)} title="Agendar" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, cursor: 'pointer' }}>🗓️</button>
-          <button onClick={() => setModalCita(c)} style={{ background: '#f5c400', color: '#000', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>📋 Cotizar</button>
+          <button onClick={() => irACotizar(c)} style={{ background: '#f5c400', color: '#000', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>📋 Cotizar</button>
           <BotonWhatsApp telefono={c.telefono} label="" />
           <button onClick={() => abrirPdfCita(c.id)} title="Crear PDF" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '5px 8px', fontSize: 12, cursor: 'pointer' }}>📄</button>
           <BotonEnviarPdfWhatsApp telefono={c.telefono} tipo="documento" pdfFn={() => citasApi.generarPdf(c.id)} style={{ padding: '5px 8px' }} />
@@ -440,7 +451,7 @@ export default function Citas() {
       ) : citas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-muted)' }}><div style={{ fontSize: 44 }}>📅</div><div style={{ marginTop: 12, fontWeight: 600, fontSize: 15 }}>No hay citas con este filtro</div></div>
       ) : isMobile ? (
-        <div>{citas.map(c => <CitaCard key={c.id} cita={c} onCotizar={setModalCita} onAgendar={setModalAgendar} isNueva={nuevasIds.has(c.id)} />)}</div>
+        <div>{citas.map(c => <CitaCard key={c.id} cita={c} onCotizar={irACotizar} onAgendar={setModalAgendar} isNueva={nuevasIds.has(c.id)} />)}</div>
       ) : (
         <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--color-border)', boxShadow: 'var(--shadow)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)', fontSize: 13, minWidth: colsVisibles.length * 110 }}>

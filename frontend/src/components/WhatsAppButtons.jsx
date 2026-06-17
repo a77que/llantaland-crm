@@ -11,11 +11,18 @@ export function normalizarTelefono(tel) {
   return d;
 }
 
-// Construye el enlace wa.me con texto opcional
+// Construye el enlace de WhatsApp.
+// En celular usa wa.me (abre la app); en escritorio usa WhatsApp Web directamente
+// (evita la página de "descarga WhatsApp" que muestra wa.me en PC).
 export function waLink(tel, texto) {
   const t = normalizarTelefono(tel);
   if (!t) return null;
-  return `https://wa.me/${t}${texto ? `?text=${encodeURIComponent(texto)}` : ''}`;
+  const esMovil = typeof navigator !== 'undefined' &&
+    /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent || '');
+  if (esMovil) {
+    return `https://wa.me/${t}${texto ? `?text=${encodeURIComponent(texto)}` : ''}`;
+  }
+  return `https://web.whatsapp.com/send?phone=${t}${texto ? `&text=${encodeURIComponent(texto)}` : ''}`;
 }
 
 // Abre WhatsApp con el teléfono del cliente (chat directo)
