@@ -21,7 +21,7 @@ function ModalSede({ sede, onClose, onGuardado }) {
     codigoLocal: '', nombre: '', tipo: 'TIENDA',
     distrito: '', direccion: '', telefono: '',
     email: '', horario: '', encargado: '',
-    latitud: '', longitud: '', activo: true,
+    latitud: '', longitud: '', googleMaps: '', activo: true,
   });
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
   const setCheck = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.checked }));
@@ -62,6 +62,7 @@ function ModalSede({ sede, onClose, onGuardado }) {
           <GridCell><Lbl txt="Encargado" /><input style={INP_STYLE} value={form.encargado||''} onChange={set('encargado')} placeholder="Juan Pérez" /></GridCell>
           <GridCell half><Lbl txt="Latitud" /><input style={INP_STYLE} value={form.latitud||''} onChange={set('latitud')} placeholder="-12.1191" /></GridCell>
           <GridCell half><Lbl txt="Longitud" /><input style={INP_STYLE} value={form.longitud||''} onChange={set('longitud')} placeholder="-77.0282" /></GridCell>
+          <GridCell><Lbl txt="Google Maps (link)" /><input style={INP_STYLE} value={form.googleMaps||''} onChange={set('googleMaps')} placeholder="https://maps.app.goo.gl/..." /><div style={{ fontSize:11, color:'var(--color-text-muted)', marginTop:4 }}>El bot envía este link al cliente al cerrar la cita. Si lo dejas vacío, usa las coordenadas o el nombre+dirección.</div></GridCell>
         </div>
 
         <div style={{ marginTop:14, display:'flex', alignItems:'center', gap:8 }}>

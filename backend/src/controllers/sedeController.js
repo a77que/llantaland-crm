@@ -43,6 +43,7 @@ function sanitizarSede(body) {
     encargado:   str(body.encargado),
     latitud:     str(body.latitud),
     longitud:    str(body.longitud),
+    googleMaps:  str(body.googleMaps),
     ...(body.activo !== undefined && { activo: body.activo === true || body.activo === 'true' }),
   };
 }
