@@ -110,6 +110,18 @@ function LeadDetalle({ lead, onClose, isMobile }) {
         )}
 
         <div style={{ padding: isMobile ? '8px 16px 16px' : 0 }}>
+          {/* Estado de cotización (atendido / en espera) */}
+          {(() => {
+            const tc = (lead.cotizaciones?.length || lead._count?.cotizaciones || 0) > 0;
+            return (
+              <div style={{ background: tc ? '#dcfce7' : '#fef3c7', border: `1px solid ${tc ? '#86efac' : '#fde68a'}`, borderRadius: 10, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{tc ? '✅' : '⏳'}</span>
+                <span style={{ fontWeight: 800, fontSize: 13, color: tc ? '#15803d' : '#b45309' }}>
+                  {tc ? 'Este lead YA tiene cotización generada' : 'EN ESPERA — aún sin cotización, genérala'}
+                </span>
+              </div>
+            );
+          })()}
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
@@ -248,6 +260,15 @@ function LeadCard({ lead, onClick, isNuevo }) {
         boxShadow: isNuevo ? '0 0 12px rgba(245,196,0,.35)' : undefined,
       }}
     >
+      {/* Estado de cotización */}
+      {(() => {
+        const tc = (lead._count?.cotizaciones || lead.cotizaciones?.length || 0) > 0;
+        return (
+          <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 999, marginBottom: 8, background: tc ? '#dcfce7' : '#fef3c7', color: tc ? '#15803d' : '#b45309' }}>
+            {tc ? '✅ Con cotización' : '⏳ Sin cotización'}
+          </div>
+        );
+      })()}
       {/* Fila 1: teléfono + ranking + paso + badge NUEVO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -529,6 +550,7 @@ export default function Leads() {
             <thead>
               <tr>
                 {[
+                  { k:null,             label:'Cotización' },
                   { k:'telefono',       label:'Teléfono' },
                   { k:'nombreCliente',  label:'Cliente' },
                   { k:'medidaDetectada',label:'Medida' },
@@ -563,12 +585,18 @@ export default function Leads() {
               {leads.map(lead => {
                 const local = lead.localInstalacion || lead.localAsignado;
                 const isNuevo = nuevosIds.has(lead.id);
+                const tieneCot = (lead._count?.cotizaciones || 0) > 0;
                 return (
                   <tr key={lead.id}
                     style={{ cursor: 'pointer', background: isNuevo ? '#fff8e1' : '', outline: isNuevo ? '2px solid #f5c400' : 'none', outlineOffset: '-1px' }}
                     onClick={() => { setSelectedId(lead.id); marcarVisto(lead.id); }}
                     onMouseEnter={e => { if (!isNuevo) e.currentTarget.style.background = 'var(--color-bg)'; }}
                     onMouseLeave={e => { if (!isNuevo) e.currentTarget.style.background = ''; }}>
+                    <td style={{ padding: '11px 14px', background: tieneCot ? '#dcfce7' : '#fef3c7', borderLeft: `4px solid ${tieneCot ? '#16a34a' : '#f59e0b'}` }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: tieneCot ? '#15803d' : '#b45309', whiteSpace: 'nowrap' }}>
+                        {tieneCot ? '✅ Con cotización' : '⏳ Sin cotización'}
+                      </span>
+                    </td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>
                       {isNuevo && <span style={{ background: '#f5c400', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 8, marginRight: 6, letterSpacing: 1 }}>🔔 NUEVO</span>}
                       {lead.telefono}

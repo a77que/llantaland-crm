@@ -87,9 +87,9 @@ const listar = async (req, res, next) => {
         take,
         orderBy: { [sortField]: sortDir },
         ...(isAdmin ? {
-          include: { humanTakeover: true, _count: { select: { historial: true } } },
+          include: { humanTakeover: true, _count: { select: { historial: true, cotizaciones: true } } },
         } : {
-          select: { ...LEAD_SELECT_VENDEDOR, humanTakeover: true, _count: { select: { historial: true } } },
+          select: { ...LEAD_SELECT_VENDEDOR, humanTakeover: true, _count: { select: { historial: true, cotizaciones: true } } },
         }),
       }),
       prisma.leadCRM.count({ where }),
