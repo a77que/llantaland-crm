@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { productosApi } from '../services/api';
+import { productosApi, sedesApi, stockApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 const TIPO_OPCIONES = ['AUTO', 'CAMIONETA', 'CAMION', 'MOTO', 'SUV', 'BUS'];
@@ -22,8 +22,12 @@ export default function CrearProductoModal({ onClose }) {
   });
   const set = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
 
+  const { data: sedes = [] } = useQuery({ queryKey: ['sedes'], queryFn: sedesApi.listar, staleTime: Infinity });
+  const [stock, setStock] = useState({}); // { sedeId: cantidad }
+  const setStk = (sedeId) => (e) => setStock(p => ({ ...p, [sedeId]: e.target.value }));
+
   const crear = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const num = (v) => v === '' || v == null ? undefined : Number(String(v).replace(',', '.'));
       const int = (v) => v === '' || v == null ? undefined : parseInt(v);
       const str = (v) => (v && String(v).trim()) ? String(v).trim() : undefined;
@@ -39,11 +43,18 @@ export default function CrearProductoModal({ onClose }) {
         garantia: str(f.garantia), fichaTecnica: str(f.fichaTecnica),
       };
       Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
-      return productosApi.crear(data);
+      const prod = await productosApi.crear(data);
+      // Stock inicial por almacén
+      const entradas = Object.entries(stock).filter(([, v]) => v !== '' && parseInt(v) > 0);
+      if (prod?.id && entradas.length) {
+        await Promise.all(entradas.map(([sedeId, v]) => stockApi.actualizar(prod.id, sedeId, { cantidad: parseInt(v) })));
+      }
+      return prod;
     },
     onSuccess: () => {
       toast.success('Producto creado');
       qc.invalidateQueries({ queryKey: ['productos'] });
+      qc.invalidateQueries({ queryKey: ['stock'] });
       onClose();
     },
     onError: (e) => toast.error(e?.error || e?.message || 'No se pudo crear el producto'),
@@ -103,8 +114,22 @@ export default function CrearProductoModal({ onClose }) {
           </div>
           <div><label style={lbl}>Ficha técnica (texto libre)</label><textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={f.fichaTecnica} onChange={set('fichaTecnica')} placeholder="Detalles adicionales…" /></div>
 
+          <div style={sec}>Stock inicial por almacén</div>
+          {sedes.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No hay almacenes registrados.</div>
+          ) : (
+            <div style={grid}>
+              {sedes.map(s => (
+                <div key={s.id}>
+                  <label style={lbl}>{s.codigoLocal ? `${s.codigoLocal} · ` : ''}{s.nombre}</label>
+                  <input style={inp} type="number" min="0" value={stock[s.id] ?? ''} onChange={setStk(s.id)} placeholder="0" />
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', background: 'var(--color-bg)', borderRadius: 8, padding: '8px 11px' }}>
-            💡 El stock por almacén se asigna luego en Importar/Actualizar o editando el producto. Los datos técnicos que dejes vacíos los puedes completar con IA al editar el producto.
+            💡 El stock que dejes vacío queda en 0; lo puedes ajustar luego en el inventario. Los datos técnicos vacíos se completan con IA al editar el producto.
           </div>
         </div>
 
