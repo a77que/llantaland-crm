@@ -32,6 +32,7 @@ function noiseColor(db) {
   return '#dc2626';
 }
 const TECH_FIELDS = ['indice_carga','velocidad_max','garantia','cargaMaxNeumatico','velocidadMaxKmh','eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca'];
+const FIELD_LABELS = { indice_carga:'Índice de carga', velocidad_max:'Índice de velocidad', garantia:'Garantía', cargaMaxNeumatico:'Carga máx. (kg)', velocidadMaxKmh:'Velocidad máx. (km/h)', eficienciaCombustible:'Eficiencia combustible', eficienciaFrenado:'Frenado en mojado', nivelRuido:'Nivel de ruido', paisFabricacion:'País de fabricación', origenMarca:'Origen de marca' };
 
 function Seccion({ titulo, children }) {
   return (
@@ -180,15 +181,24 @@ export default function InventarioDetalle() {
             {prod.garantia && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Garantía: </span><strong>{prod.garantia}</strong></div>}
             {prod.paisFabricacion && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>País fab.: </span><strong>{prod.paisFabricacion}</strong></div>}
             {prod.origenMarca && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Origen marca: </span><strong>{prod.origenMarca}</strong></div>}
-            {TECH_FIELDS.filter(f => prod[f] !== null && prod[f] !== undefined && prod[f] !== '').length < TECH_FIELDS.length && (
-              <button
-                onClick={() => aiMut.mutate()}
-                disabled={aiMut.isPending}
-                style={{ marginTop: 8, width: '100%', padding: '9px', background: aiMut.isPending ? '#64748b' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: aiMut.isPending ? 'wait' : 'pointer' }}
-              >
-                {aiMut.isPending ? '⏳ Consultando IA...' : `🤖 Rellenar ${TECH_FIELDS.filter(f => !prod[f] && prod[f] !== 0).length} campos con IA`}
-              </button>
-            )}
+            {(() => {
+              const faltan = TECH_FIELDS.filter(f => !prod[f] && prod[f] !== 0);
+              if (faltan.length === 0) return <div style={{ marginTop: 8, fontSize: 12, color: '#16a34a', fontWeight: 700 }}>✅ Ficha técnica completa</div>;
+              return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 11.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 11px', marginBottom: 8, lineHeight: 1.45 }}>
+                    <strong>Faltan {faltan.length} dato{faltan.length !== 1 ? 's' : ''}:</strong> {faltan.map(f => FIELD_LABELS[f] || f).join(', ')}.
+                  </div>
+                  <button
+                    onClick={() => aiMut.mutate()}
+                    disabled={aiMut.isPending}
+                    style={{ width: '100%', padding: '9px', background: aiMut.isPending ? '#64748b' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: aiMut.isPending ? 'wait' : 'pointer' }}
+                  >
+                    {aiMut.isPending ? '⏳ Consultando IA...' : `🤖 Rellenar ${faltan.length} campos con IA`}
+                  </button>
+                </div>
+              );
+            })()}
           </Seccion>
         </div>
 

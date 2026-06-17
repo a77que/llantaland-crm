@@ -104,6 +104,14 @@ const TECH_FIELDS = [
   'fichaTecnica',
 ];
 
+const FIELD_LABELS = {
+  indice_carga:'Índice de carga', velocidad_max:'Índice de velocidad', garantia:'Garantía',
+  cargaMaxNeumatico:'Carga máx. (kg)', velocidadMaxKmh:'Velocidad máx. (km/h)',
+  eficienciaCombustible:'Eficiencia combustible', eficienciaFrenado:'Frenado en mojado',
+  nivelRuido:'Nivel de ruido', paisFabricacion:'País de fabricación', origenMarca:'Origen de marca',
+  fichaTecnica:'Ficha técnica',
+};
+
 function parseMedida(medida) {
   const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
   if (!m) return { ancho: null, perfil: null, radio: null };
@@ -417,7 +425,9 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
   const tipoColor = prod ? (TIPO_COLOR[prod.tipo] || '#64748b') : '#64748b';
   const stockTotal = prod?.stocks?.reduce((a, s) => a + s.cantidad, 0) || 0;
   const medidaParts = prod ? parseMedida(prod.medida) : {};
-  const camposFaltantes = prod ? TECH_FIELDS.filter(f => !prod[f] && prod[f] !== 0).length : 0;
+  const camposFaltantesArr = prod ? TECH_FIELDS.filter(f => !prod[f] && prod[f] !== 0) : [];
+  const camposFaltantes = camposFaltantesArr.length;
+  const faltantesLabels = camposFaltantesArr.map(f => FIELD_LABELS[f] || f);
   const camposExtra = prod?.camposExtra ? Object.entries(prod.camposExtra) : [];
 
   return (
@@ -568,17 +578,14 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
         {/* Footer */}
         {prod && (
           <div style={{ padding:'12px 16px', borderTop:'1px solid var(--color-border)', display:'flex', gap:8, alignItems:'center', flexShrink:0, background:'var(--color-bg)', flexWrap:'wrap' }}>
-            {/* Botón IA */}
+            {/* Datos faltantes — solo informativo. El rellenado con IA se hace al EDITAR el producto. */}
             {camposFaltantes > 0 ? (
-              <button
-                onClick={() => aiMut.mutate()}
-                disabled={aiMut.isPending}
-                style={{ flex:1, minWidth:160, padding:'9px 12px', background: aiMut.isPending ? '#64748b' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff', border:'none', borderRadius:9, fontSize:12, fontWeight:700, cursor: aiMut.isPending ? 'wait' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}
-              >
-                {aiMut.isPending ? '⏳ Consultando IA...' : `🤖 Completar ${camposFaltantes} campos con IA`}
-              </button>
+              <div style={{ flex:1, minWidth:180, fontSize:11.5, color:'#92400e', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:9, padding:'8px 11px', lineHeight:1.45 }}>
+                🤖 <strong>Faltan {camposFaltantes} dato{camposFaltantes !== 1 ? 's' : ''}:</strong> {faltantesLabels.join(', ')}.
+                <span style={{ display:'block', opacity:.85, marginTop:2 }}>Se completan con IA al <em>editar</em> el producto (botón “Editar →”).</span>
+              </div>
             ) : (
-              <div style={{ fontSize:12, color:'#16a34a', fontWeight:700 }}>✅ Ficha completa</div>
+              <div style={{ fontSize:12, color:'#16a34a', fontWeight:700 }}>✅ Ficha técnica completa</div>
             )}
 
             {/* Botones comparar — se pueden marcar VARIAS llantas (no solo 2) */}
@@ -618,27 +625,14 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
               📋 Cotizar esta llanta
             </button>
 
-            {/* Editar / Eliminar — solo en gestión de inventario, no al vender */}
+            {/* Editar — la edición, el rellenado con IA y eliminar están dentro de la edición del producto */}
             {!ocultarGestion && (
-              <>
-                <button
-                  onClick={() => { onClose(); navigate(`/inventario/${prodId}`); }}
-                  style={{ padding:'9px 12px', borderRadius:9, border:'1px solid var(--color-border)', background:'var(--color-surface)', cursor:'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap' }}
-                >
-                  Editar →
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm(`⚠️ ¿Eliminar esta llanta del catálogo?\n\n${prod.marca} ${prod.nombreComercial || ''} ${prod.medida} (${prod.sku})\n\nDejará de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) {
-                      delMut.mutate();
-                    }
-                  }}
-                  disabled={delMut.isPending}
-                  style={{ padding:'9px 12px', borderRadius:9, border:'2px solid #dc2626', background:'#fef2f2', color:'#dc2626', cursor:'pointer', fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}
-                >
-                  {delMut.isPending ? '⏳' : '🗑️ Eliminar'}
-                </button>
-              </>
+              <button
+                onClick={() => { onClose(); navigate(`/inventario/${prodId}`); }}
+                style={{ padding:'9px 14px', borderRadius:9, border:'none', background:'#f5c400', color:'#000', cursor:'pointer', fontSize:12, fontWeight:800, whiteSpace:'nowrap' }}
+              >
+                ✏️ Editar producto →
+              </button>
             )}
           </div>
         )}

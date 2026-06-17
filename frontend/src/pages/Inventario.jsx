@@ -6,6 +6,7 @@ import { productosApi, sedesApi, stockApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
 import ProductoModal from '../components/ProductoModal';
+import CrearProductoModal from '../components/CrearProductoModal';
 import ComparadorModal from '../components/ComparadorModal';
 
 const fmt   = (v) => v ? `S/ ${parseFloat(v).toFixed(2)}` : '—';
@@ -519,6 +520,7 @@ export default function Inventario() {
   const [showGestor, setShowGestor] = useState(false);
   // Modal de detalle y comparador
   const [modalProdId, setModalProdId] = useState(null);
+  const [showCrear, setShowCrear] = useState(false);
   const [comparar, setComparar] = useState([]); // varios IDs para comparar
   const [verComparador, setVerComparador] = useState(false);
   // Edición masiva
@@ -706,6 +708,10 @@ export default function Inventario() {
           >
             {modoEdicion ? '✏️ Modo edición ON' : '✏️ Edición masiva'}
           </button>
+          <button onClick={() => setShowCrear(true)}
+            style={{ padding:'8px 14px', border:'none', borderRadius:8, background:'#16a34a', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+            ➕ {isMobile ? 'Crear' : 'Crear producto'}
+          </button>
           <Link to="/importar" style={{ padding:'8px 14px', background:'#f5c400', color:'#000', borderRadius:8, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
             📂 {isMobile ? '' : 'Importar'}
           </Link>
@@ -741,7 +747,7 @@ export default function Inventario() {
           <table style={{ borderCollapse:'collapse', background:'var(--color-surface)', fontSize:12.5, minWidth: columnasVisibles.length * 110 }}>
             <thead>
               <tr style={{ background:'#1a2234' }}>
-                <th style={{ padding:'10px 12px', textAlign:'left', fontSize:11, fontWeight:700, color:'#f5c400', whiteSpace:'nowrap', position:'sticky', left:0, background:'#1a2234', zIndex:2, minWidth: modoEdicion ? 50 : 100, letterSpacing:.5, textTransform:'uppercase' }}>
+                <th style={{ padding:'10px 6px', textAlign:'center', fontSize:11, fontWeight:700, color:'#f5c400', whiteSpace:'nowrap', position:'sticky', left:0, background:'#1a2234', zIndex:2, minWidth: modoEdicion ? 34 : 50, width: modoEdicion ? 34 : 50, letterSpacing:.5, textTransform:'uppercase' }}>
                   {modoEdicion ? (
                     <input type="checkbox"
                       checked={seleccionados.length === productos.length && productos.length > 0}
@@ -749,7 +755,7 @@ export default function Inventario() {
                       style={{ width:16, height:16, accentColor:'#f5c400', cursor:'pointer' }}
                       title="Seleccionar todos"
                     />
-                  ) : 'Acciones'}
+                  ) : ''}
                 </th>
                 {columnasVisibles.map(col => {
                   const isSortable = !!SORTABLE[col.key];
@@ -786,16 +792,16 @@ export default function Inventario() {
                 const rowBg = isSel ? '#fffbeb' : idx%2===0 ? 'var(--color-surface)' : 'var(--color-bg)';
                 return (
                   <tr key={prod.id} style={{ background: rowBg, borderBottom:'1px solid var(--color-border)', outline: isSel ? '2px solid #f5c400' : 'none', outlineOffset:'-1px' }}>
-                    {/* Acciones — sticky */}
-                    <td style={{ padding:'6px 8px', position:'sticky', left:0, background:rowBg, zIndex:1, borderRight:'2px solid var(--color-border)', whiteSpace:'nowrap' }}>
+                    {/* Acciones — sticky (columna angosta) */}
+                    <td style={{ padding:'6px 4px', textAlign:'center', position:'sticky', left:0, background:rowBg, zIndex:1, borderRight:'2px solid var(--color-border)', whiteSpace:'nowrap' }}>
                       {modoEdicion ? (
                         <input type="checkbox" checked={isSel}
                           onChange={() => setSeleccionados(s => isSel ? s.filter(id=>id!==prod.id) : [...s, prod.id])}
                           style={{ width:16, height:16, accentColor:'#f5c400', cursor:'pointer' }}
                         />
                       ) : (
-                        <button onClick={() => setModalProdId(prod.id)} style={{ fontSize:11, padding:'4px 10px', background:'#1a2234', color:'#f5c400', borderRadius:6, fontWeight:700, whiteSpace:'nowrap', border:'1px solid #f5c400', cursor:'pointer' }}>
-                          Ver
+                        <button onClick={() => setModalProdId(prod.id)} title="Ver detalle" style={{ fontSize:13, padding:'4px 7px', background:'#1a2234', color:'#f5c400', borderRadius:6, fontWeight:700, border:'1px solid #f5c400', cursor:'pointer', lineHeight:1 }}>
+                          👁️
                         </button>
                       )}
                     </td>
@@ -1014,6 +1020,8 @@ export default function Inventario() {
       {verComparador && comparar.length >= 2 && !modalProdId && (
         <ComparadorModal ids={comparar} onClose={() => { setVerComparador(false); setComparar([]); }} />
       )}
+
+      {showCrear && <CrearProductoModal onClose={() => setShowCrear(false)} />}
     </div>
   );
 }
