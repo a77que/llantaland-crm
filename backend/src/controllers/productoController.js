@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const { paginar } = require('../utils/helpers');
 const { normalizarMedida, pareceMedida } = require('../utils/medida');
+const { getConfigApis } = require('../services/apiConfigService');
 
 const prisma = new PrismaClient();
 
@@ -290,14 +291,16 @@ Formato de ejemplo:
 
     let datos = null;
 
-    const groqKey = process.env.GROQ_API_KEY;
+    // Claves de IA: primero las configuradas en el CRM (BD), luego variables de entorno.
+    const cfgApis = await getConfigApis();
+    const groqKey = cfgApis.groqKey;
     if (groqKey) {
       try {
         const groqResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.1,
             max_tokens: 500,
@@ -315,10 +318,11 @@ Formato de ejemplo:
     }
 
     if (!datos) {
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey) return res.status(503).json({ error: 'No hay claves de IA configuradas (GROQ_API_KEY o GEMINI_API_KEY)' });
+      const geminiKey = cfgApis.geminiKey;
+      if (!groqKey && !geminiKey) return res.status(503).json({ error: 'No hay claves de IA configuradas. Cárgalas en Admin → Config APIs (Groq o Gemini).' });
+      if (!geminiKey) return res.status(502).json({ error: 'La IA (Groq) no devolvió datos. Reintenta o configura Gemini como respaldo en Config APIs.' });
       const geminiResp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
