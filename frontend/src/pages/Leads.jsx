@@ -155,15 +155,28 @@ function LeadDetalle({ lead, onClose, isMobile }) {
           </div>
 
           {/* Botones acción — arriba del flujo para acceso inmediato en móvil */}
-          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-            <button onClick={crearCotizacion} style={{ flex:1, padding:'13px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
-              📋 Crear Cotización
-            </button>
-            <BotonWhatsApp telefono={lead.telefono} label="WhatsApp" size="lg" />
-            <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
-              Ver cotizaciones →
-            </button>
-          </div>
+          {(() => {
+            const cots = [...(lead.cotizaciones || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            const tieneCot = cots.length > 0;
+            const verCotizacion = () => { onClose(); navigate(`/cotizaciones/${cots[0].id}`); };
+            return (
+              <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+                {tieneCot ? (
+                  <button onClick={verCotizacion} style={{ flex:1, padding:'13px 16px', background:'#16a34a', color:'#fff', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
+                    👁️ Ver Cotización
+                  </button>
+                ) : (
+                  <button onClick={crearCotizacion} style={{ flex:1, padding:'13px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
+                    📋 Crear Cotización
+                  </button>
+                )}
+                <BotonWhatsApp telefono={lead.telefono} label="WhatsApp" size="lg" />
+                <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                  Ver cotizaciones →
+                </button>
+              </div>
+            );
+          })()}
 
           {/* Flujo del cliente */}
           <div style={{ marginBottom: 16 }}>
