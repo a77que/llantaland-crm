@@ -53,6 +53,8 @@ export const productosApi = {
   tipos: () => api.get('/productos/tipos'),
   medidas: (q) => api.get('/productos/medidas', { params: q ? { q } : {} }),
   enriquecer: (id) => api.post(`/productos/${id}/enriquecer-ia`),
+  hermanasImagen: (id) => api.get(`/productos/${id}/hermanas`),
+  aplicarImagen: (data) => api.post('/productos/aplicar-imagen', data),
   subirImagen: (id, formData) => api.post(`/productos/${id}/imagenes`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

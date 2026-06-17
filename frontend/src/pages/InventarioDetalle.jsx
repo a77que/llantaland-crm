@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -86,6 +86,31 @@ export default function InventarioDetalle() {
     onError: (e) => toast.error(e?.error || 'Error al eliminar'),
   });
 
+  // Llantas hermanas (misma medida + marca) para compartir imagen
+  const { data: hermanas } = useQuery({
+    queryKey: ['hermanas-img', id],
+    queryFn: () => productosApi.hermanasImagen(id),
+    enabled: !!id,
+  });
+  const [selHermanas, setSelHermanas] = useState(null);
+  useEffect(() => {
+    if (hermanas?.sinImagen && selHermanas === null) {
+      setSelHermanas(new Set(hermanas.sinImagen.map(h => h.id)));
+    }
+  }, [hermanas, selHermanas]);
+
+  const aplicarImgMut = useMutation({
+    mutationFn: ({ imagenUrl, ids }) => productosApi.aplicarImagen({ imagenUrl, ids }),
+    onSuccess: (r) => {
+      toast.success(`Imagen aplicada a ${r?.actualizados ?? 0} llanta(s)`);
+      qc.invalidateQueries({ queryKey: ['producto', id] });
+      qc.invalidateQueries({ queryKey: ['hermanas-img', id] });
+      qc.invalidateQueries({ queryKey: ['productos'] });
+      setSelHermanas(null);
+    },
+    onError: (e) => toast.error(e?.error || 'Error al aplicar imagen'),
+  });
+
   if (isLoading) return <LoadingSpinner fullPage />;
   if (!prod) return <div style={{ padding: 24 }}>Producto no encontrado</div>;
 
@@ -147,6 +172,46 @@ export default function InventarioDetalle() {
               </div>
             </div>
           </div>
+
+          {/* Esta imagen aplica a llantas hermanas sin foto → propagar */}
+          {prod.imagenUrl && hermanas?.sinImagen?.length > 0 && (
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: '#92400e', marginBottom: 4 }}>🖼️ Esta imagen aplica a {hermanas.sinImagen.length} llanta(s) igual(es)</div>
+              <div style={{ fontSize: 11.5, color: '#92400e', marginBottom: 8 }}>Misma medida y marca, solo cambia el nombre. Marca las que quieras actualizar:</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 170, overflowY: 'auto', marginBottom: 10 }}>
+                {hermanas.sinImagen.map(h => (
+                  <label key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!selHermanas?.has(h.id)} onChange={() => setSelHermanas(prev => { const n = new Set(prev); n.has(h.id) ? n.delete(h.id) : n.add(h.id); return n; })} style={{ accentColor: '#f5c400', width: 15, height: 15 }} />
+                    <span><strong>{h.nombreComercial || h.sku}</strong> · {h.medida} <span style={{ color: 'var(--color-text-muted)' }}>({h.sku})</span></span>
+                  </label>
+                ))}
+              </div>
+              <button
+                disabled={!selHermanas?.size || aplicarImgMut.isPending}
+                onClick={() => aplicarImgMut.mutate({ imagenUrl: prod.imagenUrl, ids: [...selHermanas] })}
+                style={{ width: '100%', padding: '9px', background: (!selHermanas?.size || aplicarImgMut.isPending) ? '#94a3b8' : '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+              >
+                {aplicarImgMut.isPending ? 'Aplicando…' : `✅ Aceptar — aplicar a ${selHermanas?.size || 0} llanta(s)`}
+              </button>
+            </div>
+          )}
+
+          {/* No tiene imagen pero una hermana sí → usarla aquí */}
+          {!prod.imagenUrl && hermanas?.conImagen?.length > 0 && (
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: '#1d4ed8', marginBottom: 8 }}>🖼️ Una llanta igual ya tiene foto — úsala aquí</div>
+              {hermanas.conImagen.slice(0, 1).map(h => (
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <img src={h.imagenUrl} alt="" style={{ width: 54, height: 54, objectFit: 'contain', background: '#fff', borderRadius: 8, border: '1px solid var(--color-border)' }} />
+                  <div style={{ flex: 1, fontSize: 12 }}>{h.nombreComercial || h.sku} · {h.medida}</div>
+                  <button onClick={() => aplicarImgMut.mutate({ imagenUrl: h.imagenUrl, ids: [prod.id] })} disabled={aplicarImgMut.isPending}
+                    style={{ padding: '8px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    Usar foto
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Etiqueta EU */}
           <Seccion titulo="🏷️ Etiqueta EU">

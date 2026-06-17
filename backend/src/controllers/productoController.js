@@ -374,4 +374,45 @@ Formato de ejemplo:
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA };
+// Llantas "hermanas": misma medida (canónica) + misma marca. Suelen ser el mismo
+// producto físico con distinto nombre comercial → comparten imagen.
+const hermanasImagen = async (req, res, next) => {
+  try {
+    const prod = await prisma.producto.findUnique({ where: { id: req.params.id } });
+    if (!prod) return res.status(404).json({ error: 'Producto no encontrado' });
+    const norm = prod.medidaNorm || normalizarMedida(prod.medida);
+    const hermanas = await prisma.producto.findMany({
+      where: {
+        id: { not: prod.id }, activo: true,
+        marca: { equals: prod.marca, mode: 'insensitive' },
+        OR: [{ medidaNorm: norm }, { medida: { equals: prod.medida, mode: 'insensitive' } }],
+      },
+      select: { id: true, sku: true, marca: true, medida: true, nombreComercial: true, imagenUrl: true },
+      orderBy: { nombreComercial: 'asc' },
+      take: 300,
+    });
+    res.json({
+      producto: { id: prod.id, imagenUrl: prod.imagenUrl || null },
+      conImagen: hermanas.filter(h => h.imagenUrl),
+      sinImagen: hermanas.filter(h => !h.imagenUrl),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Aplica una misma imagen a varios productos (propagar a hermanas o tomar de una hermana).
+const aplicarImagen = async (req, res, next) => {
+  try {
+    const { imagenUrl, ids } = req.body;
+    if (!imagenUrl || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'imagenUrl e ids son requeridos' });
+    }
+    const r = await prisma.producto.updateMany({ where: { id: { in: ids } }, data: { imagenUrl } });
+    res.json({ ok: true, actualizados: r.count });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen };
