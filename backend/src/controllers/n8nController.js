@@ -175,6 +175,9 @@ const listarLocales = async (req, res, next) => {
       Tipo: s.tipo,
       Distrito: s.distrito || '',
       Direccion: s.direccion || '',
+      Maps: s.googleMaps || '',
+      Latitud: s.latitud || '',
+      Longitud: s.longitud || '',
     }));
     res.json(filas);
   } catch (err) {

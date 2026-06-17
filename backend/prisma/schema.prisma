@@ -138,6 +138,7 @@ model Sede {
   encargado   String?
   latitud     String?
   longitud    String?
+  googleMaps  String?  // link de Google Maps de la tienda (se envía al cerrar la cita)
   activo      Boolean  @default(true)
 
   stocks          Stock[]
