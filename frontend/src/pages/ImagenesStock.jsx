@@ -36,6 +36,7 @@ export default function ImagenesStock() {
   const [sel, setSel] = useState({});              // key -> Set(ids)
   const [cols, setCols] = useState(new Set(['miniatura', 'medida', 'estado']));
   const [descargando, setDescargando] = useState(false);
+  const [reemplazar, setReemplazar] = useState(false); // si NO, solo aplica a las que faltan
 
   const { data, isLoading } = useQuery({ queryKey: ['grupos-imagen'], queryFn: productosApi.gruposImagen });
 
@@ -133,6 +134,9 @@ export default function ImagenesStock() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 12px', border: `1.5px solid ${soloFaltan ? '#f59e0b' : 'var(--color-border)'}`, borderRadius: 8, background: soloFaltan ? '#fffbeb' : 'var(--color-surface)' }}>
           <input type="checkbox" checked={soloFaltan} onChange={e => setSoloFaltan(e.target.checked)} style={{ accentColor: '#f59e0b' }} /> Solo los que faltan
         </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 12px', border: `1.5px solid ${reemplazar ? '#dc2626' : 'var(--color-border)'}`, borderRadius: 8, background: reemplazar ? '#fef2f2' : 'var(--color-surface)' }} title="Si está activo, la imagen del grupo reemplaza también a las que ya tienen foto">
+          <input type="checkbox" checked={reemplazar} onChange={e => setReemplazar(e.target.checked)} style={{ accentColor: '#dc2626' }} /> Reemplazar todas
+        </label>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
           <span>Columnas:</span>
           {COLS.map(c => (
@@ -163,9 +167,16 @@ export default function ImagenesStock() {
                     {g.total} llanta(s) · {completo ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✅ con imagen</span> : <span style={{ color: '#b45309', fontWeight: 700 }}>⏳ {g.conImagen}/{g.total} con imagen</span>}
                   </div>
                 </div>
-                <button style={btn('#16a34a')} onClick={() => pedirArchivo(g.llantas.map(l => l.id), `${g.marca} ${g.modelo}`)} disabled={subir.isPending}>
-                  📤 Subir imagen al grupo
-                </button>
+                {(() => {
+                  const idsGrupo = reemplazar ? g.llantas.map(l => l.id) : g.llantas.filter(l => !l.imagenUrl).map(l => l.id);
+                  return (
+                    <button style={btn(idsGrupo.length ? '#16a34a' : '#94a3b8')} disabled={!idsGrupo.length || subir.isPending}
+                      title={idsGrupo.length ? '' : 'Todas ya tienen imagen; activa “Reemplazar todas” para cambiarla'}
+                      onClick={() => pedirArchivo(idsGrupo, `${g.marca} ${g.modelo}`)}>
+                      📤 {reemplazar ? `Reemplazar todas (${idsGrupo.length})` : `Subir a las que faltan (${idsGrupo.length})`}
+                    </button>
+                  );
+                })()}
                 <button style={{ ...btn('var(--color-surface)', 'var(--color-text)'), border: '1px solid var(--color-border)' }} onClick={() => setExpandido(p => ({ ...p, [g.key]: !p[g.key] }))}>
                   {abierto ? 'Ocultar' : `Ver ${g.total}`}
                 </button>
