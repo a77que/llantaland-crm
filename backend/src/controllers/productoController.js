@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const { paginar } = require('../utils/helpers');
+const XLSXStyle = require('xlsx-js-style');
 const { normalizarMedida, pareceMedida } = require('../utils/medida');
 const { getConfigApis } = require('../services/apiConfigService');
 
@@ -440,6 +441,35 @@ const gruposImagen = async (req, res, next) => {
   }
 };
 
+// Excel de llantas SIN imagen (para pegar la URL pública y re-subir por "Actualizar").
+// Una fila por producto, ordenado por marca+modelo para pegar fácil la misma URL al grupo.
+const exportFaltantesImagen = async (req, res, next) => {
+  try {
+    const productos = await prisma.producto.findMany({
+      where: { activo: true, OR: [{ imagenUrl: null }, { imagenUrl: '' }] },
+      select: { sku: true, marca: true, nombreComercial: true, medida: true },
+      orderBy: [{ marca: 'asc' }, { nombreComercial: 'asc' }, { medida: 'asc' }],
+    });
+    const head = ['SKU', 'Marca', 'Modelo', 'Medida', 'URL Imagen (pegar aquí)'];
+    const aoa = [head, ...productos.map(p => [p.sku, p.marca || '', p.nombreComercial || '', p.medida, ''])];
+    const ws = XLSXStyle.utils.aoa_to_sheet(aoa);
+    const azul = { fill: { fgColor: { rgb: '1F4E79' } }, font: { color: { rgb: 'FFFFFF' }, bold: true }, alignment: { horizontal: 'center' } };
+    for (let c = 0; c < head.length; c++) {
+      const ref = XLSXStyle.utils.encode_cell({ r: 0, c });
+      if (ws[ref]) ws[ref].s = azul;
+    }
+    ws['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 26 }, { wch: 14 }, { wch: 40 }];
+    const wb = XLSXStyle.utils.book_new();
+    XLSXStyle.utils.book_append_sheet(wb, ws, 'Faltan imagen');
+    const buf = XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="llantas_sin_imagen_${new Date().toISOString().slice(0,10)}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Sube UN archivo de imagen y lo aplica a varios productos (grupo o selección).
 const subirImagenMultiple = async (req, res, next) => {
   try {
@@ -471,4 +501,4 @@ const aplicarImagen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen };

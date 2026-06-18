@@ -35,8 +35,21 @@ export default function ImagenesStock() {
   const [expandido, setExpandido] = useState({}); // key -> bool
   const [sel, setSel] = useState({});              // key -> Set(ids)
   const [cols, setCols] = useState(new Set(['miniatura', 'medida', 'estado']));
+  const [descargando, setDescargando] = useState(false);
 
   const { data, isLoading } = useQuery({ queryKey: ['grupos-imagen'], queryFn: productosApi.gruposImagen });
+
+  const descargarFaltantes = async () => {
+    setDescargando(true);
+    try {
+      const blob = await productosApi.faltantesImagenExport();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `llantas_sin_imagen_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error('No se pudo generar el Excel'); }
+    finally { setDescargando(false); }
+  };
 
   const subir = useMutation({
     mutationFn: ({ file, ids }) => {
@@ -92,7 +105,17 @@ export default function ImagenesStock() {
           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700 }}>🖼️ Imágenes del Stock</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Sube una foto y aplícala a todo el modelo (marca + modelo) o a las llantas que elijas. La foto se toma de tu computadora.</div>
         </div>
-        <Link to="/inventario" style={{ ...btn('var(--color-surface)', 'var(--color-text)'), border: '1px solid var(--color-border)', textDecoration: 'none' }}>← Inventario</Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button style={btn('#1F4E79')} onClick={descargarFaltantes} disabled={descargando}>
+            {descargando ? 'Generando…' : '📥 Descargar faltantes (Excel)'}
+          </button>
+          <Link to="/importar" style={{ ...btn('#f5c400', '#000'), textDecoration: 'none' }}>📂 Actualizar por Excel (URL)</Link>
+          <Link to="/inventario" style={{ ...btn('var(--color-surface)', 'var(--color-text)'), border: '1px solid var(--color-border)', textDecoration: 'none' }}>← Inventario</Link>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', background: 'var(--color-bg)', borderRadius: 8, padding: '8px 11px', marginBottom: 12 }}>
+        💡 Dos formas de cargar imágenes: <b>(1) desde tu PC</b> con los botones “Subir imagen” de cada grupo o selección; <b>(2) por Excel</b> usando una <b>URL pública</b> (foto ya subida a internet/Drive). Descarga el Excel de faltantes, pega la URL por grupo y súbelo en <b>“Actualizar por Excel”</b>. Las rutas locales (C:\…) no funcionan en Excel; para esas usa la subida desde la PC.
       </div>
 
       {/* Resumen — qué falta */}

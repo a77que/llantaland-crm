@@ -805,6 +805,7 @@ const exportarCatalogo = async (req, res, next) => {
       { key: 'nivelRuido',      label: 'Nivel Ruido dB' },
       { key: 'paisFabricacion', label: 'Pais Fabricacion' },
       { key: 'origenMarca',     label: 'Origen Marca' },
+      { key: 'imagenUrl',       label: 'URL Imagen'           },
       { key: '__stockTotal',    label: 'Stock Total'          },
     ];
     const stockCols = sedes.map(s => ({ key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}`, codigoLocal: s.codigoLocal }));
