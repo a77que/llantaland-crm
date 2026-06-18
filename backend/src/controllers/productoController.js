@@ -405,6 +405,58 @@ const hermanasImagen = async (req, res, next) => {
   }
 };
 
+// Agrupa el catálogo por marca + modelo (nombre comercial) con su estado de imagen.
+// Una foto de modelo aplica a TODAS las medidas de ese grupo.
+const gruposImagen = async (req, res, next) => {
+  try {
+    const productos = await prisma.producto.findMany({
+      where: { activo: true },
+      select: { id: true, sku: true, marca: true, nombreComercial: true, medida: true, imagenUrl: true },
+      orderBy: [{ marca: 'asc' }, { nombreComercial: 'asc' }, { medida: 'asc' }],
+    });
+    const map = new Map();
+    for (const p of productos) {
+      const modelo = (p.nombreComercial || '').trim() || '(sin modelo)';
+      const key = `${(p.marca || '').trim().toUpperCase()}|${modelo.toUpperCase()}`;
+      if (!map.has(key)) map.set(key, { key, marca: p.marca || '', modelo, total: 0, conImagen: 0, imagenUrl: null, llantas: [] });
+      const g = map.get(key);
+      g.total++;
+      if (p.imagenUrl) { g.conImagen++; if (!g.imagenUrl) g.imagenUrl = p.imagenUrl; }
+      g.llantas.push({ id: p.id, sku: p.sku, medida: p.medida, imagenUrl: p.imagenUrl || null });
+    }
+    const grupos = [...map.values()];
+    res.json({
+      grupos,
+      totales: {
+        grupos: grupos.length,
+        gruposSinImagen: grupos.filter(g => g.conImagen === 0).length,
+        gruposIncompletos: grupos.filter(g => g.conImagen < g.total).length,
+        llantas: productos.length,
+        llantasSinImagen: productos.filter(p => !p.imagenUrl).length,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Sube UN archivo de imagen y lo aplica a varios productos (grupo o selección).
+const subirImagenMultiple = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Archivo de imagen requerido' });
+    let ids = req.body.ids;
+    if (typeof ids === 'string') {
+      try { ids = JSON.parse(ids); } catch { ids = ids.split(',').map(s => s.trim()).filter(Boolean); }
+    }
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Debes indicar las llantas (ids)' });
+    const url = `/uploads/${req.file.filename}`;
+    const r = await prisma.producto.updateMany({ where: { id: { in: ids } }, data: { imagenUrl: url } });
+    res.json({ ok: true, url, actualizados: r.count });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Aplica una misma imagen a varios productos (propagar a hermanas o tomar de una hermana).
 const aplicarImagen = async (req, res, next) => {
   try {
@@ -419,4 +471,4 @@ const aplicarImagen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple };

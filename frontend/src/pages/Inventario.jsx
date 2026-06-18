@@ -708,6 +708,9 @@ export default function Inventario() {
           >
             {modoEdicion ? '✏️ Modo edición ON' : '✏️ Edición masiva'}
           </button>
+          <Link to="/inventario/imagenes" style={{ padding:'8px 14px', border:'1.5px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', color:'var(--color-text)', fontSize:13, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:4, textDecoration:'none' }}>
+            🖼️ {isMobile ? '' : 'Imágenes'}
+          </Link>
           <button onClick={() => setShowCrear(true)}
             style={{ padding:'8px 14px', border:'none', borderRadius:8, background:'#16a34a', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
             ➕ {isMobile ? 'Crear' : 'Crear producto'}
