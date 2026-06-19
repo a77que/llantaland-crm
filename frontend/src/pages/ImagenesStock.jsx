@@ -37,8 +37,9 @@ export default function ImagenesStock() {
   const [cols, setCols] = useState(new Set(['miniatura', 'medida', 'estado']));
   const [descargando, setDescargando] = useState(false);
   const [reemplazar, setReemplazar] = useState(false); // si NO, solo aplica a las que faltan
+  const [modo, setModo] = useState('exacto'); // 'exacto' (nombre comercial) | 'modelo' (auto)
 
-  const { data, isLoading } = useQuery({ queryKey: ['grupos-imagen'], queryFn: productosApi.gruposImagen });
+  const { data, isLoading } = useQuery({ queryKey: ['grupos-imagen', modo], queryFn: () => productosApi.gruposImagen(modo) });
 
   const descargarFaltantes = async () => {
     setDescargando(true);
@@ -125,6 +126,18 @@ export default function ImagenesStock() {
         <Card icon="⏳" value={tot.gruposSinImagen ?? 0} label="Grupos sin imagen" color="#f59e0b" />
         <Card icon="🛞" value={tot.llantasSinImagen ?? 0} label="Llantas sin imagen" color="#dc2626" />
         <Card icon="✅" value={(tot.grupos ?? 0) - (tot.gruposIncompletos ?? 0)} label="Grupos completos" color="#16a34a" />
+      </div>
+
+      {/* Modo de agrupación */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>Agrupar por:</span>
+        {[['exacto', 'Nombre comercial'], ['modelo', '✨ Modelo (automático)']].map(([k, lab]) => (
+          <button key={k} onClick={() => setModo(k)}
+            style={{ padding: '6px 12px', borderRadius: 8, border: `1.5px solid ${modo === k ? '#3b82f6' : 'var(--color-border)'}`, background: modo === k ? '#eff6ff' : 'var(--color-surface)', color: modo === k ? '#1d4ed8' : 'var(--color-text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+            {lab}
+          </button>
+        ))}
+        {modo === 'modelo' && <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>junta todas las medidas de un mismo modelo (ej. ASR71).</span>}
       </div>
 
       {/* Controles */}

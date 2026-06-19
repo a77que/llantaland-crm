@@ -406,10 +406,27 @@ const hermanasImagen = async (req, res, next) => {
   }
 };
 
-// Agrupa el catálogo por marca + modelo (nombre comercial) con su estado de imagen.
+// Detecta el "modelo" a partir del nombre comercial, quitando la marca, la medida
+// y palabras comunes. Ej: "Llanta AUSTONE ASR71 195/65R15" -> "ASR71".
+function modeloAuto(marca, nombreComercial) {
+  let s = ` ${String(nombreComercial || '').toUpperCase()} `;
+  if (marca) s = s.split(String(marca).toUpperCase()).join(' ');
+  s = s.replace(/\b(LLANTA|LLANTAS|NEUMATICO|NEUMATICOS|TIRE|TIRES|RIN|ARO)\b/g, ' ');
+  // Quitar medidas de cualquier familia
+  s = s.replace(/\d{2}X[\d.,]+\s*R?\s*\d{2}(\.\d)?/g, ' ');            // flotación 35X12.50R20
+  s = s.replace(/\d{3}\s*\/\s*\d{2,3}\s*(ZR|RF|FR|R)?\s*\d{2}(\.\d)?\s*C?/g, ' '); // métrico
+  s = s.replace(/\d{3}\s*R\s*\d{2}\s*C?/g, ' ');                       // sin perfil 165R13C
+  s = s.replace(/\b\d(?:[.,]\d{2})\s*R?\s*\d{2}\b/g, ' ');             // numérico 7.50R16
+  s = s.replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s || '(sin modelo)';
+}
+
+// Agrupa el catálogo por marca + modelo con su estado de imagen.
+// modo='modelo' (automático, junta variantes) o por nombre comercial exacto.
 // Una foto de modelo aplica a TODAS las medidas de ese grupo.
 const gruposImagen = async (req, res, next) => {
   try {
+    const modo = req.query.modo === 'modelo' ? 'modelo' : 'exacto';
     const productos = await prisma.producto.findMany({
       where: { activo: true },
       select: { id: true, sku: true, marca: true, nombreComercial: true, medida: true, imagenUrl: true },
@@ -417,7 +434,9 @@ const gruposImagen = async (req, res, next) => {
     });
     const map = new Map();
     for (const p of productos) {
-      const modelo = (p.nombreComercial || '').trim() || '(sin modelo)';
+      const modelo = modo === 'modelo'
+        ? modeloAuto(p.marca, p.nombreComercial)
+        : ((p.nombreComercial || '').trim() || '(sin modelo)');
       const key = `${(p.marca || '').trim().toUpperCase()}|${modelo.toUpperCase()}`;
       if (!map.has(key)) map.set(key, { key, marca: p.marca || '', modelo, total: 0, conImagen: 0, imagenUrl: null, llantas: [] });
       const g = map.get(key);
