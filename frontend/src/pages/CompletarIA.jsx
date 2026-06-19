@@ -32,20 +32,36 @@ export default function CompletarIA() {
   const rellenarTodas = async () => {
     let ids = (data?.items || []).map(i => i.id);
     if (!ids.length) return;
-    const total = ids.length; let exitosos = 0, hechas = 0;
+    const sleep = (ms) => new Promise(s => setTimeout(s, ms));
+    const total = ids.length;
+    let exitosos = 0, hechas = 0, fallidos = 0, reintentos = 0;
     setProgreso({ total, hechas: 0, exitosos: 0 });
     try {
       while (ids.length) {
-        const r = await productosApi.enriquecerMasivo(ids);
+        let r;
+        try {
+          r = await productosApi.enriquecerMasivo(ids);
+        } catch (e) {
+          // Sin clave de IA → detener con mensaje claro
+          if (String(e?.error || '').toLowerCase().includes('ia configurada')) {
+            toast.error('No hay clave de IA configurada (Admin → Config APIs).'); break;
+          }
+          // Error de red/timeout → reintentar el mismo lote (hasta 4 veces) sin perder avance
+          reintentos++;
+          if (reintentos > 4) { toast('La IA está saturada; reintenta en unos minutos. Avance guardado.', { icon: '⏸️' }); break; }
+          await sleep(4000);
+          continue;
+        }
+        reintentos = 0;
         exitosos += r.exitosos || 0;
+        fallidos += r.fallidos || 0;
         hechas += r.procesados || 0;
         ids = ids.slice(r.procesados || 0);
         setProgreso({ total, hechas, exitosos });
-        if (!r.procesados) break; // evita bucle infinito
+        if (!r.procesados) break;
+        if (r.rate) await sleep(2500); // si la IA marcó límite, pausa extra
       }
-      toast.success(`Listo: ${exitosos} llanta(s) completada(s) con IA`);
-    } catch (e) {
-      toast.error(e?.error || 'Se detuvo el proceso (revisa la clave de IA)');
+      toast.success(`Completadas ${exitosos} de ${total}.${fallidos ? ` ${fallidos} no se pudieron (vuelve a darle click para reintentarlas).` : ''}`);
     } finally {
       setProgreso(null);
       qc.invalidateQueries({ queryKey: ['incompletos'] });

@@ -419,6 +419,7 @@ Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
 IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta. Debe ser rica y útil para el vendedor.`;
 
   let datos = null;
+  let rate = false; // si la IA respondió 429 (límite de velocidad)
   if (groqKey) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -427,6 +428,7 @@ IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha 
         body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 700, response_format: { type: 'json_object' } }),
         signal: AbortSignal.timeout(20000),
       });
+      if (r.status === 429) rate = true;
       if (r.ok) { const d = await r.json(); const c = d.choices?.[0]?.message?.content; if (c) datos = JSON.parse(c); }
     } catch (e) { /* sigue a gemini */ }
   }
@@ -437,10 +439,11 @@ IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha 
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }),
         signal: AbortSignal.timeout(20000),
       });
+      if (r.status === 429) rate = true;
       if (r.ok) { const d = await r.json(); const c = d.candidates?.[0]?.content?.parts?.[0]?.text; if (c) datos = JSON.parse(c); }
     } catch (e) { /* nada */ }
   }
-  if (!datos) return { status: 'error', mensaje: 'La IA no respondió' };
+  if (!datos) return { status: 'error', mensaje: 'La IA no respondió', rate };
 
   const INT_FIELDS = ['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'];
   const STR_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'eficienciaCombustible', 'eficienciaFrenado', 'paisFabricacion', 'origenMarca'];
@@ -481,19 +484,21 @@ const enriquecerMasivo = async (req, res, next) => {
   try {
     let { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids requeridos' });
-    const CAP = 12; // procesa máximo por llamada; el front repite con los restantes
+    const CAP = 6; // lotes chicos: cada request termina rápido y respeta el límite de la IA
     const lote = ids.slice(0, CAP);
-    let exitosos = 0, sinCambios = 0, fallidos = 0;
-    for (const id of lote) {
+    let exitosos = 0, sinCambios = 0, fallidos = 0, rate = false;
+    const sleep = (ms) => new Promise(s => setTimeout(s, ms));
+    for (let i = 0; i < lote.length; i++) {
       try {
-        const r = await enriquecerUno(id);
+        const r = await enriquecerUno(lote[i]);
         if (r.status === 'ok') exitosos++;
         else if (r.status === 'completo' || r.status === 'sin_cambios') sinCambios++;
         else if (r.status === 'sin_ia') return res.status(503).json({ error: 'No hay claves de IA configuradas. Cárgalas en Admin → Config APIs (Groq o Gemini).' });
-        else fallidos++;
+        else { fallidos++; if (r.rate) rate = true; }
       } catch (e) { fallidos++; }
+      if (i < lote.length - 1) await sleep(rate ? 1500 : 500); // pausa entre llamadas (más si hubo límite)
     }
-    res.json({ procesados: lote.length, exitosos, sinCambios, fallidos, restantes: Math.max(0, ids.length - lote.length) });
+    res.json({ procesados: lote.length, exitosos, sinCambios, fallidos, rate, restantes: Math.max(0, ids.length - lote.length) });
   } catch (err) {
     next(err);
   }
