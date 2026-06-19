@@ -267,6 +267,10 @@ const getConfigApiBusqueda = async (req, res, next) => {
       factilizaTokenSet: !!cfg.factilizaToken,
       groqKeySet:        !!cfg.groqKey,
       geminiKeySet:      !!cfg.geminiKey,
+      // Prioridad y activación de IA
+      iaPrioridad:  cfg.iaPrioridad || 'groq',
+      groqActivo:   cfg.groqActivo !== false,
+      geminiActivo: cfg.geminiActivo !== false,
     });
   } catch (err) {
     next(err);
@@ -288,6 +292,10 @@ const saveConfigApiBusqueda = async (req, res, next) => {
     [['dniKey'], ['rucKey'], ['ceKey'], ['factilizaToken'], ['groqKey'], ['geminiKey']].forEach(([k]) => {
       if (b[k] !== undefined && String(b[k]).trim() !== '') data[k] = String(b[k]).trim();
     });
+    // Prioridad y activación de IA
+    if (b.iaPrioridad !== undefined) data.iaPrioridad = b.iaPrioridad === 'gemini' ? 'gemini' : 'groq';
+    if (b.groqActivo !== undefined) data.groqActivo = !!b.groqActivo;
+    if (b.geminiActivo !== undefined) data.geminiActivo = !!b.geminiActivo;
 
     const existing = await prisma.configApiBusqueda.findFirst();
     const row = existing

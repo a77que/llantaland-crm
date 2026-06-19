@@ -560,6 +560,9 @@ model ConfigApiBusqueda {
   factilizaToken String?
   groqKey        String?
   geminiKey      String?
+  iaPrioridad    String   @default("groq")  // "groq" | "gemini" (cuál se intenta primero)
+  groqActivo     Boolean  @default(true)
+  geminiActivo   Boolean  @default(true)
   updatedAt      DateTime @updatedAt
   @@map("config_api_busqueda")
 }

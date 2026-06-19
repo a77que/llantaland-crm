@@ -3,6 +3,7 @@
 // 2) Marca + Modelo + Año → versiones con su medida de llanta (IA: Groq o Gemini)
 
 const { getConfigApis } = require('./apiConfigService');
+const { llamarIA: iaLlamar } = require('./iaService');
 const { normalizarMedida } = require('../utils/medida');
 
 // Consulta una placa peruana y devuelve marca, modelo y año si la API responde.
@@ -51,54 +52,10 @@ async function consultarPlaca(placa) {
   }
 }
 
-// Llama a una IA (Groq → Gemini fallback) para listar versiones de un vehículo y su medida.
+// Llama a la IA (servicio central: respeta prioridad y activación Groq/Gemini).
 async function llamarIA(prompt) {
-  const cfg = await getConfigApis();
-  const groqKey = cfg.groqKey;
-  if (groqKey) {
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant', // mismo modelo barato que usa el flujo n8n
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.2, max_tokens: 800,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (r.ok) {
-        const d = await r.json();
-        const c = d.choices?.[0]?.message?.content;
-        if (c) return JSON.parse(c);
-      }
-    } catch (e) { console.warn('[vehiculo] Groq falló:', e.message); }
-  }
-
-  const geminiKey = cfg.geminiKey;
-  if (geminiKey) {
-    try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
-          }),
-          signal: AbortSignal.timeout(15000),
-        }
-      );
-      if (r.ok) {
-        const d = await r.json();
-        const c = d.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (c) return JSON.parse(c);
-      }
-    } catch (e) { console.warn('[vehiculo] Gemini falló:', e.message); }
-  }
-  return null;
+  const { datos } = await iaLlamar(prompt);
+  return datos;
 }
 
 // Devuelve las versiones de un vehículo (marca/modelo/año) con la medida de llanta original.

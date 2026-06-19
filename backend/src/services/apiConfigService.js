@@ -33,6 +33,9 @@ async function getConfigApis() {
     factilizaToken: factTo,
     groqKey:        pick(row.groqKey,   process.env.GROQ_API_KEY),
     geminiKey:      pick(row.geminiKey, process.env.GEMINI_API_KEY),
+    iaPrioridad:    (row.iaPrioridad === 'gemini' ? 'gemini' : 'groq'),
+    groqActivo:     row.groqActivo !== false,    // por defecto activo
+    geminiActivo:   row.geminiActivo !== false,
   };
   _cacheTs = Date.now();
   return _cache;

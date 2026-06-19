@@ -41,9 +41,11 @@ export default function ConfigApis() {
     dniUrl: '', rucUrl: '', ceUrl: '', factilizaUrl: '',
     dniKey: '', rucKey: '', ceKey: '',
     factilizaToken: '', groqKey: '', geminiKey: '',
+    iaPrioridad: 'groq', groqActivo: true, geminiActivo: true,
   });
   useEffect(() => {
-    if (cfg) setForm((f) => ({ ...f, dniUrl: cfg.dniUrl || '', rucUrl: cfg.rucUrl || '', ceUrl: cfg.ceUrl || '', factilizaUrl: cfg.factilizaUrl || '' }));
+    if (cfg) setForm((f) => ({ ...f, dniUrl: cfg.dniUrl || '', rucUrl: cfg.rucUrl || '', ceUrl: cfg.ceUrl || '', factilizaUrl: cfg.factilizaUrl || '',
+      iaPrioridad: cfg.iaPrioridad || 'groq', groqActivo: cfg.groqActivo !== false, geminiActivo: cfg.geminiActivo !== false }));
   }, [cfg]);
 
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
@@ -51,7 +53,8 @@ export default function ConfigApis() {
   const guardar = useMutation({
     mutationFn: () => {
       // URLs siempre; claves solo si se escribió algo (vacío = no cambiar)
-      const payload = { dniUrl: form.dniUrl, rucUrl: form.rucUrl, ceUrl: form.ceUrl, factilizaUrl: form.factilizaUrl };
+      const payload = { dniUrl: form.dniUrl, rucUrl: form.rucUrl, ceUrl: form.ceUrl, factilizaUrl: form.factilizaUrl,
+        iaPrioridad: form.iaPrioridad, groqActivo: form.groqActivo, geminiActivo: form.geminiActivo };
       ['dniKey', 'rucKey', 'ceKey', 'factilizaToken', 'groqKey', 'geminiKey'].forEach((k) => {
         if (form[k] && form[k].trim()) payload[k] = form[k].trim();
       });
@@ -154,18 +157,40 @@ export default function ConfigApis() {
 
       {/* IA */}
       <div style={S.card}>
-        <div style={S.cardTitle}>IA de versiones de vehículo (medida por marca/modelo/año)</div>
+        <div style={S.cardTitle}>IA (rellenar ficha y versiones de vehículo)</div>
+
+        {/* Prioridad + activación */}
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={S.label}>Prioridad:</span>
+            {[['groq', 'Groq primero'], ['gemini', 'Gemini primero']].map(([k, lab]) => (
+              <button key={k} type="button" onClick={() => setForm(p => ({ ...p, iaPrioridad: k }))}
+                style={{ padding: '6px 12px', borderRadius: 8, border: `1.5px solid ${form.iaPrioridad === k ? '#6366f1' : 'var(--color-border)'}`, background: form.iaPrioridad === k ? '#eef2ff' : 'var(--color-surface)', color: form.iaPrioridad === k ? '#4338ca' : 'var(--color-text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                {lab}
+              </button>
+            ))}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.groqActivo} onChange={e => setForm(p => ({ ...p, groqActivo: e.target.checked }))} style={{ accentColor: '#16a34a' }} /> Groq activo
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.geminiActivo} onChange={e => setForm(p => ({ ...p, geminiActivo: e.target.checked }))} style={{ accentColor: '#16a34a' }} /> Gemini activo
+          </label>
+        </div>
+
         <div style={gridStyle}>
           <div style={S.group}>
-            <label style={S.label}>Groq API Key (principal)</label>
-            <input style={S.input} type="password" value={form.groqKey} onChange={set('groqKey')} placeholder={keyPlaceholder(cfg?.groqKeySet)} />
+            <label style={S.label}>Groq API Key {!form.groqActivo && '(desactivada)'}</label>
+            <input style={{ ...S.input, opacity: form.groqActivo ? 1 : 0.5 }} type="password" value={form.groqKey} onChange={set('groqKey')} placeholder={keyPlaceholder(cfg?.groqKeySet)} />
           </div>
           <div style={S.group}>
-            <label style={S.label}>Gemini API Key (respaldo)</label>
-            <input style={S.input} type="password" value={form.geminiKey} onChange={set('geminiKey')} placeholder={keyPlaceholder(cfg?.geminiKeySet)} />
+            <label style={S.label}>Gemini API Key {!form.geminiActivo && '(desactivada)'}</label>
+            <input style={{ ...S.input, opacity: form.geminiActivo ? 1 : 0.5 }} type="password" value={form.geminiKey} onChange={set('geminiKey')} placeholder={keyPlaceholder(cfg?.geminiKeySet)} />
           </div>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Se usa Groq primero; si falla, Gemini como respaldo.</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          Se intenta primero la IA con prioridad; si falla o está desactivada, usa la otra (si está activa). Si desactivas una, no se usa aunque tenga clave.
+        </span>
       </div>
 
       <button style={{ ...S.btn, padding: '12px 28px' }} onClick={() => guardar.mutate()} disabled={guardar.isPending}>

@@ -3,7 +3,7 @@ const path = require('path');
 const { paginar } = require('../utils/helpers');
 const XLSXStyle = require('xlsx-js-style');
 const { normalizarMedida, pareceMedida } = require('../utils/medida');
-const { getConfigApis } = require('../services/apiConfigService');
+const { llamarIA } = require('../services/iaService');
 
 const prisma = new PrismaClient();
 
@@ -248,132 +248,17 @@ const TECH_FIELDS = [
   'paisFabricacion', 'origenMarca', 'fichaTecnica',
 ];
 
+// Completa con IA UN producto (botón "Rellenar con IA"). Usa el servicio central
+// (respeta prioridad y activación de Groq/Gemini configuradas en Config APIs).
 const enriquecerConIA = async (req, res, next) => {
   try {
-    const prod = await prisma.producto.findUnique({ where: { id: req.params.id } });
-    if (!prod) return res.status(404).json({ error: 'Producto no encontrado' });
-
-    const missing = TECH_FIELDS.filter(f => prod[f] === null || prod[f] === undefined || prod[f] === '');
-    if (missing.length === 0) {
-      return res.json({ mensaje: 'Producto ya tiene información completa', producto: prod });
-    }
-
-    const prompt = `Eres un experto en neumáticos de automóvil. Dado el siguiente neumático, proporciona los datos técnicos faltantes con la mayor precisión posible basándote en estándares de la industria.
-
-Neumático:
-- Medida: ${prod.medida}
-- Marca: ${prod.marca}
-- Modelo: ${prod.nombreComercial || 'no especificado'}
-- Tipo de vehículo: ${prod.tipo}
-${prod.indice_carga ? `- Índice de carga: ${prod.indice_carga}` : ''}
-${prod.velocidad_max ? `- Índice de velocidad: ${prod.velocidad_max}` : ''}
-
-Campos faltantes que necesito: ${missing.join(', ')}
-
-Responde ÚNICAMENTE con un objeto JSON válido. Usa null para campos que genuinamente no puedas determinar.
-Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
-
-IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta para el vendedor. Debe ser rica y útil para que el vendedor asesore correctamente al cliente.
-
-Formato de ejemplo:
-{
-  "indice_carga": "91",
-  "velocidad_max": "H",
-  "garantia": "2 años",
-  "cargaMaxNeumatico": 615,
-  "velocidadMaxKmh": 210,
-  "eficienciaCombustible": "B",
-  "eficienciaFrenado": "A",
-  "nivelRuido": 71,
-  "paisFabricacion": "Japón",
-  "origenMarca": "Japón",
-  "fichaTecnica": "Descripción técnica completa del neumático..."
-}`;
-
-    let datos = null;
-
-    // Claves de IA: primero las configuradas en el CRM (BD), luego variables de entorno.
-    const cfgApis = await getConfigApis();
-    const groqKey = cfgApis.groqKey;
-    if (groqKey) {
-      try {
-        const groqResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-          body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.1,
-            max_tokens: 500,
-            response_format: { type: 'json_object' },
-          }),
-        });
-        if (groqResp.ok) {
-          const d = await groqResp.json();
-          const content = d.choices?.[0]?.message?.content;
-          if (content) datos = JSON.parse(content);
-        }
-      } catch (e) {
-        console.warn('[IA] Groq falló:', e.message);
-      }
-    }
-
-    if (!datos) {
-      const geminiKey = cfgApis.geminiKey;
-      if (!groqKey && !geminiKey) return res.status(503).json({ error: 'No hay claves de IA configuradas. Cárgalas en Admin → Config APIs (Groq o Gemini).' });
-      if (!geminiKey) return res.status(502).json({ error: 'La IA (Groq) no devolvió datos. Reintenta o configura Gemini como respaldo en Config APIs.' });
-      const geminiResp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      if (!geminiResp.ok) {
-        return res.status(502).json({ error: 'IA no disponible', detalle: await geminiResp.text() });
-      }
-      const gd = await geminiResp.json();
-      const content = gd.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (content) datos = JSON.parse(content);
-    }
-
-    if (!datos) return res.status(502).json({ error: 'No se pudo obtener respuesta de la IA' });
-
-    const INT_FIELDS  = ['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'];
-    const STR_FIELDS  = ['indice_carga', 'velocidad_max', 'garantia', 'eficienciaCombustible', 'eficienciaFrenado', 'paisFabricacion', 'origenMarca'];
-    const update = {};
-
-    for (const f of missing) {
-      if (datos[f] == null) continue;
-      if (f === 'fichaTecnica') {
-        update[f] = String(datos[f]).trim();
-      } else if (INT_FIELDS.includes(f)) {
-        const n = parseInt(datos[f]);
-        if (!isNaN(n)) update[f] = n;
-      } else if (STR_FIELDS.includes(f)) {
-        update[f] = String(datos[f]).trim().substring(0, 50);
-      }
-    }
-
-    if (Object.keys(update).length === 0) {
-      return res.json({ mensaje: 'La IA no pudo determinar los campos faltantes', producto: prod });
-    }
-
-    const productoActualizado = await prisma.producto.update({
-      where: { id: req.params.id },
-      data: update,
-      include: { stocks: { include: { sede: true }, orderBy: { sede: { codigoLocal: 'asc' } } } },
-    });
-
-    res.json({
-      mensaje: `${Object.keys(update).length} campos completados con IA`,
-      camposActualizados: Object.keys(update),
-      producto: productoActualizado,
-    });
+    const r = await enriquecerUno(req.params.id);
+    if (r.status === 'no_encontrado') return res.status(404).json({ error: 'Producto no encontrado' });
+    if (r.status === 'sin_ia') return res.status(503).json({ error: 'No hay IA activa/configurada. Revisa Admin → Config APIs (activa Groq o Gemini).' });
+    if (r.status === 'completo') return res.json({ mensaje: 'Producto ya tiene información completa', producto: r.producto });
+    if (r.status === 'error') return res.status(502).json({ error: 'La IA no respondió. Reintenta en un momento.' });
+    if (r.status === 'sin_cambios') return res.json({ mensaje: 'La IA no pudo determinar los campos faltantes', producto: r.producto });
+    return res.json({ mensaje: `${r.camposActualizados.length} campos completados con IA`, camposActualizados: r.camposActualizados, producto: r.producto });
   } catch (err) {
     next(err);
   }
@@ -396,11 +281,6 @@ async function enriquecerUno(prodId) {
   const missing = TECH_FIELDS.filter(f => prod[f] === null || prod[f] === undefined || prod[f] === '');
   if (missing.length === 0) return { status: 'completo', producto: prod };
 
-  const cfgApis = await getConfigApis();
-  const groqKey = cfgApis.groqKey;
-  const geminiKey = cfgApis.geminiKey;
-  if (!groqKey && !geminiKey) return { status: 'sin_ia' };
-
   const prompt = `Eres un experto en neumáticos de automóvil. Dado el siguiente neumático, proporciona los datos técnicos faltantes con la mayor precisión posible basándote en estándares de la industria.
 
 Neumático:
@@ -418,31 +298,8 @@ Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
 
 IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta. Debe ser rica y útil para el vendedor.`;
 
-  let datos = null;
-  let rate = false; // si la IA respondió 429 (límite de velocidad)
-  if (groqKey) {
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 700, response_format: { type: 'json_object' } }),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (r.status === 429) rate = true;
-      if (r.ok) { const d = await r.json(); const c = d.choices?.[0]?.message?.content; if (c) datos = JSON.parse(c); }
-    } catch (e) { /* sigue a gemini */ }
-  }
-  if (!datos && geminiKey) {
-    try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (r.status === 429) rate = true;
-      if (r.ok) { const d = await r.json(); const c = d.candidates?.[0]?.content?.parts?.[0]?.text; if (c) datos = JSON.parse(c); }
-    } catch (e) { /* nada */ }
-  }
+  const { datos, rate, sinIa } = await llamarIA(prompt);
+  if (sinIa) return { status: 'sin_ia' };
   if (!datos) return { status: 'error', mensaje: 'La IA no respondió', rate };
 
   const INT_FIELDS = ['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'];
