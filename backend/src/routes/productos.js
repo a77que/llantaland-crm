@@ -2,7 +2,7 @@ const router = require('express').Router();
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen } = require('../controllers/productoController');
+const { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo } = require('../controllers/productoController');
 const { auth, requireAdmin } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
@@ -31,6 +31,8 @@ router.get('/medidas',    medidas);
 router.get('/compatibles',compatibles);
 router.get('/grupos-imagen',      gruposImagen);
 router.get('/imagenes/faltantes-export', exportFaltantesImagen);
+router.get('/incompletos',        incompletos);
+router.post('/enriquecer-masivo', requireAdmin, enriquecerMasivo);
 router.post('/aplicar-imagen',    requireAdmin, aplicarImagen);
 router.post('/imagen-multiple',   requireAdmin, upload.single('imagen'), subirImagenMultiple);
 router.get('/:id/hermanas',       hermanasImagen);

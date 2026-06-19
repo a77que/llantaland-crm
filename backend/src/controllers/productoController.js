@@ -379,6 +379,126 @@ Formato de ejemplo:
   }
 };
 
+// Etiquetas legibles de los campos técnicos (para mostrar qué falta).
+const TECH_LABELS = {
+  indice_carga: 'Índice de carga', velocidad_max: 'Índice de velocidad', garantia: 'Garantía',
+  cargaMaxNeumatico: 'Carga máx. (kg)', velocidadMaxKmh: 'Velocidad máx. (km/h)',
+  eficienciaCombustible: 'Eficiencia combustible', eficienciaFrenado: 'Frenado en mojado',
+  nivelRuido: 'Nivel de ruido', paisFabricacion: 'País de fabricación', origenMarca: 'Origen de marca',
+  fichaTecnica: 'Ficha técnica',
+};
+
+// Helper reutilizable: completa con IA los campos técnicos faltantes de UN producto.
+// Devuelve { status: 'ok'|'completo'|'sin_cambios'|'error'|'sin_ia'|'no_encontrado', ... }.
+async function enriquecerUno(prodId) {
+  const prod = await prisma.producto.findUnique({ where: { id: prodId } });
+  if (!prod) return { status: 'no_encontrado' };
+  const missing = TECH_FIELDS.filter(f => prod[f] === null || prod[f] === undefined || prod[f] === '');
+  if (missing.length === 0) return { status: 'completo', producto: prod };
+
+  const cfgApis = await getConfigApis();
+  const groqKey = cfgApis.groqKey;
+  const geminiKey = cfgApis.geminiKey;
+  if (!groqKey && !geminiKey) return { status: 'sin_ia' };
+
+  const prompt = `Eres un experto en neumáticos de automóvil. Dado el siguiente neumático, proporciona los datos técnicos faltantes con la mayor precisión posible basándote en estándares de la industria.
+
+Neumático:
+- Medida: ${prod.medida}
+- Marca: ${prod.marca}
+- Modelo: ${prod.nombreComercial || 'no especificado'}
+- Tipo de vehículo: ${prod.tipo}
+${prod.indice_carga ? `- Índice de carga: ${prod.indice_carga}` : ''}
+${prod.velocidad_max ? `- Índice de velocidad: ${prod.velocidad_max}` : ''}
+
+Campos faltantes que necesito: ${missing.join(', ')}
+
+Responde ÚNICAMENTE con un objeto JSON válido. Usa null para campos que genuinamente no puedas determinar.
+Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
+
+IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta. Debe ser rica y útil para el vendedor.`;
+
+  let datos = null;
+  if (groqKey) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+        body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 700, response_format: { type: 'json_object' } }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (r.ok) { const d = await r.json(); const c = d.choices?.[0]?.message?.content; if (c) datos = JSON.parse(c); }
+    } catch (e) { /* sigue a gemini */ }
+  }
+  if (!datos && geminiKey) {
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }),
+        signal: AbortSignal.timeout(20000),
+      });
+      if (r.ok) { const d = await r.json(); const c = d.candidates?.[0]?.content?.parts?.[0]?.text; if (c) datos = JSON.parse(c); }
+    } catch (e) { /* nada */ }
+  }
+  if (!datos) return { status: 'error', mensaje: 'La IA no respondió' };
+
+  const INT_FIELDS = ['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'];
+  const STR_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'eficienciaCombustible', 'eficienciaFrenado', 'paisFabricacion', 'origenMarca'];
+  const update = {};
+  for (const f of missing) {
+    if (datos[f] == null) continue;
+    if (f === 'fichaTecnica') update[f] = String(datos[f]).trim();
+    else if (INT_FIELDS.includes(f)) { const n = parseInt(datos[f]); if (!isNaN(n)) update[f] = n; }
+    else if (STR_FIELDS.includes(f)) update[f] = String(datos[f]).trim().substring(0, 50);
+  }
+  if (Object.keys(update).length === 0) return { status: 'sin_cambios', producto: prod };
+  const producto = await prisma.producto.update({ where: { id: prodId }, data: update });
+  return { status: 'ok', camposActualizados: Object.keys(update), producto };
+}
+
+// Lista de llantas con ficha técnica incompleta + qué campos faltan.
+const incompletos = async (req, res, next) => {
+  try {
+    const productos = await prisma.producto.findMany({
+      where: { activo: true },
+      select: { id: true, sku: true, marca: true, nombreComercial: true, medida: true,
+        ...Object.fromEntries(TECH_FIELDS.map(f => [f, true])) },
+      orderBy: [{ marca: 'asc' }, { nombreComercial: 'asc' }, { medida: 'asc' }],
+    });
+    const items = [];
+    for (const p of productos) {
+      const faltan = TECH_FIELDS.filter(f => p[f] === null || p[f] === undefined || p[f] === '');
+      if (faltan.length) items.push({ id: p.id, sku: p.sku, marca: p.marca, modelo: p.nombreComercial || '', medida: p.medida, faltan, faltanLabels: faltan.map(f => TECH_LABELS[f] || f) });
+    }
+    res.json({ total: items.length, items });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Rellena con IA varios productos (por lotes para no exceder límites de la IA).
+const enriquecerMasivo = async (req, res, next) => {
+  try {
+    let { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids requeridos' });
+    const CAP = 12; // procesa máximo por llamada; el front repite con los restantes
+    const lote = ids.slice(0, CAP);
+    let exitosos = 0, sinCambios = 0, fallidos = 0;
+    for (const id of lote) {
+      try {
+        const r = await enriquecerUno(id);
+        if (r.status === 'ok') exitosos++;
+        else if (r.status === 'completo' || r.status === 'sin_cambios') sinCambios++;
+        else if (r.status === 'sin_ia') return res.status(503).json({ error: 'No hay claves de IA configuradas. Cárgalas en Admin → Config APIs (Groq o Gemini).' });
+        else fallidos++;
+      } catch (e) { fallidos++; }
+    }
+    res.json({ procesados: lote.length, exitosos, sinCambios, fallidos, restantes: Math.max(0, ids.length - lote.length) });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Llantas "hermanas": misma medida (canónica) + misma marca. Suelen ser el mismo
 // producto físico con distinto nombre comercial → comparten imagen.
 const hermanasImagen = async (req, res, next) => {
@@ -520,4 +640,4 @@ const aplicarImagen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo };

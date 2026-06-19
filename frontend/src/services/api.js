@@ -58,6 +58,8 @@ export const productosApi = {
   gruposImagen: (modo) => api.get('/productos/grupos-imagen', { params: modo ? { modo } : {}, timeout: 60000 }),
   subirImagenMultiple: (formData) => api.post('/productos/imagen-multiple', formData, { timeout: 120000 }),
   faltantesImagenExport: () => api.get('/productos/imagenes/faltantes-export', { responseType: 'blob', timeout: 120000 }),
+  incompletos: () => api.get('/productos/incompletos', { timeout: 60000 }),
+  enriquecerMasivo: (ids) => api.post('/productos/enriquecer-masivo', { ids }, { timeout: 120000 }),
   subirImagen: (id, formData) => api.post(`/productos/${id}/imagenes`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
