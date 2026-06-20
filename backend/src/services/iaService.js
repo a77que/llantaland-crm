@@ -20,7 +20,6 @@ function extraerJson(text) {
   return null;
 }
 
-async function _groq(prompt, key, jsonObject) {
 async function _groq(prompt, key, jsonObject, maxTokens, timeoutMs) {
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
