@@ -10,6 +10,16 @@ const { getConfigApis } = require('./apiConfigService');
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
+// Parseo tolerante: la IA a veces envuelve el JSON en ```json ... ``` o agrega texto.
+function extraerJson(text) {
+  if (!text) return null;
+  let s = String(text).replace(/```json/gi, '').replace(/```/g, '').trim();
+  try { return JSON.parse(s); } catch (e) { /* intentar extraer el bloque {...} */ }
+  const i = s.indexOf('{'), j = s.lastIndexOf('}');
+  if (i >= 0 && j > i) { try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { /* nada */ } }
+  return null;
+}
+
 async function _groq(prompt, key, jsonObject) {
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -23,7 +33,7 @@ async function _groq(prompt, key, jsonObject) {
     signal: AbortSignal.timeout(20000),
   });
   if (r.status === 429) return { rate: true };
-  if (r.ok) { const d = await r.json(); const c = d.choices?.[0]?.message?.content; if (c) return { datos: JSON.parse(c) }; }
+  if (r.ok) { const d = await r.json(); const c = d.choices?.[0]?.message?.content; const datos = extraerJson(c); if (datos) return { datos }; }
   return {};
 }
 
@@ -34,7 +44,7 @@ async function _gemini(prompt, key, jsonObject) {
     signal: AbortSignal.timeout(20000),
   });
   if (r.status === 429) return { rate: true };
-  if (r.ok) { const d = await r.json(); const c = d.candidates?.[0]?.content?.parts?.[0]?.text; if (c) return { datos: JSON.parse(c) }; }
+  if (r.ok) { const d = await r.json(); const c = d.candidates?.[0]?.content?.parts?.[0]?.text; const datos = extraerJson(c); if (datos) return { datos }; }
   return {};
 }
 

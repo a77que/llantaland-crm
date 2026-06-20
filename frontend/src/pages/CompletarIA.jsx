@@ -6,11 +6,21 @@ import { productosApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
+const MOTIVO_LABEL = {
+  limite_velocidad: 'Límite de velocidad de la IA (reintenta en un momento)',
+  sin_respuesta: 'La IA no respondió a tiempo',
+  sin_campos: 'La IA no logró determinar los datos de esta llanta',
+  sin_ia: 'No hay IA activa/configurada',
+  excepcion: 'Error de conexión',
+  desconocido: 'No se pudo completar',
+};
+
 export default function CompletarIA() {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const [q, setQ] = useState('');
   const [progreso, setProgreso] = useState(null); // { total, hechas, exitosos }
+  const [fallos, setFallos] = useState([]);        // detalle de las que no se pudieron
 
   const { data, isLoading } = useQuery({ queryKey: ['incompletos'], queryFn: productosApi.incompletos });
 
@@ -29,12 +39,14 @@ export default function CompletarIA() {
     return `${i.marca} ${i.modelo} ${i.medida} ${i.sku}`.toLowerCase().includes(q.toLowerCase());
   });
 
-  const rellenarTodas = async () => {
-    let ids = (data?.items || []).map(i => i.id);
+  const rellenarTodas = async (idsArg) => {
+    let ids = (idsArg && idsArg.length ? idsArg : (data?.items || []).map(i => i.id)).slice();
     if (!ids.length) return;
     const sleep = (ms) => new Promise(s => setTimeout(s, ms));
     const total = ids.length;
-    let exitosos = 0, hechas = 0, fallidos = 0, reintentos = 0;
+    let exitosos = 0, hechas = 0, reintentos = 0;
+    const fallosAll = [];
+    setFallos([]);
     setProgreso({ total, hechas: 0, exitosos: 0 });
     try {
       while (ids.length) {
@@ -54,14 +66,15 @@ export default function CompletarIA() {
         }
         reintentos = 0;
         exitosos += r.exitosos || 0;
-        fallidos += r.fallidos || 0;
         hechas += r.procesados || 0;
+        if (Array.isArray(r.fallos)) fallosAll.push(...r.fallos);
         ids = ids.slice(r.procesados || 0);
         setProgreso({ total, hechas, exitosos });
         if (!r.procesados) break;
         if (r.rate) await sleep(2500); // si la IA marcó límite, pausa extra
       }
-      toast.success(`Completadas ${exitosos} de ${total}.${fallidos ? ` ${fallidos} no se pudieron (vuelve a darle click para reintentarlas).` : ''}`);
+      setFallos(fallosAll);
+      toast.success(`Completadas ${exitosos} de ${total}.${fallosAll.length ? ` ${fallosAll.length} no se pudieron (ver detalle abajo).` : ''}`);
     } finally {
       setProgreso(null);
       qc.invalidateQueries({ queryKey: ['incompletos'] });
@@ -82,7 +95,7 @@ export default function CompletarIA() {
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Llantas con datos técnicos incompletos. Complétalos uno por uno o todos en automático.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button style={btn(items.length || corriendo ? '#6366f1' : '#94a3b8')} disabled={corriendo || !(data?.items || []).length} onClick={rellenarTodas}>
+          <button style={btn(items.length || corriendo ? '#6366f1' : '#94a3b8')} disabled={corriendo || !(data?.items || []).length} onClick={() => rellenarTodas()}>
             {corriendo ? `Rellenando… ${progreso.hechas}/${progreso.total}` : `🤖 Rellenar todas (${(data?.items || []).length})`}
           </button>
           <Link to="/inventario" style={{ ...btn('var(--color-surface)', 'var(--color-text)'), border: '1px solid var(--color-border)', textDecoration: 'none' }}>← Inventario</Link>
@@ -95,6 +108,29 @@ export default function CompletarIA() {
           ? `Procesando con IA… ${progreso.hechas} de ${progreso.total} (✅ ${progreso.exitosos} completadas). No cierres esta pestaña.`
           : `${data?.total ?? 0} llanta(s) con ficha incompleta.`}
       </div>
+
+      {/* Detalle de las que fallaron + reintentar */}
+      {!corriendo && fallos.length > 0 && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: '#b91c1c' }}>⚠️ {fallos.length} no se pudieron completar</div>
+            <button style={btn('#dc2626')} onClick={() => rellenarTodas(fallos.map(f => f.id))}>🔁 Reintentar las que fallaron</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
+            {fallos.map((f, i) => (
+              <div key={f.id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12, padding: '4px 0', borderBottom: '1px solid #fee2e2' }}>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <strong>{f.marca || ''} {f.modelo || ''}</strong> {f.medida || ''} {f.sku ? <span style={{ color: 'var(--color-text-muted)' }}>({f.sku})</span> : ''}
+                </span>
+                <span style={{ color: '#b45309', fontWeight: 600, whiteSpace: 'nowrap' }}>{MOTIVO_LABEL[f.motivo] || f.motivo || 'No se pudo'}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>
+            La mayoría se resuelve reintentando (el límite de velocidad de la IA es la causa más común). Las que digan "no logró determinar los datos" suelen ser modelos poco conocidos: complétalas a mano o usa otra IA (cambia la prioridad en Config APIs).
+          </div>
+        </div>
+      )}
 
       <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar marca, modelo, medida o SKU…"
         style={{ width: '100%', padding: '9px 14px', fontSize: 14, border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', color: 'var(--color-text)', marginBottom: 12, boxSizing: 'border-box' }} />

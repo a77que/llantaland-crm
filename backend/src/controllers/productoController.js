@@ -278,8 +278,9 @@ const TECH_LABELS = {
 async function enriquecerUno(prodId) {
   const prod = await prisma.producto.findUnique({ where: { id: prodId } });
   if (!prod) return { status: 'no_encontrado' };
+  const info = { id: prod.id, sku: prod.sku, marca: prod.marca, modelo: prod.nombreComercial || '', medida: prod.medida };
   const missing = TECH_FIELDS.filter(f => prod[f] === null || prod[f] === undefined || prod[f] === '');
-  if (missing.length === 0) return { status: 'completo', producto: prod };
+  if (missing.length === 0) return { status: 'completo', producto: prod, info };
 
   const prompt = `Eres un experto en neumáticos de automóvil. Dado el siguiente neumático, proporciona los datos técnicos faltantes con la mayor precisión posible basándote en estándares de la industria.
 
@@ -299,8 +300,8 @@ Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
 IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta. Debe ser rica y útil para el vendedor.`;
 
   const { datos, rate, sinIa } = await llamarIA(prompt);
-  if (sinIa) return { status: 'sin_ia' };
-  if (!datos) return { status: 'error', mensaje: 'La IA no respondió', rate };
+  if (sinIa) return { status: 'sin_ia', motivo: 'sin_ia', info };
+  if (!datos) return { status: 'error', motivo: rate ? 'limite_velocidad' : 'sin_respuesta', rate, info };
 
   const INT_FIELDS = ['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'];
   const STR_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'eficienciaCombustible', 'eficienciaFrenado', 'paisFabricacion', 'origenMarca'];
@@ -311,9 +312,9 @@ IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha 
     else if (INT_FIELDS.includes(f)) { const n = parseInt(datos[f]); if (!isNaN(n)) update[f] = n; }
     else if (STR_FIELDS.includes(f)) update[f] = String(datos[f]).trim().substring(0, 50);
   }
-  if (Object.keys(update).length === 0) return { status: 'sin_cambios', producto: prod };
+  if (Object.keys(update).length === 0) return { status: 'sin_cambios', motivo: 'sin_campos', producto: prod, info };
   const producto = await prisma.producto.update({ where: { id: prodId }, data: update });
-  return { status: 'ok', camposActualizados: Object.keys(update), producto };
+  return { status: 'ok', camposActualizados: Object.keys(update), producto, info };
 }
 
 // Lista de llantas con ficha técnica incompleta + qué campos faltan.
@@ -344,18 +345,26 @@ const enriquecerMasivo = async (req, res, next) => {
     const CAP = 6; // lotes chicos: cada request termina rápido y respeta el límite de la IA
     const lote = ids.slice(0, CAP);
     let exitosos = 0, sinCambios = 0, fallidos = 0, rate = false;
+    const fallos = []; // detalle de las que no se pudieron, con su motivo
     const sleep = (ms) => new Promise(s => setTimeout(s, ms));
     for (let i = 0; i < lote.length; i++) {
       try {
         const r = await enriquecerUno(lote[i]);
         if (r.status === 'ok') exitosos++;
-        else if (r.status === 'completo' || r.status === 'sin_cambios') sinCambios++;
+        else if (r.status === 'completo') sinCambios++;
         else if (r.status === 'sin_ia') return res.status(503).json({ error: 'No hay claves de IA configuradas. Cárgalas en Admin → Config APIs (Groq o Gemini).' });
-        else { fallidos++; if (r.rate) rate = true; }
-      } catch (e) { fallidos++; }
+        else { // 'error' o 'sin_cambios' → reportar el motivo
+          fallidos++;
+          if (r.rate) rate = true;
+          fallos.push({ id: lote[i], motivo: r.motivo || 'desconocido', ...(r.info || {}) });
+        }
+      } catch (e) {
+        fallidos++;
+        fallos.push({ id: lote[i], motivo: 'excepcion', detalle: String(e?.message || e).slice(0, 120) });
+      }
       if (i < lote.length - 1) await sleep(rate ? 1500 : 500); // pausa entre llamadas (más si hubo límite)
     }
-    res.json({ procesados: lote.length, exitosos, sinCambios, fallidos, rate, restantes: Math.max(0, ids.length - lote.length) });
+    res.json({ procesados: lote.length, exitosos, sinCambios, fallidos, rate, fallos, restantes: Math.max(0, ids.length - lote.length) });
   } catch (err) {
     next(err);
   }
