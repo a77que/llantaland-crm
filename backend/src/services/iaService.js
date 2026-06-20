@@ -21,34 +21,35 @@ function extraerJson(text) {
 }
 
 async function _groq(prompt, key, jsonObject) {
+async function _groq(prompt, key, jsonObject, maxTokens, timeoutMs) {
   const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1, max_tokens: 800,
+      temperature: 0.1, max_tokens: maxTokens,
       ...(jsonObject ? { response_format: { type: 'json_object' } } : {}),
     }),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (r.status === 429) return { rate: true };
   if (r.ok) { const d = await r.json(); const c = d.choices?.[0]?.message?.content; const datos = extraerJson(c); if (datos) return { datos }; }
   return {};
 }
 
-async function _gemini(prompt, key, jsonObject) {
+async function _gemini(prompt, key, jsonObject, maxTokens, timeoutMs) {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, ...(jsonObject ? { responseMimeType: 'application/json' } : {}) } }),
-    signal: AbortSignal.timeout(20000),
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens, ...(jsonObject ? { responseMimeType: 'application/json' } : {}) } }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (r.status === 429) return { rate: true };
   if (r.ok) { const d = await r.json(); const c = d.candidates?.[0]?.content?.parts?.[0]?.text; const datos = extraerJson(c); if (datos) return { datos }; }
   return {};
 }
 
-async function llamarIA(prompt, { jsonObject = true } = {}) {
+async function llamarIA(prompt, { jsonObject = true, maxTokens = 900, timeoutMs = 20000 } = {}) {
   const cfg = await getConfigApis();
   const usarGroq = cfg.groqActivo && !!cfg.groqKey;
   const usarGemini = cfg.geminiActivo && !!cfg.geminiKey;
@@ -59,8 +60,8 @@ async function llamarIA(prompt, { jsonObject = true } = {}) {
   for (const prov of orden) {
     try {
       let res = null;
-      if (prov === 'groq' && usarGroq) res = await _groq(prompt, cfg.groqKey, jsonObject);
-      else if (prov === 'gemini' && usarGemini) res = await _gemini(prompt, cfg.geminiKey, jsonObject);
+      if (prov === 'groq' && usarGroq) res = await _groq(prompt, cfg.groqKey, jsonObject, maxTokens, timeoutMs);
+      else if (prov === 'gemini' && usarGemini) res = await _gemini(prompt, cfg.geminiKey, jsonObject, maxTokens, timeoutMs);
       if (res) {
         if (res.rate) rate = true;
         if (res.datos) return { datos: res.datos, rate, sinIa: false };

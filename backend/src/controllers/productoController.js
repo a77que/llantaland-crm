@@ -299,7 +299,9 @@ Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
 
 IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta. Debe ser rica y útil para el vendedor.`;
 
-  const { datos, rate, sinIa } = await llamarIA(prompt);
+  // La ficha técnica es texto largo (3 párrafos) → más tokens y más tiempo para que no se corte.
+  const pesado = missing.includes('fichaTecnica');
+  const { datos, rate, sinIa } = await llamarIA(prompt, { maxTokens: pesado ? 2800 : 900, timeoutMs: pesado ? 45000 : 20000 });
   if (sinIa) return { status: 'sin_ia', motivo: 'sin_ia', info };
   if (!datos) return { status: 'error', motivo: rate ? 'limite_velocidad' : 'sin_respuesta', rate, info };
 
@@ -342,7 +344,7 @@ const enriquecerMasivo = async (req, res, next) => {
   try {
     let { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids requeridos' });
-    const CAP = 6; // lotes chicos: cada request termina rápido y respeta el límite de la IA
+    const CAP = 4; // lotes chicos: cada request termina dentro del timeout aun generando ficha técnica
     const lote = ids.slice(0, CAP);
     let exitosos = 0, sinCambios = 0, fallidos = 0, rate = false;
     const fallos = []; // detalle de las que no se pudieron, con su motivo
