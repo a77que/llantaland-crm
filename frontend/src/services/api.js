@@ -44,13 +44,33 @@ export const leadsApi = {
 // Campos técnicos que la IA pudo haber dejado con basura ("null", "[object Object]"…).
 const TECH_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'cargaMaxNeumatico', 'velocidadMaxKmh', 'eficienciaCombustible', 'eficienciaFrenado', 'nivelRuido', 'paisFabricacion', 'origenMarca', 'fichaTecnica'];
 const BASURA = new Set(['', 'null', 'undefined', 'nan', 'n/a', 'na', '-', '--', '.', '[object object]', 'none', 'no especificado', 'no disponible', 'sin información', 'sin informacion']);
-// Limpia valores basura → null, para que la vista muestre "—" en vez del texto malo.
+// Índice de velocidad: si quedó como número (km/h), mostrar la LETRA correcta.
+const KMH_A_LETRA = { 100:'J',110:'K',120:'L',130:'M',140:'N',150:'P',160:'Q',170:'R',180:'S',190:'T',200:'U',210:'H',240:'V',270:'W',300:'Y' };
+function indiceVelocidadLetra(v) {
+  let s = String(v).trim().toUpperCase();
+  if (s === 'ZR') return 'ZR';
+  if (/^[A-Z]\d?$/.test(s)) return s;
+  const m = s.match(/(\d{2,3})/);
+  if (m) {
+    const n = parseInt(m[1]);
+    if (KMH_A_LETRA[n]) return KMH_A_LETRA[n];
+    const keys = Object.keys(KMH_A_LETRA).map(Number).sort((a, b) => a - b);
+    for (const k of keys) if (n <= k) return KMH_A_LETRA[k];
+    return 'Y';
+  }
+  return null;
+}
+// Limpia valores basura → null, y corrige los campos que deben ser LETRA.
 function limpiarProducto(p) {
   if (!p || typeof p !== 'object') return p;
   for (const f of TECH_FIELDS) {
     const v = p[f];
     if (typeof v === 'string' && BASURA.has(v.trim().toLowerCase())) p[f] = null;
     else if (v !== null && typeof v === 'object') p[f] = null;
+  }
+  if (p.velocidad_max != null) p.velocidad_max = indiceVelocidadLetra(p.velocidad_max); // número → letra
+  for (const f of ['eficienciaCombustible', 'eficienciaFrenado']) {                      // solo letras A–G
+    if (p[f] != null && !/^[A-G]$/.test(String(p[f]).trim().toUpperCase())) p[f] = null;
   }
   return p;
 }

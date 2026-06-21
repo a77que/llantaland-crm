@@ -266,6 +266,38 @@ function aTexto(v) {
   return String(v);
 }
 
+// ── Campos que deben ser LETRA (no número) ──────────────────────────────────
+// Índice de velocidad: símbolo de letra. Si llega un número (km/h) lo convertimos.
+const KMH_A_LETRA = { 100:'J',110:'K',120:'L',130:'M',140:'N',150:'P',160:'Q',170:'R',180:'S',190:'T',200:'U',210:'H',240:'V',270:'W',300:'Y' };
+function normIndiceVelocidad(v) {
+  if (v === null || v === undefined) return null;
+  let s = String(v).trim().toUpperCase();
+  if (s === 'ZR') return 'ZR';
+  if (/^[A-Z]\d?$/.test(s)) return s;                       // ya es letra (H, V, W1…)
+  const m = s.match(/(\d{2,3})/);                            // vino como número km/h
+  if (m) {
+    const n = parseInt(m[1]);
+    if (KMH_A_LETRA[n]) return KMH_A_LETRA[n];
+    const keys = Object.keys(KMH_A_LETRA).map(Number).sort((a, b) => a - b);
+    for (const k of keys) if (n <= k) return KMH_A_LETRA[k];  // redondea al inmediato superior
+    return 'Y';
+  }
+  return null;
+}
+// Etiqueta europea de eficiencia: una sola letra A–G.
+function normEficiencia(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim().toUpperCase();
+  return /^[A-G]$/.test(s) ? s : null;
+}
+// ¿El valor actual de este campo es problemático (vacío, basura, o número donde va letra)?
+function problemaTecnico(f, v) {
+  if (esVacioTecnico(v)) return true;
+  if (f === 'velocidad_max') return normIndiceVelocidad(v) === null || /^\d+$/.test(String(v).trim());
+  if (f === 'eficienciaCombustible' || f === 'eficienciaFrenado') return normEficiencia(v) === null;
+  return false;
+}
+
 // Completa con IA UN producto (botón "Rellenar con IA"). Usa el servicio central
 // (respeta prioridad y activación de Groq/Gemini configuradas en Config APIs).
 const enriquecerConIA = async (req, res, next) => {
@@ -297,11 +329,26 @@ async function enriquecerUno(prodId) {
   const prod = await prisma.producto.findUnique({ where: { id: prodId } });
   if (!prod) return { status: 'no_encontrado' };
   const info = { id: prod.id, sku: prod.sku, marca: prod.marca, modelo: prod.nombreComercial || '', medida: prod.medida };
-  const missing = TECH_FIELDS.filter(f => esVacioTecnico(prod[f]));
+  let missing = TECH_FIELDS.filter(f => problemaTecnico(f, prod[f]));
   if (missing.length === 0) return { status: 'completo', producto: prod, info };
-  // Campos que YA tienen basura guardada ("null", "[object Object]"…) y hay que limpiar
-  // aunque la IA no logre rellenarlos (no deben quedar visibles en ventas).
-  const sucios = missing.filter(f => prod[f] !== null && prod[f] !== undefined && prod[f] !== '');
+
+  // Correcciones LOCALES (sin IA): índice de velocidad que quedó como número (210 → H).
+  const localFix = {};
+  if (missing.includes('velocidad_max')) {
+    const letra = normIndiceVelocidad(prod.velocidad_max);
+    if (letra) localFix.velocidad_max = letra;
+  }
+  // Lo que ya se resolvió localmente sale de la lista para la IA.
+  missing = missing.filter(f => !(f in localFix));
+
+  // Campos que YA tienen basura/valor inválido guardado y hay que limpiar aunque la IA falle.
+  const sucios = TECH_FIELDS.filter(f => problemaTecnico(f, prod[f]) && prod[f] !== null && prod[f] !== undefined && prod[f] !== '' && !(f in localFix));
+
+  // Si todo se arregló localmente, guardamos sin llamar a la IA.
+  if (missing.length === 0) {
+    const producto = await prisma.producto.update({ where: { id: prodId }, data: localFix });
+    return { status: 'ok', camposActualizados: Object.keys(localFix), producto, info };
+  }
 
   const prompt = `Eres un experto en neumáticos de automóvil. Dado el siguiente neumático, proporciona los datos técnicos faltantes con la mayor precisión posible basándote en estándares de la industria.
 
@@ -318,6 +365,13 @@ Campos faltantes que necesito: ${missing.join(', ')}
 Responde ÚNICAMENTE con un objeto JSON válido. Usa null para campos que genuinamente no puedas determinar.
 Solo incluye en el JSON los campos de esta lista: ${missing.join(', ')}
 
+FORMATOS OBLIGATORIOS (respétalos estrictamente):
+- "velocidad_max": una LETRA del símbolo de velocidad (ej. "T", "H", "V", "W", "Y", "ZR"). NUNCA un número.
+- "eficienciaCombustible" y "eficienciaFrenado": una sola LETRA de la etiqueta europea entre "A" y "E". NUNCA un número.
+- "indice_carga": un NÚMERO (ej. "91", "104").
+- "cargaMaxNeumatico" (kg), "velocidadMaxKmh" (km/h) y "nivelRuido" (dB): NÚMEROS enteros.
+- "garantia": texto corto (ej. "5 años o 80,000 km"). "paisFabricacion" y "origenMarca": nombre de país.
+
 IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha técnica completa y detallada en español (mínimo 3 párrafos) que incluya: descripción del neumático, aplicaciones recomendadas, ventajas de la banda de rodamiento, tecnologías de construcción, condiciones de uso ideales, y argumentos de venta. Debe ser rica y útil para el vendedor.`;
 
   // La ficha técnica es texto largo (3 párrafos) → más tokens y más tiempo para que no se corte.
@@ -328,11 +382,17 @@ IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha 
 
   const INT_FIELDS = ['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'];
   const STR_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'eficienciaCombustible', 'eficienciaFrenado', 'paisFabricacion', 'origenMarca'];
-  const update = {};
+  const update = { ...localFix };
   for (const f of missing) {
     if (INT_FIELDS.includes(f)) {
       const n = parseInt(datos[f]);
       if (!isNaN(n)) update[f] = n;
+    } else if (f === 'velocidad_max') {
+      const letra = normIndiceVelocidad(datos[f]);   // fuerza letra (T, H, V…)
+      if (letra) update[f] = letra;
+    } else if (f === 'eficienciaCombustible' || f === 'eficienciaFrenado') {
+      const letra = normEficiencia(datos[f]);         // fuerza letra A–E
+      if (letra) update[f] = letra;
     } else if (f === 'fichaTecnica') {
       const txt = aTexto(datos[f]).trim();
       if (!esVacioTecnico(txt)) update[f] = txt;
@@ -362,7 +422,7 @@ const incompletos = async (req, res, next) => {
     });
     const items = [];
     for (const p of productos) {
-      const faltan = TECH_FIELDS.filter(f => esVacioTecnico(p[f]));
+      const faltan = TECH_FIELDS.filter(f => problemaTecnico(f, p[f]));
       if (faltan.length) items.push({ id: p.id, sku: p.sku, marca: p.marca, modelo: p.nombreComercial || '', medida: p.medida, faltan, faltanLabels: faltan.map(f => TECH_LABELS[f] || f) });
     }
     res.json({ total: items.length, items });
