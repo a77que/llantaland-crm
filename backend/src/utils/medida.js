@@ -84,4 +84,38 @@ function pareceMedida(q) {
   );
 }
 
-module.exports = { normalizarMedida, pareceMedida };
+/**
+ * Deduce Ancho / Perfil / Radio a partir de la medida, para CUALQUIER familia.
+ * Trabaja sobre la clave canónica (normalizarMedida) para no depender del formato
+ * crudo. Devuelve null en los campos que no apliquen a esa familia:
+ *   - Métrico con perfil  245/75R16   → { ancho: 245(mm), perfil: 75(%), radio: 16 }
+ *   - Sin perfil          165R13      → { ancho: 165(mm), perfil: null,  radio: 13 }
+ *   - Numérico            7.50R16     → { ancho: 7.5(in), perfil: null,  radio: 16 }
+ *   - Flotación           35X12.5R20  → { ancho: 12.5(in), perfil: null, radio: 20 }
+ *   - Aro decimal         205/75R17.5 → { ancho: 205, perfil: 75, radio: 17.5 }
+ */
+function dimensionesMedida(m) {
+  const s = normalizarMedida(m);
+  if (!s) return { ancho: null, perfil: null, radio: null };
+  let mm;
+
+  // Flotación: 35X12.5R20
+  mm = s.match(/^(\d{2})X(\d{1,2}(?:\.\d+)?)R(\d{2}(?:\.\d)?)$/);
+  if (mm) return { ancho: parseFloat(mm[2]), perfil: null, radio: parseFloat(mm[3]) };
+
+  // Métrico con perfil: 245/75R16  (aro puede ser decimal 17.5)
+  mm = s.match(/^(\d{3})\/(\d{2,3})R(\d{2}(?:\.\d)?)$/);
+  if (mm) return { ancho: parseInt(mm[1]), perfil: parseInt(mm[2]), radio: parseFloat(mm[3]) };
+
+  // Numérico con punto: 7.50R16 / 6.50R16
+  mm = s.match(/^(\d)\.(\d{2})R(\d{2})$/);
+  if (mm) return { ancho: parseFloat(`${mm[1]}.${mm[2]}`), perfil: null, radio: parseInt(mm[3]) };
+
+  // Métrico sin perfil: 165R13 / 185R14
+  mm = s.match(/^(\d{3})R(\d{2})$/);
+  if (mm) return { ancho: parseInt(mm[1]), perfil: null, radio: parseInt(mm[2]) };
+
+  return { ancho: null, perfil: null, radio: null };
+}
+
+module.exports = { normalizarMedida, pareceMedida, dimensionesMedida };

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { productosApi, sedesApi, stockApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { dimensionesMedida } from '../utils/medida';
 import ProductoModal from '../components/ProductoModal';
 import CrearProductoModal from '../components/CrearProductoModal';
 import ComparadorModal from '../components/ComparadorModal';
@@ -12,11 +13,7 @@ import ComparadorModal from '../components/ComparadorModal';
 const fmt   = (v) => v ? `S/ ${parseFloat(v).toFixed(2)}` : '—';
 const fmtPct = (v) => v ? `${parseFloat(v).toFixed(0)}%` : '—';
 
-function parseMedida(medida) {
-  const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
-  if (!m) return { ancho: null, perfil: null, radio: null };
-  return { ancho: parseInt(m[1]), perfil: parseInt(m[2]), radio: parseInt(m[3]) };
-}
+const parseMedida = (medida) => dimensionesMedida(medida);
 
 // Columnas fijas del sistema
 const COLUMNAS_FIJAS = [

@@ -1,7 +1,7 @@
 const XLSX = require('xlsx');
 const XLSXStyle = require('xlsx-js-style');
 const { PrismaClient } = require('@prisma/client');
-const { normalizarMedida } = require('../utils/medida');
+const { normalizarMedida, dimensionesMedida } = require('../utils/medida');
 
 const prisma = new PrismaClient();
 
@@ -664,11 +664,8 @@ function toNum(val) {
   return val;
 }
 
-function parseMedida(medida) {
-  const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
-  if (!m) return { ancho: null, perfil: null, radio: null };
-  return { ancho: parseInt(m[1]), perfil: parseInt(m[2]), radio: parseInt(m[3]) };
-}
+// Ancho/Perfil/Radio para todas las familias de medida (delegado a utils/medida).
+const parseMedida = (medida) => dimensionesMedida(medida);
 
 const generarTemplate = async (req, res, next) => {
   try {

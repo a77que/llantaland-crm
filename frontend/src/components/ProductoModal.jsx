@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { productosApi } from '../services/api';
+import { dimensionesMedida } from '../utils/medida';
 import LoadingSpinner from './common/LoadingSpinner';
 
 // ── Tablas de referencia ──────────────────────────────────────────────────────
@@ -112,11 +113,7 @@ const FIELD_LABELS = {
   fichaTecnica:'Ficha técnica',
 };
 
-function parseMedida(medida) {
-  const m = String(medida || '').match(/(\d{3})[\s/]?(\d{2,3})[\s/]?[Rr][\s]?(\d{2,3})/);
-  if (!m) return { ancho: null, perfil: null, radio: null };
-  return { ancho: parseInt(m[1]), perfil: parseInt(m[2]), radio: parseInt(m[3]) };
-}
+const parseMedida = (medida) => dimensionesMedida(medida);
 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
