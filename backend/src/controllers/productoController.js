@@ -290,6 +290,26 @@ function normEficiencia(v) {
   const s = String(v).trim().toUpperCase();
   return /^[A-G]$/.test(s) ? s : null;
 }
+// Extrae la letra de eficiencia EU (A–G) desde el texto de la ficha técnica.
+const CLAVES_COMBUSTIBLE = ['eficiencia (?:de |energ[ée]tica |en el )?(?:consumo de )?combustible', 'eficiencia energ[ée]tica', 'resistencia a la rodadura', 'consumo de combustible', 'ahorro de combustible', 'rodadura'];
+const CLAVES_FRENADO = ['frenado en mojado', 'frenado sobre mojado', 'agarre en mojado', 'agarre sobre mojado', 'frenado en h[úu]medo', 'agarre en h[úu]medo', 'eficiencia de frenado', 'adherencia en mojado', 'adherencia sobre mojado'];
+function extraerLetraEU(texto, claves) {
+  if (!texto) return null;
+  const t = String(texto);
+  for (const k of claves) {
+    const mk = new RegExp(k, 'i').exec(t);
+    if (!mk) continue;
+    // Texto tras la clave, quitando el ruido "(EU)"/"(UE)" para que no se confunda con la letra.
+    const seg = t.slice(mk.index + mk[0].length, mk.index + mk[0].length + 40).replace(/\(?\b(?:eu|ue)\b\)?/ig, ' ');
+    // 1) letra (mayúscula) inmediatamente después de la clave: ": A", " B", "\"C\""
+    let m = seg.match(/^\s*["'(:=\-–]?\s*([A-G])(?![A-Za-z])/);
+    if (m) return m[1];
+    // 2) con conector cercano ("clase C", "categoría A", "nivel B") — cualquier caso, ventana corta
+    m = seg.match(/^[^.\n]{0,15}?(?:clase|categor[íi]a|nivel|grado|valor)\s*["'(]?([A-Ga-g])(?![A-Za-z])/i);
+    if (m) return m[1].toUpperCase();
+  }
+  return null;
+}
 // ¿El valor actual de este campo es problemático (vacío, basura, o número donde va letra)?
 function problemaTecnico(f, v) {
   if (esVacioTecnico(v)) return true;
@@ -337,6 +357,15 @@ async function enriquecerUno(prodId) {
   if (missing.includes('velocidad_max')) {
     const letra = normIndiceVelocidad(prod.velocidad_max);
     if (letra) localFix.velocidad_max = letra;
+  }
+  // Eficiencias EU vacías pero presentes en el texto de la ficha técnica → extraer letra.
+  if (missing.includes('eficienciaCombustible')) {
+    const l = extraerLetraEU(prod.fichaTecnica, CLAVES_COMBUSTIBLE);
+    if (l) localFix.eficienciaCombustible = l;
+  }
+  if (missing.includes('eficienciaFrenado')) {
+    const l = extraerLetraEU(prod.fichaTecnica, CLAVES_FRENADO);
+    if (l) localFix.eficienciaFrenado = l;
   }
   // Lo que ya se resolvió localmente sale de la lista para la IA.
   missing = missing.filter(f => !(f in localFix));
