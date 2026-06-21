@@ -248,6 +248,24 @@ const TECH_FIELDS = [
   'paisFabricacion', 'origenMarca', 'fichaTecnica',
 ];
 
+// Valores "basura" que cuentan como VACÍO aunque el campo no sea null:
+// la palabra "null", "[object Object]" (objeto guardado como texto), "n/a", etc.
+const BASURA = new Set(['', 'null', 'undefined', 'nan', 'n/a', 'na', '-', '--', '.', '[object object]', 'none', 'no especificado', 'no disponible', 'sin información', 'sin informacion']);
+function esVacioTecnico(v) {
+  if (v === null || v === undefined) return true;
+  if (typeof v === 'string') return BASURA.has(v.trim().toLowerCase());
+  if (typeof v === 'object') return true; // objeto/array en un campo de texto = inválido
+  return false;
+}
+// Convierte lo que devuelva la IA (string, objeto o array) en texto legible.
+function aTexto(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return v.map(aTexto).filter(Boolean).join('\n');
+  if (typeof v === 'object') return Object.values(v).map(aTexto).filter(Boolean).join('\n\n');
+  return String(v);
+}
+
 // Completa con IA UN producto (botón "Rellenar con IA"). Usa el servicio central
 // (respeta prioridad y activación de Groq/Gemini configuradas en Config APIs).
 const enriquecerConIA = async (req, res, next) => {
@@ -279,8 +297,11 @@ async function enriquecerUno(prodId) {
   const prod = await prisma.producto.findUnique({ where: { id: prodId } });
   if (!prod) return { status: 'no_encontrado' };
   const info = { id: prod.id, sku: prod.sku, marca: prod.marca, modelo: prod.nombreComercial || '', medida: prod.medida };
-  const missing = TECH_FIELDS.filter(f => prod[f] === null || prod[f] === undefined || prod[f] === '');
+  const missing = TECH_FIELDS.filter(f => esVacioTecnico(prod[f]));
   if (missing.length === 0) return { status: 'completo', producto: prod, info };
+  // Campos que YA tienen basura guardada ("null", "[object Object]"…) y hay que limpiar
+  // aunque la IA no logre rellenarlos (no deben quedar visibles en ventas).
+  const sucios = missing.filter(f => prod[f] !== null && prod[f] !== undefined && prod[f] !== '');
 
   const prompt = `Eres un experto en neumáticos de automóvil. Dado el siguiente neumático, proporciona los datos técnicos faltantes con la mayor precisión posible basándote en estándares de la industria.
 
@@ -309,10 +330,21 @@ IMPORTANTE para el campo "fichaTecnica": Si está en la lista, genera una ficha 
   const STR_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'eficienciaCombustible', 'eficienciaFrenado', 'paisFabricacion', 'origenMarca'];
   const update = {};
   for (const f of missing) {
-    if (datos[f] == null) continue;
-    if (f === 'fichaTecnica') update[f] = String(datos[f]).trim();
-    else if (INT_FIELDS.includes(f)) { const n = parseInt(datos[f]); if (!isNaN(n)) update[f] = n; }
-    else if (STR_FIELDS.includes(f)) update[f] = String(datos[f]).trim().substring(0, 50);
+    if (INT_FIELDS.includes(f)) {
+      const n = parseInt(datos[f]);
+      if (!isNaN(n)) update[f] = n;
+    } else if (f === 'fichaTecnica') {
+      const txt = aTexto(datos[f]).trim();
+      if (!esVacioTecnico(txt)) update[f] = txt;
+    } else if (STR_FIELDS.includes(f)) {
+      const v = aTexto(datos[f]).trim();
+      if (!esVacioTecnico(v)) update[f] = v.substring(0, 50);
+    }
+  }
+  // Limpia la basura ya guardada que la IA no logró rellenar: la deja en NULL real
+  // para que no aparezca "null" ni "[object Object]" en cotizaciones/ventas.
+  for (const f of sucios) {
+    if (!(f in update)) update[f] = null;
   }
   if (Object.keys(update).length === 0) return { status: 'sin_cambios', motivo: 'sin_campos', producto: prod, info };
   const producto = await prisma.producto.update({ where: { id: prodId }, data: update });
@@ -330,7 +362,7 @@ const incompletos = async (req, res, next) => {
     });
     const items = [];
     for (const p of productos) {
-      const faltan = TECH_FIELDS.filter(f => p[f] === null || p[f] === undefined || p[f] === '');
+      const faltan = TECH_FIELDS.filter(f => esVacioTecnico(p[f]));
       if (faltan.length) items.push({ id: p.id, sku: p.sku, marca: p.marca, modelo: p.nombreComercial || '', medida: p.medida, faltan, faltanLabels: faltan.map(f => TECH_LABELS[f] || f) });
     }
     res.json({ total: items.length, items });
