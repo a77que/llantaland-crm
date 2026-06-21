@@ -41,14 +41,31 @@ export const leadsApi = {
   eliminar:          (id)       => api.delete(`/leads/${id}`),
 };
 
+// Campos técnicos que la IA pudo haber dejado con basura ("null", "[object Object]"…).
+const TECH_FIELDS = ['indice_carga', 'velocidad_max', 'garantia', 'cargaMaxNeumatico', 'velocidadMaxKmh', 'eficienciaCombustible', 'eficienciaFrenado', 'nivelRuido', 'paisFabricacion', 'origenMarca', 'fichaTecnica'];
+const BASURA = new Set(['', 'null', 'undefined', 'nan', 'n/a', 'na', '-', '--', '.', '[object object]', 'none', 'no especificado', 'no disponible', 'sin información', 'sin informacion']);
+// Limpia valores basura → null, para que la vista muestre "—" en vez del texto malo.
+function limpiarProducto(p) {
+  if (!p || typeof p !== 'object') return p;
+  for (const f of TECH_FIELDS) {
+    const v = p[f];
+    if (typeof v === 'string' && BASURA.has(v.trim().toLowerCase())) p[f] = null;
+    else if (v !== null && typeof v === 'object') p[f] = null;
+  }
+  return p;
+}
+
 export const productosApi = {
-  listar: (params) => api.get('/productos', { params }),
-  obtener: (id) => api.get(`/productos/${id}`),
+  listar: (params) => api.get('/productos', { params }).then(r => {
+    if (r && Array.isArray(r.data)) r.data = r.data.map(limpiarProducto);
+    return r;
+  }),
+  obtener: (id) => api.get(`/productos/${id}`).then(limpiarProducto),
   crear: (data) => api.post('/productos', data),
   actualizar: (id, data) => api.put(`/productos/${id}`, data),
   eliminar: (id) => api.delete(`/productos/${id}`),
   eliminarMasivo: (ids) => api.post('/productos/eliminar-masivo', { ids }),
-  compatibles: (params) => api.get('/productos/compatibles', { params }),
+  compatibles: (params) => api.get('/productos/compatibles', { params }).then(r => Array.isArray(r) ? r.map(limpiarProducto) : r),
   marcas: () => api.get('/productos/marcas'),
   tipos: () => api.get('/productos/tipos'),
   medidas: (q) => api.get('/productos/medidas', { params: q ? { q } : {} }),
