@@ -85,6 +85,7 @@ export const productosApi = {
   actualizar: (id, data) => api.put(`/productos/${id}`, data),
   eliminar: (id) => api.delete(`/productos/${id}`),
   eliminarMasivo: (ids) => api.post('/productos/eliminar-masivo', { ids }),
+  eliminarPorSku: (skus) => api.post('/productos/eliminar-sku', { skus }),
   compatibles: (params) => api.get('/productos/compatibles', { params }).then(r => Array.isArray(r) ? r.map(limpiarProducto) : r),
   marcas: () => api.get('/productos/marcas'),
   tipos: () => api.get('/productos/tipos'),

@@ -55,6 +55,7 @@ const CAMPOS_BD_BASE = [
   { key: 'origenMarca',          label: 'Origen Marca' },
   { key: 'precioProveedor',      label: 'Precio Proveedor' },
   { key: 'precioReferencialVenta', label: 'Precio Referencial Venta' },
+  { key: 'stockTotal',           label: 'Stock Total (almacén principal)' },
 ];
 
 const preview = async (req, res, next) => {
@@ -122,12 +123,15 @@ const ejecutar = async (req, res, next) => {
     });
 
     // Pre-cargar sedes para mapear stock_LX → sedeId sin queries por fila
-    const sedes = await prisma.sede.findMany({ where: { activo: true } });
+    const sedes = await prisma.sede.findMany({ where: { activo: true }, orderBy: { codigoLocal: 'asc' } });
     const sedeMap = Object.fromEntries(sedes.map(s => [s.codigoLocal, s.id]));
+    const sedePrincipal = sedes[0] || null; // para la columna "Stock Total"
 
     let creados = 0;
     let actualizados = 0;
+    let sinCambios = 0;
     const errores = [];
+    const resultadosFila = []; // por índice de dataRows: { estado, detalle }
 
     const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
     const int = (v) => { const n = parseInt(v); return isNaN(n) ? null : n; };
@@ -136,7 +140,7 @@ const ejecutar = async (req, res, next) => {
 
     // ── Fase 1: parsear y validar TODAS las filas (sin tocar la BD) ──
     const validas = [];
-    for (const { row, filaExcel } of dataRows) {
+    dataRows.forEach(({ row, filaExcel }, idx) => {
       const record = {};
       for (const [colIdx, campo] of Object.entries(columnMap)) {
         if (!campo || campo === '_skip') continue;
@@ -146,18 +150,21 @@ const ejecutar = async (req, res, next) => {
       }
 
       const precioRaw = record.precioRegular ?? record.precio;
+      const tienePrecio = precioRaw != null && String(precioRaw).trim() !== '';
+      // Precio Regular YA NO es obligatorio. Solo SKU, Medida y Marca lo son.
       const faltantes = [];
       if (!record.sku) faltantes.push('SKU');
       if (!record.medida) faltantes.push('Medida');
       if (!record.marca) faltantes.push('Marca');
-      if (!precioRaw) faltantes.push('Precio Regular');
       if (faltantes.length > 0) {
         errores.push({ fila: filaExcel, error: `Campos obligatorios faltantes: ${faltantes.join(', ')}` });
-        continue;
+        resultadosFila[idx] = { estado: 'error', detalle: `Faltan: ${faltantes.join(', ')}` };
+        return;
       }
-      if (num(precioRaw) === null) {
+      if (tienePrecio && num(precioRaw) === null) {
         errores.push({ fila: filaExcel, error: `Precio Regular no es un número válido: "${precioRaw}". Usa solo números, sin símbolos de moneda (ej: 250.00)` });
-        continue;
+        resultadosFila[idx] = { estado: 'error', detalle: 'Precio no numérico' };
+        return;
       }
 
       const productoData = {
@@ -168,7 +175,7 @@ const ejecutar = async (req, res, next) => {
         nombreComercial:       str(record.nombreComercial),
         grupo:                 str(record.grupo),
         tipo:                  normalizarTipo(record.tipo),
-        precioRegular:         num(precioRaw),
+        precioRegular:         tienePrecio ? num(precioRaw) : undefined, // omitir si no viene (no pisa el existente)
         precioOferta:          num(record.precioOferta) ?? undefined,
         descuentoMaximo:       num(record.descuentoMaximo) ?? undefined,
         garantia:              str(record.garantia),
@@ -197,18 +204,35 @@ const ejecutar = async (req, res, next) => {
         const sedeId = sedeMap[campo.replace('stock_', '').toUpperCase()];
         if (sedeId) stockEntries.push({ sedeId, cantidad });
       }
+      // Stock Total: si no se especificó stock por tienda, va al almacén principal.
+      if (stockEntries.length === 0 && record.stockTotal != null && String(record.stockTotal).trim() !== '') {
+        const cantidad = int(record.stockTotal);
+        if (cantidad !== null && sedePrincipal) stockEntries.push({ sedeId: sedePrincipal.id, cantidad });
+      }
 
-      validas.push({ filaExcel, sku: productoData.sku, productoData, stockEntries });
-    }
+      validas.push({ idx, filaExcel, sku: productoData.sku, productoData, stockEntries });
+    });
 
-    // ── Fase 2: una sola consulta para saber qué SKUs ya existen ──
+    // ── Fase 2: traer los productos que ya existen (completos) para detectar cambios ──
     const skus = [...new Set(validas.map(v => v.sku))];
-    const existentes = new Set();
+    const existentesMap = new Map(); // sku → producto actual
     const TAM_IN = 1000; // dividir el IN para no exceder límites de parámetros
     for (let i = 0; i < skus.length; i += TAM_IN) {
-      const lote = await prisma.producto.findMany({ where: { sku: { in: skus.slice(i, i + TAM_IN) } }, select: { sku: true } });
-      lote.forEach(p => existentes.add(p.sku));
+      const lote = await prisma.producto.findMany({ where: { sku: { in: skus.slice(i, i + TAM_IN) } } });
+      lote.forEach(p => existentesMap.set(p.sku, p));
     }
+
+    // Compara el valor entrante contra el actual (normaliza Decimals/números).
+    const norm = (x) => {
+      if (x === null || x === undefined) return '';
+      if (typeof x === 'object' && typeof x.toNumber === 'function') return String(x.toNumber());
+      if (typeof x === 'number') return String(x);
+      return String(x).trim();
+    };
+    const sinCambiosRespecto = (actual, data) => Object.keys(data).every(k => {
+      if (k === 'medidaNorm' || k === 'activo') return true; // derivados / banderas
+      return norm(actual[k]) === norm(data[k]);
+    });
 
     // ── Fase 3: escribir en BD en lotes paralelos (rápido para miles de filas) ──
     const CONCURRENCIA = 20;
@@ -216,26 +240,39 @@ const ejecutar = async (req, res, next) => {
       const lote = validas.slice(i, i + CONCURRENCIA);
       await Promise.all(lote.map(async (v) => {
         try {
-          const yaExiste = existentes.has(v.sku);
-          const producto = yaExiste
-            ? await prisma.producto.update({ where: { sku: v.sku }, data: v.productoData })
-            : await prisma.producto.create({ data: v.productoData });
-          if (yaExiste) actualizados++; else creados++;
-
-          for (const { sedeId, cantidad } of v.stockEntries) {
-            await prisma.stock.upsert({
-              where: { productoId_sedeId: { productoId: producto.id, sedeId } },
-              update: { cantidad },
-              create: { productoId: producto.id, sedeId, cantidad },
-            });
+          const actual = existentesMap.get(v.sku);
+          let estado;
+          if (!actual) {
+            // Producto nuevo: precioRegular es obligatorio en BD → por defecto 0 si no vino.
+            const data = { ...v.productoData };
+            if (data.precioRegular == null) data.precioRegular = 0;
+            const producto = await prisma.producto.create({ data });
+            await aplicarStock(producto.id, v.stockEntries);
+            creados++; estado = 'creado';
+          } else if (sinCambiosRespecto(actual, v.productoData) && v.stockEntries.length === 0) {
+            sinCambios++; estado = 'sin_cambios';
+          } else {
+            await prisma.producto.update({ where: { sku: v.sku }, data: v.productoData });
+            await aplicarStock(actual.id, v.stockEntries);
+            actualizados++; estado = 'actualizado';
           }
+          resultadosFila[v.idx] = { estado, detalle: estado === 'creado' ? 'Producto nuevo' : estado === 'actualizado' ? 'Datos actualizados' : 'Sin cambios' };
         } catch (rowErr) {
-          errores.push({ fila: v.filaExcel, error: explicarErrorPrisma(rowErr) });
+          const msg = explicarErrorPrisma(rowErr);
+          errores.push({ fila: v.filaExcel, error: msg });
+          resultadosFila[v.idx] = { estado: 'error', detalle: msg };
         }
       }));
     }
 
-    res.json({ creados, actualizados, errores, total: dataRows.length });
+    // Reporte Excel con filas sombreadas según resultado
+    let reporteBase64 = null;
+    if (dataRows.length <= 10000) {
+      try { reporteBase64 = generarReporteCrear(rows[0], dataRows.map(d => d.row), resultadosFila); }
+      catch (e) { console.error('No se pudo generar el reporte de creación:', e.message); }
+    }
+
+    res.json({ creados, actualizados, sinCambios, errores, total: dataRows.length, reporteBase64 });
   } catch (err) {
     next(err);
   }
@@ -247,8 +284,8 @@ function sugerirCampo(header, sedes = []) {
   // Columnas AUTO de la plantilla → ignorar
   if (h.includes('[auto]')) return '_skip';
 
-  // Stock Total es calculado (suma de almacenes) — nunca se importa
-  if (h.includes('stock') && h.includes('total')) return '_skip';
+  // Stock Total: si no se llena el stock por tienda, va al almacén principal
+  if (h.includes('stock') && h.includes('total')) return 'stockTotal';
   // Ancho/Perfil/Radio del catálogo exportado — derivados de Medida, no importar
   if (/^(ancho|perfil|radio)\b/.test(h)) return '_skip';
 
@@ -387,6 +424,59 @@ function generarReporteUpdate(headers, dataRows, resultadosFila, dryRun) {
 
   ws['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
 
+  const wb = XLSXStyle.utils.book_new();
+  XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
+  return XLSXStyle.write(wb, { type: 'base64', bookType: 'xlsx' });
+}
+
+// Upsert de stock por sede para un producto.
+async function aplicarStock(productoId, stockEntries) {
+  for (const { sedeId, cantidad } of stockEntries) {
+    await prisma.stock.upsert({
+      where: { productoId_sedeId: { productoId, sedeId } },
+      update: { cantidad },
+      create: { productoId, sedeId, cantidad },
+    });
+  }
+}
+
+/**
+ * Reporte Excel (base64) de la importación de NUEVOS productos: cada fila del
+ * archivo sombreada según resultado (verde=creado, azul=actualizado,
+ * gris=sin cambios, rojo=error) + columnas RESULTADO y DETALLE.
+ */
+function generarReporteCrear(headers, dataRowsRaw, resultadosFila) {
+  const ESTILOS = {
+    creado:      { fill: 'C6EFCE', font: '006100' },
+    actualizado: { fill: 'BDD7EE', font: '1F4E79' },
+    sin_cambios: { fill: 'EFEFEF', font: '777777' },
+    error:       { fill: 'FFC7CE', font: '9C0006' },
+    vacio:       { fill: 'FFFFFF', font: '000000' },
+  };
+  const LABEL = { creado: 'CREADO', actualizado: 'ACTUALIZADO', sin_cambios: 'SIN CAMBIOS', error: 'ERROR', vacio: '' };
+
+  const head = [...(headers || []).map(h => String(h ?? '')), 'RESULTADO', 'DETALLE'];
+  const aoa = [head, ...dataRowsRaw.map((row, i) => {
+    const r = resultadosFila[i] || { estado: 'vacio', detalle: '' };
+    return [...(headers || []).map((_, c) => row[c] ?? ''), LABEL[r.estado] || '', r.detalle || ''];
+  })];
+
+  const ws = XLSXStyle.utils.aoa_to_sheet(aoa);
+  const nCols = head.length;
+  for (let c = 0; c < nCols; c++) {
+    const addr = XLSXStyle.utils.encode_cell({ r: 0, c });
+    if (ws[addr]) ws[addr].s = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } } };
+  }
+  for (let r = 0; r < dataRowsRaw.length; r++) {
+    const estado = (resultadosFila[r] || {}).estado || 'vacio';
+    const st = ESTILOS[estado] || ESTILOS.vacio;
+    for (let c = 0; c < nCols; c++) {
+      const addr = XLSXStyle.utils.encode_cell({ r: r + 1, c });
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+      ws[addr].s = { fill: { patternType: 'solid', fgColor: { rgb: st.fill } }, font: { color: { rgb: st.font } } };
+    }
+  }
+  ws['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
   const wb = XLSXStyle.utils.book_new();
   XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
   return XLSXStyle.write(wb, { type: 'base64', bookType: 'xlsx' });
@@ -717,11 +807,17 @@ const generarTemplate = async (req, res, next) => {
       { key: 'precioReferencialVenta', label: 'Precio Referencial Venta', nota: 'Precio de mercado actual, ej: 300.00', ej1: 300.00, ej2: 560.00 }
     );
 
-    const stockCols = sedes.map((s, i) => ({
+    // Columna Stock Total: la forma simple de cargar stock sin tocar cada tienda.
+    const stockTotalCol = {
+      key: 'stockTotal', label: 'Stock Total',
+      nota: 'Va al almacén principal (úsalo si no llenas las tiendas)',
+      ej1: 30, ej2: 15,
+    };
+    // Stock por tienda: opcional. Vacío en los ejemplos para promover el uso de Stock Total.
+    const stockCols = sedes.map((s) => ({
       key: `stock_${s.codigoLocal}`, label: `Stock ${s.nombre}`,
-      nota: 'Número entero, ej: 10',
-      ej1: i === 0 ? 30 : 0,
-      ej2: i === 1 ? 15 : 0,
+      nota: 'Opcional. Número entero por tienda',
+      ej1: '', ej2: '',
     }));
 
     const extraCols = extraKeys.map(k => ({
@@ -729,7 +825,7 @@ const generarTemplate = async (req, res, next) => {
       nota: 'Campo personalizado', ej1: '', ej2: '',
     }));
 
-    const allCols = [...fixedCols, ...stockCols, ...extraCols];
+    const allCols = [...fixedCols, stockTotalCol, ...stockCols, ...extraCols];
 
     const wsData = [
       allCols.map(c => c.label),
@@ -756,7 +852,7 @@ const generarTemplate = async (req, res, next) => {
       ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
       ['Tipo',               'No',  'Categoría libre (ej: AUTO, CAMIONETA, SUV, VAN)', 'Se guarda tal como lo escribas (en mayúsculas). Si se omite, se asigna AUTO.'],
-      ['Precio Regular',     'SÍ',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda.'],
+      ['Precio Regular',     'No',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda. Si lo dejas vacío en un producto NUEVO se guarda en 0; en uno existente no se modifica.'],
       ['Precio Oferta',      'No',  'Número decimal',                    'Dejar vacío si no hay precio de oferta.'],
       ['Descuento Máximo %', 'No',  'Número (ej: 15)',                   'Porcentaje máximo de descuento permitido.'],
       ['Garantía',           'No',  'Texto (ej: 2 años)',                'Período de garantía del fabricante.'],
@@ -765,7 +861,8 @@ const generarTemplate = async (req, res, next) => {
       ['Índice de Velocidad', 'No',  'Letra (ej: H, V, S)',               'Código de velocidad. H=210km/h, V=240km/h, S=180km/h, T=190km/h, Y=300km/h.'],
       ['Precio Proveedor',   'No',  'Número decimal (ej: 180.00)',       'Costo base del proveedor. Sirve para calcular el precio de venta en "Precios y Margen".'],
       ['Precio Referencial Venta', 'No', 'Número decimal (ej: 300.00)',  'Precio de mercado actual, para comparar contra el precio de venta calculado.'],
-      ...sedes.map(s  => [`Stock ${s.nombre}`, 'No', 'Número entero (ej: 10)', `Stock en sede ${s.nombre} (${s.codigoLocal}).`]),
+      ['Stock Total',        'No',  'Número entero (ej: 30)',            'Forma rápida de cargar stock: se asigna al almacén principal. Úsalo si no quieres llenar el stock de cada tienda. Si llenas alguna columna "Stock <tienda>", esa manda.'],
+      ...sedes.map(s  => [`Stock ${s.nombre}`, 'No', 'Número entero (ej: 10)', `Opcional. Stock en sede ${s.nombre} (${s.codigoLocal}). Si lo llenas, tiene prioridad sobre Stock Total.`]),
       ...extraKeys.map(k => [extraKeyLabel(k), 'No', 'Texto libre', 'Campo personalizado del catálogo.']),
     ];
     const wsInstr = XLSX.utils.aoa_to_sheet(instrRows);

@@ -163,6 +163,37 @@ const eliminarMasivo = async (req, res, next) => {
   }
 };
 
+// Elimina (lógico) varios productos a partir de una lista de SKUs. Acepta un
+// array o un texto con SKUs separados por coma, espacio o salto de línea.
+// Informa: cuáles se eliminaron, cuáles ya estaban inactivos y cuáles no existen.
+const eliminarPorSku = async (req, res, next) => {
+  try {
+    let { skus } = req.body;
+    if (typeof skus === 'string') skus = skus.split(/[\s,;]+/);
+    if (!Array.isArray(skus)) return res.status(400).json({ error: 'Envía los SKUs a eliminar (array o texto).' });
+    const limpios = [...new Set(skus.map(s => String(s).trim()).filter(Boolean))];
+    if (limpios.length === 0) return res.status(400).json({ error: 'No se indicó ningún SKU.' });
+
+    const encontrados = await prisma.producto.findMany({
+      where: { sku: { in: limpios } },
+      select: { id: true, sku: true, activo: true },
+    });
+    const mapEnc = new Map(encontrados.map(p => [p.sku, p]));
+
+    const activos = encontrados.filter(p => p.activo);
+    if (activos.length) {
+      await prisma.producto.updateMany({ where: { id: { in: activos.map(p => p.id) } }, data: { activo: false } });
+    }
+    const eliminados   = activos.map(p => p.sku);
+    const yaInactivos  = encontrados.filter(p => !p.activo).map(p => p.sku);
+    const noEncontrados = limpios.filter(s => !mapEnc.has(s));
+
+    res.json({ ok: true, total: limpios.length, eliminados, yaInactivos, noEncontrados });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const compatibles = async (req, res, next) => {
   try {
     const { medida } = req.query;
@@ -648,4 +679,4 @@ const aplicarImagen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo };
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo };

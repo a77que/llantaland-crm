@@ -9,6 +9,7 @@ import { dimensionesMedida } from '../utils/medida';
 import ProductoModal from '../components/ProductoModal';
 import CrearProductoModal from '../components/CrearProductoModal';
 import ComparadorModal from '../components/ComparadorModal';
+import EliminarPorSkuModal from '../components/EliminarPorSkuModal';
 
 const fmt   = (v) => v ? `S/ ${parseFloat(v).toFixed(2)}` : '—';
 const fmtPct = (v) => v ? `${parseFloat(v).toFixed(0)}%` : '—';
@@ -518,6 +519,7 @@ export default function Inventario() {
   // Modal de detalle y comparador
   const [modalProdId, setModalProdId] = useState(null);
   const [showCrear, setShowCrear] = useState(false);
+  const [showEliminarSku, setShowEliminarSku] = useState(false);
   const [comparar, setComparar] = useState([]); // varios IDs para comparar
   const [verComparador, setVerComparador] = useState(false);
   // Edición masiva
@@ -714,6 +716,10 @@ export default function Inventario() {
           <button onClick={() => setShowCrear(true)}
             style={{ padding:'8px 14px', border:'none', borderRadius:8, background:'#16a34a', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
             ➕ {isMobile ? 'Crear' : 'Crear producto'}
+          </button>
+          <button onClick={() => setShowEliminarSku(true)}
+            style={{ padding:'8px 14px', border:'1.5px solid #fecaca', borderRadius:8, background:'#fef2f2', color:'#dc2626', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+            🗑️ {isMobile ? 'SKU' : 'Eliminar por SKU'}
           </button>
           <Link to="/importar" style={{ padding:'8px 14px', background:'#f5c400', color:'#000', borderRadius:8, fontSize:13, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
             📂 {isMobile ? '' : 'Importar'}
@@ -1025,6 +1031,7 @@ export default function Inventario() {
       )}
 
       {showCrear && <CrearProductoModal onClose={() => setShowCrear(false)} />}
+      {showEliminarSku && <EliminarPorSkuModal onClose={() => setShowEliminarSku(false)} />}
     </div>
   );
 }

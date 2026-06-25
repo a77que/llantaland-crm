@@ -77,10 +77,25 @@ export default function ImportadorStock() {
     },
     onSuccess: (data) => {
       setResultado(data);
-      toast.success(`Importación completada: ${data.creados} creados, ${data.actualizados} actualizados`);
+      toast.success(`Importación completada: ${data.creados} creados, ${data.actualizados} actualizados, ${data.sinCambios ?? 0} sin cambios`);
     },
     onError: (e) => toast.error(e?.error || 'Error al importar'),
   });
+
+  // Descarga el informe Excel (base64) que devuelve el backend.
+  const descargarInforme = () => {
+    if (!resultado?.reporteBase64) return;
+    const bin = atob(resultado.reporteBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `informe_importacion_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const onDrop = useCallback((acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -108,8 +123,8 @@ export default function ImportadorStock() {
             📋 Plantilla de ejemplo
           </div>
           <div style={{ fontSize: 12.5, color: '#3b82f6', lineHeight: 1.5 }}>
-            Descarga el formato correcto con <strong>4 llantas de muestra</strong> y una hoja de instrucciones.<br />
-            Columnas obligatorias: <strong>SKU · Medida · Marca · Precio</strong>
+            Descarga el formato correcto con <strong>llantas de muestra</strong> y una hoja de instrucciones.<br />
+            Obligatorias: <strong>SKU · Medida · Marca</strong>. Para el stock usa la columna <strong>Stock Total</strong> (va al almacén principal) sin llenar cada tienda.
           </div>
         </div>
         <button
@@ -239,19 +254,30 @@ export default function ImportadorStock() {
       {/* Resultado */}
       {resultado && (
         <div style={S.card}>
-          <div style={S.cardTitle}>3. Resultado de la importación</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-            <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '16px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#16a34a' }}>{resultado.creados}</div>
-              <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>Productos creados</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            <div style={S.cardTitle}>3. Resultado de la importación</div>
+            {resultado.reporteBase64 && (
+              <button onClick={descargarInforme} style={{ padding: '8px 16px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                ⬇️ Descargar informe (.xlsx)
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '16px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#16a34a' }}>{resultado.creados}</div>
+              <div style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600 }}>Creados nuevos</div>
             </div>
-            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '16px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#2563eb' }}>{resultado.actualizados}</div>
-              <div style={{ fontSize: 12, color: '#2563eb', fontWeight: 600 }}>Actualizados</div>
+            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '16px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#2563eb' }}>{resultado.actualizados}</div>
+              <div style={{ fontSize: 11.5, color: '#2563eb', fontWeight: 600 }}>Actualizados</div>
             </div>
-            <div style={{ background: resultado.errores.length > 0 ? '#fef2f2' : '#f8fafc', borderRadius: 8, padding: '16px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: resultado.errores.length > 0 ? '#dc2626' : '#64748b' }}>{resultado.errores.length}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: resultado.errores.length > 0 ? '#dc2626' : '#64748b' }}>Errores</div>
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '16px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#64748b' }}>{resultado.sinCambios ?? 0}</div>
+              <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>Sin cambios</div>
+            </div>
+            <div style={{ background: resultado.errores.length > 0 ? '#fef2f2' : '#f8fafc', borderRadius: 8, padding: '16px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 26, fontWeight: 800, color: resultado.errores.length > 0 ? '#dc2626' : '#64748b' }}>{resultado.errores.length}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: resultado.errores.length > 0 ? '#dc2626' : '#64748b' }}>Errores</div>
             </div>
           </div>
 
