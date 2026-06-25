@@ -140,6 +140,8 @@ export default function ComparadorModal({ ids = [], onClose }) {
 
   metrics.push(
     { sec:'🌍 Garantía y Origen' },
+    { label:'Modelo',           modo:null, get:p => p.modelo || null,          render:p => <span style={{ fontSize:13 }}>{p.modelo || '—'}</span> },
+    { label:'Run-Flat',         modo:null, get:p => p.runFlat == null ? null : (p.runFlat ? 'Sí' : 'No'), render:p => <span style={{ fontSize:13, fontWeight:700, color: p.runFlat ? '#15803d' : 'var(--color-text-muted)' }}>{p.runFlat == null ? '—' : (p.runFlat ? 'Sí' : 'No')}</span> },
     { label:'Garantía',         modo:null, get:p => p.garantia || null,        render:p => <span style={{ fontSize:13 }}>{p.garantia || '—'}</span> },
     { label:'País fabricación', modo:null, get:p => p.paisFabricacion || null, render:p => <span style={{ fontSize:13 }}>{p.paisFabricacion || '—'}</span> },
     { label:'Origen de marca',  modo:null, get:p => p.origenMarca || null,     render:p => <span style={{ fontSize:13 }}>{p.origenMarca || '—'}</span> },

@@ -466,6 +466,8 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                     </div>
                   )}
                   <span style={{ padding:'1px 8px', borderRadius:6, fontSize:10, fontWeight:700, background:tipoColor+'20', color:tipoColor }}>{prod.tipo}</span>
+                  {prod.modelo && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>Modelo: <strong>{prod.modelo}</strong></span>}
+                  {prod.runFlat != null && <span style={{ fontSize:10, fontWeight:700, padding:'1px 8px', borderRadius:6, background: prod.runFlat ? '#dcfce7' : '#f1f5f9', color: prod.runFlat ? '#15803d' : '#64748b' }}>{prod.runFlat ? '✓ Run-Flat' : 'Sin Run-Flat'}</span>}
                   {prod.grupo && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>{prod.grupo}</span>}
                   {prod.garantia && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>🛡️ {prod.garantia}</span>}
                 </div>

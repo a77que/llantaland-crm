@@ -24,6 +24,8 @@ const COLUMNAS_FIJAS = [
   { key: 'radio',           label: 'Radio (R)',        group: 'Medida' },
   { key: 'marca',           label: 'Marca',           group: 'Producto',  required: true },
   { key: 'nombreComercial', label: 'Nombre Comercial', group: 'Producto' },
+  { key: 'modelo',          label: 'Modelo',          group: 'Producto' },
+  { key: 'runFlat',         label: 'Run-Flat',        group: 'Producto' },
   { key: 'grupo',           label: 'Grupo',           group: 'Producto' },
   { key: 'precioRegular',   label: 'Precio Regular',  group: 'Precios' },
   { key: 'precioOferta',    label: 'Precio Oferta',   group: 'Precios' },
@@ -55,7 +57,7 @@ const defaultVisible = () => {
   if (saved) return JSON.parse(saved);
   return [
     'medida','ancho','perfil','radio',
-    'marca','nombreComercial','grupo','precioRegular','precioOferta','descuentoMaximo',
+    'marca','nombreComercial','modelo','runFlat','grupo','precioRegular','precioOferta','descuentoMaximo',
     'indice_carga','velocidad_max','cargaMaxNeumatico','velocidadMaxKmh',
     'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
     'stockTotal',
@@ -75,6 +77,7 @@ function getCellValue(prod, key) {
     return getStockLocal(prod, cod);
   }
   if (key === 'stockTotal') return prod.stocks?.reduce((a, s) => a + s.cantidad, 0) ?? 0;
+  if (key === 'runFlat') return prod.runFlat == null ? '—' : (prod.runFlat ? 'Sí' : 'No');
   if (key === 'precioRegular') return fmt(prod.precioRegular);
   if (key === 'precioOferta')  return fmt(prod.precioOferta);
   if (key === 'descuentoMaximo') return fmtPct(prod.descuentoMaximo);
@@ -823,7 +826,7 @@ export default function Inventario() {
 
                       const isStockTotal = col.key === 'stockTotal';
                       const isCustom = col.key.startsWith('custom_');
-                      const isEditable = col.key !== 'medida' && !isStockTotal;
+                      const isEditable = col.key !== 'medida' && col.key !== 'runFlat' && !isStockTotal;
 
                       // En modo edición masiva: guardar en estado local
                       const onSaveMasivo = (prodId, campo, valor, isC) => {

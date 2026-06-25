@@ -37,6 +37,8 @@ const CAMPOS_BD_BASE = [
   { key: 'medida',               label: 'Medida', required: true },
   { key: 'marca',                label: 'Marca', required: true },
   { key: 'nombreComercial',      label: 'Nombre Comercial' },
+  { key: 'modelo',               label: 'Modelo' },
+  { key: 'runFlat',              label: 'Run-Flat (Sí/No)' },
   { key: 'grupo',                label: 'Grupo' },
   { key: 'tipo',                 label: 'Tipo (AUTO, CAMIONETA, CAMION, MOTO o personalizado)' },
   { key: 'precioRegular',        label: 'Precio Regular', required: true },
@@ -137,6 +139,13 @@ const ejecutar = async (req, res, next) => {
     const int = (v) => { const n = parseInt(v); return isNaN(n) ? null : n; };
     const str = (v) => v != null && String(v).trim() !== '' ? String(v).trim() : null;
     const eu  = (v) => { const s = str(v); return s ? s.toUpperCase().charAt(0) : null; };
+    const bool = (v) => {
+      const s = str(v); if (s === null) return undefined;
+      const l = s.toLowerCase();
+      if (['si','sí','yes','y','true','1','runflat','run-flat','run flat','rf','x','verdadero'].includes(l)) return true;
+      if (['no','n','false','0','falso'].includes(l)) return false;
+      return undefined;
+    };
 
     // ── Fase 1: parsear y validar TODAS las filas (sin tocar la BD) ──
     const validas = [];
@@ -173,6 +182,8 @@ const ejecutar = async (req, res, next) => {
         medidaNorm:            normalizarMedida(String(record.medida).trim()),
         marca:                 String(record.marca).trim(),
         nombreComercial:       str(record.nombreComercial),
+        modelo:                str(record.modelo),
+        runFlat:               bool(record.runFlat),
         grupo:                 str(record.grupo),
         tipo:                  normalizarTipo(record.tipo),
         precioRegular:         tienePrecio ? num(precioRaw) : undefined, // omitir si no viene (no pisa el existente)
@@ -295,6 +306,12 @@ function sugerirCampo(header, sedes = []) {
     'medida':                       'medida',
     'marca':                        'marca',
     'nombre comercial':             'nombreComercial',
+    'modelo':                       'modelo',
+    'run-flat':                     'runFlat',
+    'run flat':                     'runFlat',
+    'runflat':                      'runFlat',
+    'run-flat (sí/no)':             'runFlat',
+    'run-flat (si/no)':             'runFlat',
     'grupo':                        'grupo',
     'tipo':                         'tipo',
     'precio regular':               'precioRegular',
@@ -337,6 +354,9 @@ function sugerirCampo(header, sedes = []) {
   if (h.includes('sku') || (h.includes('cod') && !h.includes('local'))) return 'sku';
   if (h.includes('medida') || h.includes('talla') || h.includes('size')) return 'medida';
   if (h.includes('marca') || h.includes('brand'))                         return 'marca';
+  if (h.includes('run') && h.includes('flat'))                            return 'runFlat';
+  if (h.includes('runflat'))                                              return 'runFlat';
+  if (h.includes('modelo'))                                               return 'modelo';
   if (h.includes('nombre') || h.includes('comercial') || h.includes('model')) return 'nombreComercial';
   if (h.includes('precio') && h.includes('proveedor'))                     return 'precioProveedor';
   if (h.includes('proveedor') || h.includes('costo'))                      return 'precioProveedor';
@@ -514,6 +534,8 @@ const previewUpdate = async (req, res, next) => {
       { key: 'precioProveedor', label: 'Precio Proveedor', grupo: 'Precios' },
       { key: 'precioReferencialVenta', label: 'Precio Referencial Venta', grupo: 'Precios' },
       { key: 'nombreComercial', label: 'Nombre Comercial', grupo: 'Info producto' },
+      { key: 'modelo',          label: 'Modelo',           grupo: 'Info producto' },
+      { key: 'runFlat',         label: 'Run-Flat (Sí/No)', grupo: 'Info producto' },
       { key: 'grupo',           label: 'Grupo',            grupo: 'Info producto' },
       { key: 'tipo',            label: 'Tipo',             grupo: 'Info producto' },
       { key: 'imagenUrl',       label: 'URL Imagen',       grupo: 'Info producto' },
@@ -664,6 +686,10 @@ const aplicarUpdate = async (req, res, next) => {
           datosProducto.tipo = normalizarTipo(valorArchivo);
         } else if (campoCRM === 'eficienciaCombustible' || campoCRM === 'eficienciaFrenado') {
           datosProducto[campoCRM] = valorArchivo.toUpperCase().charAt(0);
+        } else if (campoCRM === 'runFlat') {
+          const l = valorArchivo.toLowerCase();
+          if (['si','sí','yes','y','true','1','runflat','run-flat','run flat','rf','x','verdadero'].includes(l)) datosProducto.runFlat = true;
+          else if (['no','n','false','0','falso'].includes(l)) datosProducto.runFlat = false;
         } else {
           datosProducto[campoCRM] = valorArchivo;
         }
@@ -782,6 +808,8 @@ const generarTemplate = async (req, res, next) => {
       { key: 'medida',          label: 'Medida',               nota: '← OBLIGATORIO. Ej: 195/65R15',              ej1: '195/65R15',            ej2: '265/70R17'           },
       { key: 'marca',           label: 'Marca',                nota: '← OBLIGATORIO. Ej: BRIDGESTONE',            ej1: 'BRIDGESTONE',          ej2: 'MICHELIN'            },
       { key: 'nombreComercial', label: 'Nombre Comercial',     nota: 'Ej: ECOPIA EP150',                          ej1: 'ECOPIA EP150',         ej2: 'LTX FORCE'           },
+      { key: 'modelo',          label: 'Modelo',               nota: 'Modelo específico de la llanta',            ej1: 'EP150',                ej2: 'LTX FORCE'           },
+      { key: 'runFlat',         label: 'Run-Flat (Sí/No)',     nota: 'Sí o No (vacío = sin dato)',                ej1: 'No',                   ej2: 'Sí'                  },
       { key: 'grupo',           label: 'Grupo',                nota: 'Excelente / Muy Buena / Buena',             ej1: 'Excelente',            ej2: 'Muy Buena'           },
       { key: 'tipo',            label: 'Tipo',                 nota: 'Categoría libre. Ej: AUTO, CAMIONETA, SUV',  ej1: 'AUTO',                 ej2: 'CAMIONETA'           },
       { key: 'precioRegular',   label: 'Precio Regular',       nota: '← OBLIGATORIO. Número, ej: 250.00',         ej1: 250.00,                 ej2: 480.00                },
@@ -849,7 +877,9 @@ const generarTemplate = async (req, res, next) => {
       ['SKU',                'SÍ',  'Texto único',                       'Código único del producto. No puede repetirse.'],
       ['Medida',             'SÍ',  'Ej: 195/65R15',                     'Medida estándar. El sistema extrae automáticamente Ancho (195mm), Perfil (65%) y Radio (R15) — no necesitas columnas aparte.'],
       ['Marca',              'SÍ',  'Ej: BRIDGESTONE',                   'Nombre del fabricante.'],
-      ['Nombre Comercial',   'No',  'Texto',                             'Nombre del modelo o línea comercial.'],
+      ['Nombre Comercial',   'No',  'Texto',                             'Nombre de la línea comercial.'],
+      ['Modelo',             'No',  'Texto',                             'Modelo específico de la llanta.'],
+      ['Run-Flat (Sí/No)',   'No',  'Sí / No',                           'Indica si la llanta es run-flat. Acepta Sí/No, RF, true/false. Vacío = sin dato.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
       ['Tipo',               'No',  'Categoría libre (ej: AUTO, CAMIONETA, SUV, VAN)', 'Se guarda tal como lo escribas (en mayúsculas). Si se omite, se asigna AUTO.'],
       ['Precio Regular',     'No',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda. Si lo dejas vacío en un producto NUEVO se guarda en 0; en uno existente no se modifica.'],
@@ -899,6 +929,8 @@ const exportarCatalogo = async (req, res, next) => {
       { key: '__radio',         label: 'Radio (R)'            },
       { key: 'marca',           label: 'Marca'                },
       { key: 'nombreComercial', label: 'Nombre Comercial'     },
+      { key: 'modelo',          label: 'Modelo'               },
+      { key: 'runFlat',         label: 'Run-Flat'             },
       { key: 'grupo',           label: 'Grupo'                },
       { key: 'tipo',            label: 'Tipo'                 },
       { key: 'precioRegular',   label: 'Precio Regular'       },
@@ -934,6 +966,7 @@ const exportarCatalogo = async (req, res, next) => {
 
       return allCols.map(col => {
         if (col.key === '__stockTotal') return stockTotal;
+        if (col.key === 'runFlat') return prod.runFlat === true ? 'Sí' : prod.runFlat === false ? 'No' : '';
         if (col.key === '__ancho')  return mp.ancho  ?? '';
         if (col.key === '__perfil') return mp.perfil ?? '';
         if (col.key === '__radio')  return mp.radio  ?? '';

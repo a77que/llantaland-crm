@@ -237,6 +237,8 @@ export default function InventarioDetalle() {
 
           {/* Info técnica */}
           <Seccion titulo="⚙️ Especificaciones">
+            {prod.modelo && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Modelo: </span><strong>{prod.modelo}</strong></div>}
+            {prod.runFlat != null && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Run-Flat: </span><strong>{prod.runFlat ? 'Sí' : 'No'}</strong></div>}
             {prod.grupo && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Grupo: </span><strong>{prod.grupo}</strong></div>}
             {prod.indice_carga && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Índice carga: </span><strong>{prod.indice_carga}</strong></div>}
             {prod.velocidad_max && <div style={{ marginBottom: 8 }}><span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Veloc. máx: </span><strong>{prod.velocidad_max}</strong></div>}
