@@ -53,6 +53,8 @@ const CAMPOS_BD_BASE = [
   { key: 'nivelRuido',           label: 'Nivel Ruido dB' },
   { key: 'paisFabricacion',      label: 'Pais Fabricacion' },
   { key: 'origenMarca',          label: 'Origen Marca' },
+  { key: 'precioProveedor',      label: 'Precio Proveedor' },
+  { key: 'precioReferencialVenta', label: 'Precio Referencial Venta' },
 ];
 
 const preview = async (req, res, next) => {
@@ -180,6 +182,8 @@ const ejecutar = async (req, res, next) => {
         nivelRuido:            int(record.nivelRuido),
         paisFabricacion:       str(record.paisFabricacion),
         origenMarca:           str(record.origenMarca),
+        precioProveedor:       num(record.precioProveedor) ?? undefined,
+        precioReferencialVenta: num(record.precioReferencialVenta) ?? undefined,
         activo:                true, // re-importar un producto eliminado lo reactiva
       };
       Object.keys(productoData).forEach(k => productoData[k] === undefined && delete productoData[k]);
@@ -275,6 +279,9 @@ function sugerirCampo(header, sedes = []) {
     'nivel ruido db':               'nivelRuido',
     'pais fabricacion':             'paisFabricacion',
     'origen marca':                 'origenMarca',
+    'precio proveedor':             'precioProveedor',
+    'precio referencial venta':     'precioReferencialVenta',
+    'precio referencial':           'precioReferencialVenta',
   };
   if (EXACTO[h]) return EXACTO[h];
 
@@ -294,6 +301,9 @@ function sugerirCampo(header, sedes = []) {
   if (h.includes('medida') || h.includes('talla') || h.includes('size')) return 'medida';
   if (h.includes('marca') || h.includes('brand'))                         return 'marca';
   if (h.includes('nombre') || h.includes('comercial') || h.includes('model')) return 'nombreComercial';
+  if (h.includes('precio') && h.includes('proveedor'))                     return 'precioProveedor';
+  if (h.includes('proveedor') || h.includes('costo'))                      return 'precioProveedor';
+  if (h.includes('precio') && (h.includes('referencial') || h.includes('mercado'))) return 'precioReferencialVenta';
   if (h.includes('precio') && (h.includes('regular') || h.includes('lista')))  return 'precioRegular';
   if (h.includes('precio') && (h.includes('oferta') || h.includes('especial'))) return 'precioOferta';
   if (h.includes('precio') || h.includes('price'))                         return 'precioRegular';
@@ -411,6 +421,8 @@ const previewUpdate = async (req, res, next) => {
     const camposUpdate = [
       { key: 'precioRegular',   label: 'Precio Regular',   grupo: 'Precios' },
       { key: 'precioOferta',    label: 'Precio Oferta',    grupo: 'Precios' },
+      { key: 'precioProveedor', label: 'Precio Proveedor', grupo: 'Precios' },
+      { key: 'precioReferencialVenta', label: 'Precio Referencial Venta', grupo: 'Precios' },
       { key: 'nombreComercial', label: 'Nombre Comercial', grupo: 'Info producto' },
       { key: 'grupo',           label: 'Grupo',            grupo: 'Info producto' },
       { key: 'tipo',            label: 'Tipo',             grupo: 'Info producto' },
@@ -552,7 +564,7 @@ const aplicarUpdate = async (req, res, next) => {
         if (campoCRM.startsWith('stock_')) {
           const sedeId = sedeMap[campoCRM.replace('stock_', '').toUpperCase()];
           if (sedeId) datosStock[sedeId] = Math.max(0, parseInt(valorArchivo) || 0);
-        } else if (campoCRM === 'precioRegular' || campoCRM === 'precioOferta') {
+        } else if (['precioRegular', 'precioOferta', 'precioProveedor', 'precioReferencialVenta'].includes(campoCRM)) {
           const n = parseFloat(String(valorArchivo).replace(',', '.'));
           if (!isNaN(n)) datosProducto[campoCRM] = n;
         } else if (['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'].includes(campoCRM)) {
@@ -700,7 +712,9 @@ const generarTemplate = async (req, res, next) => {
       { key: 'eficienciaFrenado', label: 'Eficiencia Frenado EU', nota: 'Etiqueta A/B/C/D/E/F/G', ej1: 'A', ej2: 'B' },
       { key: 'nivelRuido', label: 'Nivel Ruido dB', nota: 'Decibeles, ej: 71', ej1: 71, ej2: 73 },
       { key: 'paisFabricacion', label: 'Pais Fabricacion', nota: 'Ej: Japon, China, Peru', ej1: 'Japon', ej2: 'Tailandia' },
-      { key: 'origenMarca', label: 'Origen Marca', nota: 'Pais origen de la marca', ej1: 'Japon', ej2: 'Francia' }
+      { key: 'origenMarca', label: 'Origen Marca', nota: 'Pais origen de la marca', ej1: 'Japon', ej2: 'Francia' },
+      { key: 'precioProveedor', label: 'Precio Proveedor', nota: 'Costo base del proveedor, ej: 180.00', ej1: 180.00, ej2: 350.00 },
+      { key: 'precioReferencialVenta', label: 'Precio Referencial Venta', nota: 'Precio de mercado actual, ej: 300.00', ej1: 300.00, ej2: 560.00 }
     );
 
     const stockCols = sedes.map((s, i) => ({
@@ -749,6 +763,8 @@ const generarTemplate = async (req, res, next) => {
       ['Ficha Técnica',      'No',  'URL o texto',                       'URL o descripción técnica del producto.'],
       ['Índice de carga',    'No',  'Número (ej: 91)',                   'Índice de carga estándar.'],
       ['Índice de Velocidad', 'No',  'Letra (ej: H, V, S)',               'Código de velocidad. H=210km/h, V=240km/h, S=180km/h, T=190km/h, Y=300km/h.'],
+      ['Precio Proveedor',   'No',  'Número decimal (ej: 180.00)',       'Costo base del proveedor. Sirve para calcular el precio de venta en "Precios y Margen".'],
+      ['Precio Referencial Venta', 'No', 'Número decimal (ej: 300.00)',  'Precio de mercado actual, para comparar contra el precio de venta calculado.'],
       ...sedes.map(s  => [`Stock ${s.nombre}`, 'No', 'Número entero (ej: 10)', `Stock en sede ${s.nombre} (${s.codigoLocal}).`]),
       ...extraKeys.map(k => [extraKeyLabel(k), 'No', 'Texto libre', 'Campo personalizado del catálogo.']),
     ];
@@ -802,6 +818,8 @@ const exportarCatalogo = async (req, res, next) => {
       { key: 'nivelRuido',      label: 'Nivel Ruido dB' },
       { key: 'paisFabricacion', label: 'Pais Fabricacion' },
       { key: 'origenMarca',     label: 'Origen Marca' },
+      { key: 'precioProveedor', label: 'Precio Proveedor'     },
+      { key: 'precioReferencialVenta', label: 'Precio Referencial Venta' },
       { key: 'imagenUrl',       label: 'URL Imagen'           },
       { key: '__stockTotal',    label: 'Stock Total'          },
     ];
