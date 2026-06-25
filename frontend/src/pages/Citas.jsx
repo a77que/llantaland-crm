@@ -6,6 +6,7 @@ import { citasApi, cotizacionesApi, sedesApi } from '../services/api';
 import { useCitasNotification } from '../context/CitasNotificationContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
+import CalendarioCitas from '../components/CalendarioCitas';
 
 // Genera y abre el PDF de la cita (usa la cotización si existe, si no lo arma desde los datos del cliente)
 async function abrirPdfCita(citaId) {
@@ -324,6 +325,7 @@ export default function Citas() {
     } });
   };
 
+  const [vista, setVista]       = useState('lista'); // 'lista' | 'calendario'
   const [page, setPage]         = useState(1);
   const [q, setQ]               = useState('');
   const [orderBy, setOrderBy]   = useState('updatedAt');
@@ -342,6 +344,15 @@ export default function Citas() {
     staleTime: 15_000,
     refetchInterval: 20_000,
   });
+
+  // Para el calendario necesitamos todas las citas (no solo la página actual).
+  const { data: calData } = useQuery({
+    queryKey: ['citas-calendario', q, filtro.estado],
+    queryFn: () => citasApi.listar({ page: 1, limit: 500, q: q || undefined, estado: filtro.estado || undefined }),
+    enabled: vista === 'calendario',
+    staleTime: 15_000,
+  });
+  const citasCalendario = calData?.citas || [];
 
   useEffect(() => { if (count > 0) marcarTodosVistos(); }, []); // eslint-disable-line
 
@@ -425,7 +436,12 @@ export default function Citas() {
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>{total} registros</span>
-          {!isMobile && <button onClick={() => setShowGestor(true)} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>⚙️ Columnas</button>}
+          <div style={{ display: 'flex', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+            {[['lista', '☰ Lista'], ['calendario', '🗓️ Calendario']].map(([v, lbl]) => (
+              <button key={v} onClick={() => setVista(v)} style={{ padding: '8px 12px', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', background: vista === v ? 'var(--color-primary)' : 'transparent', color: vista === v ? '#fff' : 'var(--color-text-muted)' }}>{lbl}</button>
+            ))}
+          </div>
+          {!isMobile && vista === 'lista' && <button onClick={() => setShowGestor(true)} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>⚙️ Columnas</button>}
           <button onClick={() => refetch()} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 12px', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12 }}>{isFetching ? '⟳' : 'Actualizar'}</button>
         </div>
       </div>
@@ -444,7 +460,9 @@ export default function Citas() {
       </div>
 
       {/* Contenido */}
-      {isLoading ? (
+      {vista === 'calendario' ? (
+        <CalendarioCitas citas={citasCalendario} onAbrir={setModalAgendar} isMobile={isMobile} />
+      ) : isLoading ? (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-muted)' }}><div style={{ fontSize: 32, marginBottom: 10 }}>⏳</div>Cargando citas...</div>
       ) : isError ? (
         <div style={{ textAlign: 'center', padding: 60, color: '#dc2626' }}><div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>Error al cargar.<br /><button onClick={() => refetch()} style={{ marginTop: 12, padding: '8px 16px', background: '#f5c400', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>Reintentar</button></div>
@@ -487,7 +505,7 @@ export default function Citas() {
       )}
 
       {/* Paginación */}
-      {totalPages > 1 && (
+      {vista === 'lista' && totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '8px 16px', color: page === 1 ? 'var(--color-text-muted)' : 'var(--color-text)', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13 }}>← Anterior</button>
           <span style={{ color: 'var(--color-text-muted)', fontSize: 13, lineHeight: '36px' }}>{page} / {totalPages}</span>

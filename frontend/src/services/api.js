@@ -147,6 +147,8 @@ export const adminApi = {
   getConfigApis: () => api.get('/admin/config-apis'),
   saveConfigApis: (data) => api.post('/admin/config-apis', data),
   resumen: (params) => api.get('/admin/resumen', { params }),
+  getCostos: () => api.get('/admin/costos'),
+  saveCostos: (items) => api.post('/admin/costos', { items }),
 };
 
 export const usuariosApi = {

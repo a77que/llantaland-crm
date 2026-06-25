@@ -12,6 +12,7 @@ const NAV = [
   { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
   { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
   { section: 'Inventario', to: '/inventario',    label: 'Catálogo Llantas',      icon: null, imgIcon: '/OsoLogoSVG.svg' },
+  { section: 'Inventario', to: '/inventario/precios', label: 'Precios y Margen',  icon: '🧮', adminOnly: true },
   { section: 'Inventario', to: '/almacenes',     label: 'Almacenes',             icon: '🏪' },
   { section: 'Admin',      to: '/admin/stock',   label: 'Stock Crítico',         icon: '⚠️', adminOnly: true },
   { section: 'Admin',      to: '/admin/usuarios',label: 'Usuarios',              icon: '👤', adminOnly: true },

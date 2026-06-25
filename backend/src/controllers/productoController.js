@@ -111,6 +111,20 @@ const actualizar = async (req, res, next) => {
   try {
     const data = { ...req.body };
     if (data.medida) data.medidaNorm = normalizarMedida(data.medida);
+    // Campos de precio numéricos. Los nullable aceptan vacío → null; precioRegular
+    // (obligatorio) nunca se pone en null: si llega vacío/ inválido se ignora.
+    const NULLABLES = ['precioProveedor', 'precioReferencialVenta', 'precioOferta'];
+    for (const f of [...NULLABLES, 'precioRegular']) {
+      if (!(f in data)) continue;
+      const v = data[f];
+      if (v === '' || v === null || v === undefined) {
+        if (NULLABLES.includes(f)) data[f] = null; else delete data[f];
+      } else if (isNaN(parseFloat(v))) {
+        delete data[f];
+      } else {
+        data[f] = parseFloat(v);
+      }
+    }
     const producto = await prisma.producto.update({
       where: { id: req.params.id },
       data,
