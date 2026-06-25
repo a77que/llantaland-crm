@@ -14,7 +14,7 @@ export default function CrearProductoModal({ onClose }) {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const [f, setF] = useState({
-    sku: '', medida: '', marca: '', nombreComercial: '', modelo: '', runFlat: '', grupo: '', tipo: 'AUTO',
+    sku: '', medida: '', marca: '', nombreComercial: '', modelo: '', runFlat: '', tipoLlanta: '', tipoVehiculo: '', grupo: '', tipo: 'AUTO',
     precioRegular: '', precioOferta: '', descuentoMaximo: '',
     indice_carga: '', velocidad_max: '', cargaMaxNeumatico: '', velocidadMaxKmh: '',
     eficienciaCombustible: '', eficienciaFrenado: '', nivelRuido: '',
@@ -35,6 +35,7 @@ export default function CrearProductoModal({ onClose }) {
         sku: f.sku.trim(), medida: f.medida.trim(), marca: f.marca.trim(),
         nombreComercial: str(f.nombreComercial), modelo: str(f.modelo),
         runFlat: f.runFlat === '' ? undefined : f.runFlat === 'si',
+        tipoLlanta: str(f.tipoLlanta), tipoVehiculo: str(f.tipoVehiculo),
         grupo: str(f.grupo), tipo: (f.tipo || 'AUTO').trim().toUpperCase(),
         precioRegular: num(f.precioRegular),
         precioOferta: num(f.precioOferta), descuentoMaximo: num(f.descuentoMaximo),
@@ -92,6 +93,8 @@ export default function CrearProductoModal({ onClose }) {
             <div><label style={lbl}>Nombre comercial</label><input style={inp} value={f.nombreComercial} onChange={set('nombreComercial')} placeholder="Ej: Turanza ER300" /></div>
             <div><label style={lbl}>Modelo</label><input style={inp} value={f.modelo} onChange={set('modelo')} placeholder="Ej: ER300" /></div>
             <div><label style={lbl}>Run-Flat</label><select style={inp} value={f.runFlat} onChange={set('runFlat')}><option value="">—</option><option value="si">Sí</option><option value="no">No</option></select></div>
+            <div><label style={lbl}>Tipo de llanta</label><input style={inp} value={f.tipoLlanta} onChange={set('tipoLlanta')} placeholder="Carga, Ciudad, MT, AT…" /></div>
+            <div><label style={lbl}>Tipo de vehículo</label><input style={inp} value={f.tipoVehiculo} onChange={set('tipoVehiculo')} placeholder="Pick up, Sedán, Transporte…" /></div>
             <div><label style={lbl}>Grupo</label><input style={inp} value={f.grupo} onChange={set('grupo')} placeholder="Turismo, SUV…" /></div>
             <div><label style={lbl}>Tipo</label><input style={inp} list="tipos-dl" value={f.tipo} onChange={set('tipo')} placeholder="AUTO" /><datalist id="tipos-dl">{TIPO_OPCIONES.map(t => <option key={t} value={t} />)}</datalist></div>
           </div>

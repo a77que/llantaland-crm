@@ -26,6 +26,8 @@ const COLUMNAS_FIJAS = [
   { key: 'nombreComercial', label: 'Nombre Comercial', group: 'Producto' },
   { key: 'modelo',          label: 'Modelo',          group: 'Producto' },
   { key: 'runFlat',         label: 'Run-Flat',        group: 'Producto' },
+  { key: 'tipoLlanta',      label: 'Tipo de llanta',  group: 'Producto' },
+  { key: 'tipoVehiculo',    label: 'Tipo de vehículo', group: 'Producto' },
   { key: 'grupo',           label: 'Grupo',           group: 'Producto' },
   { key: 'precioRegular',   label: 'Precio Regular',  group: 'Precios' },
   { key: 'precioOferta',    label: 'Precio Oferta',   group: 'Precios' },
@@ -57,7 +59,7 @@ const defaultVisible = () => {
   if (saved) return JSON.parse(saved);
   return [
     'medida','ancho','perfil','radio',
-    'marca','nombreComercial','modelo','runFlat','grupo','precioRegular','precioOferta','descuentoMaximo',
+    'marca','nombreComercial','modelo','runFlat','tipoLlanta','tipoVehiculo','grupo','precioRegular','precioOferta','descuentoMaximo',
     'indice_carga','velocidad_max','cargaMaxNeumatico','velocidadMaxKmh',
     'eficienciaCombustible','eficienciaFrenado','nivelRuido','paisFabricacion','origenMarca',
     'stockTotal',

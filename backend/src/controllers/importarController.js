@@ -39,6 +39,8 @@ const CAMPOS_BD_BASE = [
   { key: 'nombreComercial',      label: 'Nombre Comercial' },
   { key: 'modelo',               label: 'Modelo' },
   { key: 'runFlat',              label: 'Run-Flat (Sí/No)' },
+  { key: 'tipoLlanta',           label: 'Tipo de llanta' },
+  { key: 'tipoVehiculo',         label: 'Tipo de vehículo' },
   { key: 'grupo',                label: 'Grupo' },
   { key: 'tipo',                 label: 'Tipo (AUTO, CAMIONETA, CAMION, MOTO o personalizado)' },
   { key: 'precioRegular',        label: 'Precio Regular', required: true },
@@ -184,6 +186,8 @@ const ejecutar = async (req, res, next) => {
         nombreComercial:       str(record.nombreComercial),
         modelo:                str(record.modelo),
         runFlat:               bool(record.runFlat),
+        tipoLlanta:            str(record.tipoLlanta),
+        tipoVehiculo:          str(record.tipoVehiculo),
         grupo:                 str(record.grupo),
         tipo:                  normalizarTipo(record.tipo),
         precioRegular:         tienePrecio ? num(precioRaw) : undefined, // omitir si no viene (no pisa el existente)
@@ -312,6 +316,12 @@ function sugerirCampo(header, sedes = []) {
     'runflat':                      'runFlat',
     'run-flat (sí/no)':             'runFlat',
     'run-flat (si/no)':             'runFlat',
+    'tipo de llanta':               'tipoLlanta',
+    'tipo llanta':                  'tipoLlanta',
+    'tipo de vehiculo':             'tipoVehiculo',
+    'tipo de vehículo':             'tipoVehiculo',
+    'tipo vehiculo':                'tipoVehiculo',
+    'tipo de carro':                'tipoVehiculo',
     'grupo':                        'grupo',
     'tipo':                         'tipo',
     'precio regular':               'precioRegular',
@@ -376,6 +386,8 @@ function sugerirCampo(header, sedes = []) {
   if (h.includes('ruido') || h.includes('ruido') || h.includes('db'))      return 'nivelRuido';
   if (h.includes('fabricacion') || h.includes('fabricación'))              return 'paisFabricacion';
   if (h.includes('origen') && h.includes('marca'))                         return 'origenMarca';
+  if (h.includes('tipo') && h.includes('llanta'))                          return 'tipoLlanta';
+  if (h.includes('tipo') && (h.includes('veh') || h.includes('carro') || h.includes('auto'))) return 'tipoVehiculo';
   if (h.includes('tipo'))                                                   return 'tipo';
   if (h.includes('grupo') || h.includes('categoria'))                      return 'grupo';
 
@@ -536,6 +548,8 @@ const previewUpdate = async (req, res, next) => {
       { key: 'nombreComercial', label: 'Nombre Comercial', grupo: 'Info producto' },
       { key: 'modelo',          label: 'Modelo',           grupo: 'Info producto' },
       { key: 'runFlat',         label: 'Run-Flat (Sí/No)', grupo: 'Info producto' },
+      { key: 'tipoLlanta',      label: 'Tipo de llanta',   grupo: 'Info producto' },
+      { key: 'tipoVehiculo',    label: 'Tipo de vehículo', grupo: 'Info producto' },
       { key: 'grupo',           label: 'Grupo',            grupo: 'Info producto' },
       { key: 'tipo',            label: 'Tipo',             grupo: 'Info producto' },
       { key: 'imagenUrl',       label: 'URL Imagen',       grupo: 'Info producto' },
@@ -810,6 +824,8 @@ const generarTemplate = async (req, res, next) => {
       { key: 'nombreComercial', label: 'Nombre Comercial',     nota: 'Ej: ECOPIA EP150',                          ej1: 'ECOPIA EP150',         ej2: 'LTX FORCE'           },
       { key: 'modelo',          label: 'Modelo',               nota: 'Modelo específico de la llanta',            ej1: 'EP150',                ej2: 'LTX FORCE'           },
       { key: 'runFlat',         label: 'Run-Flat (Sí/No)',     nota: 'Sí o No (vacío = sin dato)',                ej1: 'No',                   ej2: 'Sí'                  },
+      { key: 'tipoLlanta',      label: 'Tipo de llanta',       nota: 'Ej: Carga, Ciudad, Pistera, MT, AT',        ej1: 'Ciudad',               ej2: 'AT'                  },
+      { key: 'tipoVehiculo',    label: 'Tipo de vehículo',     nota: 'Ej: Pick up, Sedán, Transporte urbano',     ej1: 'Sedán',                ej2: 'Pick up'             },
       { key: 'grupo',           label: 'Grupo',                nota: 'Excelente / Muy Buena / Buena',             ej1: 'Excelente',            ej2: 'Muy Buena'           },
       { key: 'tipo',            label: 'Tipo',                 nota: 'Categoría libre. Ej: AUTO, CAMIONETA, SUV',  ej1: 'AUTO',                 ej2: 'CAMIONETA'           },
       { key: 'precioRegular',   label: 'Precio Regular',       nota: '← OBLIGATORIO. Número, ej: 250.00',         ej1: 250.00,                 ej2: 480.00                },
@@ -880,6 +896,8 @@ const generarTemplate = async (req, res, next) => {
       ['Nombre Comercial',   'No',  'Texto',                             'Nombre de la línea comercial.'],
       ['Modelo',             'No',  'Texto',                             'Modelo específico de la llanta.'],
       ['Run-Flat (Sí/No)',   'No',  'Sí / No',                           'Indica si la llanta es run-flat. Acepta Sí/No, RF, true/false. Vacío = sin dato.'],
+      ['Tipo de llanta',     'No',  'Texto libre',                       'Tipo de llanta: Carga, Ciudad, Pistera, MT, AT, etc.'],
+      ['Tipo de vehículo',   'No',  'Texto libre',                       'Para qué vehículo va: Pick up, Sedán, Transporte urbano, etc.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
       ['Tipo',               'No',  'Categoría libre (ej: AUTO, CAMIONETA, SUV, VAN)', 'Se guarda tal como lo escribas (en mayúsculas). Si se omite, se asigna AUTO.'],
       ['Precio Regular',     'No',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda. Si lo dejas vacío en un producto NUEVO se guarda en 0; en uno existente no se modifica.'],
@@ -931,6 +949,8 @@ const exportarCatalogo = async (req, res, next) => {
       { key: 'nombreComercial', label: 'Nombre Comercial'     },
       { key: 'modelo',          label: 'Modelo'               },
       { key: 'runFlat',         label: 'Run-Flat'             },
+      { key: 'tipoLlanta',      label: 'Tipo de llanta'       },
+      { key: 'tipoVehiculo',    label: 'Tipo de vehículo'     },
       { key: 'grupo',           label: 'Grupo'                },
       { key: 'tipo',            label: 'Tipo'                 },
       { key: 'precioRegular',   label: 'Precio Regular'       },
