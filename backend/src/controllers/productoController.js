@@ -16,7 +16,7 @@ const SORT_FIELDS = {
   cargaMaxNeumatico: 'cargaMaxNeumatico', velocidadMaxKmh: 'velocidadMaxKmh',
   eficienciaCombustible: 'eficienciaCombustible', eficienciaFrenado: 'eficienciaFrenado',
   nivelRuido: 'nivelRuido', paisFabricacion: 'paisFabricacion', origenMarca: 'origenMarca',
-  sku: 'sku', tipo: 'tipo', createdAt: 'createdAt',
+  sku: 'sku', tipo: 'tipoVehiculo', tipoVehiculo: 'tipoVehiculo', tipoLlanta: 'tipoLlanta', createdAt: 'createdAt',
 };
 
 const listar = async (req, res, next) => {
@@ -37,7 +37,7 @@ const listar = async (req, res, next) => {
       ]});
     }
     if (marca)  where.marca  = { contains: marca,  mode: 'insensitive' };
-    if (tipo)   where.tipo   = tipo;
+    if (tipo)   where.tipoVehiculo = tipo;
     if (q) {
       const or = [
         { sku:            { contains: q, mode: 'insensitive' } },
@@ -246,12 +246,12 @@ const marcas = async (req, res, next) => {
 const tipos = async (req, res, next) => {
   try {
     const result = await prisma.producto.findMany({
-      distinct: ['tipo'],
-      select: { tipo: true },
+      distinct: ['tipoVehiculo'],
+      select: { tipoVehiculo: true },
       where: { activo: true },
-      orderBy: { tipo: 'asc' },
+      orderBy: { tipoVehiculo: 'asc' },
     });
-    res.json(result.map(r => r.tipo).filter(Boolean));
+    res.json(result.map(r => r.tipoVehiculo).filter(Boolean));
   } catch (err) {
     next(err);
   }
@@ -430,7 +430,7 @@ Neumático:
 - Medida: ${prod.medida}
 - Marca: ${prod.marca}
 - Modelo: ${prod.nombreComercial || 'no especificado'}
-- Tipo de vehículo: ${prod.tipo}
+- Tipo de vehículo: ${prod.tipoVehiculo || 'no especificado'}
 ${prod.indice_carga ? `- Índice de carga: ${prod.indice_carga}` : ''}
 ${prod.velocidad_max ? `- Índice de velocidad: ${prod.velocidad_max}` : ''}
 

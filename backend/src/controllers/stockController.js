@@ -16,7 +16,7 @@ const listar = async (req, res, next) => {
       where,
       include: {
         producto: {
-          select: { id: true, sku: true, medida: true, marca: true, modelo: true, tipo: true, precio: true },
+          select: { id: true, sku: true, medida: true, marca: true, modelo: true, tipoVehiculo: true, precio: true },
         },
         sede: { select: { id: true, nombre: true } },
       },

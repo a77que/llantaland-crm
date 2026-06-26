@@ -114,7 +114,7 @@ export default function InventarioDetalle() {
   if (isLoading) return <LoadingSpinner fullPage />;
   if (!prod) return <div style={{ padding: 24 }}>Producto no encontrado</div>;
 
-  const tipoColor = TIPO_COLOR[prod.tipo] || '#64748b';
+  const tipoColor = TIPO_COLOR[prod.tipoVehiculo] || '#64748b';
   const stockTotal = prod.stocks?.reduce((a, s) => a + s.cantidad, 0) || 0;
 
   return (
@@ -126,7 +126,7 @@ export default function InventarioDetalle() {
           {prod.marca} {prod.nombreComercial || ''}
           <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 500, color: 'var(--color-primary)' }}>{prod.medida}</span>
         </h1>
-        <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: tipoColor + '20', color: tipoColor }}>{prod.tipo}</span>
+        {prod.tipoVehiculo && <span style={{ padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: tipoColor + '20', color: tipoColor }}>{prod.tipoVehiculo}</span>}
         <button
           onClick={() => {
             if (window.confirm(`⚠️ ¿Eliminar esta llanta del catálogo?\n\n${prod.marca} ${prod.nombreComercial || ''} ${prod.medida} (${prod.sku})\n\nDejará de aparecer en el inventario y cotizaciones (el historial de ventas se conserva).`)) {

@@ -185,13 +185,13 @@ export default function ComparadorModal({ ids = [], onClose }) {
                 <tr style={{ background:'var(--color-bg)' }}>
                   <th style={{ minWidth:150, padding:'12px', borderBottom:'2px solid var(--color-border)', borderRight:'1px solid var(--color-border)', position:'sticky', left:0, background:'var(--color-bg)', zIndex:1 }} />
                   {productos.map((p, i) => {
-                    const tc = TIPO_COLOR[p.tipo] || '#64748b';
+                    const tc = TIPO_COLOR[p.tipoVehiculo] || '#64748b';
                     const esMejor = i === uniqueBest;
                     const esEmpate = bestIdxs.length > 1 && bestIdxs.includes(i);
                     return (
                       <th key={i} style={{ minWidth:minW, padding:'14px 14px', borderBottom:'2px solid var(--color-border)', borderLeft:'1px solid var(--color-border)', textAlign:'left', verticalAlign:'top' }}>
                         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4, flexWrap:'wrap' }}>
-                          <span style={{ fontSize:11, padding:'2px 8px', borderRadius:6, background:tc+'20', color:tc, fontWeight:700 }}>{p.tipo}</span>
+                          {p.tipoVehiculo && <span style={{ fontSize:11, padding:'2px 8px', borderRadius:6, background:tc+'20', color:tc, fontWeight:700 }}>{p.tipoVehiculo}</span>}
                           {esMejor && <span style={{ fontSize:10, padding:'2px 8px', borderRadius:6, background:'#f0fdf4', color:'#16a34a', fontWeight:700, border:'1px solid #bbf7d0' }}>🏆 MEJOR</span>}
                           {esEmpate && <span style={{ fontSize:10, padding:'2px 8px', borderRadius:6, background:'#eff6ff', color:'#1d4ed8', fontWeight:700, border:'1px solid #bfdbfe' }}>🤝 EMPATE</span>}
                         </div>

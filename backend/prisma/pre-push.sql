@@ -13,3 +13,19 @@ BEGIN
     DROP TYPE IF EXISTS "TipoProducto";
   END IF;
 END $$;
+
+-- Consolidación: la columna "tipo" se elimina y su información pasa a "tipoVehiculo".
+-- Se copia ANTES de que prisma db push elimine la columna "tipo" (idempotente).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'productos' AND column_name = 'tipo'
+  ) THEN
+    ALTER TABLE "productos" ADD COLUMN IF NOT EXISTS "tipoVehiculo" TEXT;
+    UPDATE "productos"
+       SET "tipoVehiculo" = "tipo"
+     WHERE ("tipoVehiculo" IS NULL OR "tipoVehiculo" = '')
+       AND "tipo" IS NOT NULL AND "tipo" <> '';
+  END IF;
+END $$;

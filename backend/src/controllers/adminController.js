@@ -45,7 +45,7 @@ const exportarStockCritico = async (req, res, next) => {
       : productos.filter(p => stockTotal(p) <= 0);
 
     // Encabezados
-    const headBase = ['SKU', 'Medida', 'Marca', 'Nombre Comercial', 'Tipo', 'Grupo',
+    const headBase = ['SKU', 'Medida', 'Marca', 'Nombre Comercial', 'Tipo de vehículo', 'Grupo',
       'Precio Regular', 'Precio Oferta', 'Stock Total'];
     const headSedes = sedes.map(s => `Stock ${s.codigoLocal || ''} ${s.nombre}`.trim());
     const header = [...headBase, ...headSedes];
@@ -56,7 +56,7 @@ const exportarStockCritico = async (req, res, next) => {
         return st ? st.cantidad : 0;
       });
       return [
-        p.sku, p.medida, p.marca, p.nombreComercial || '', p.tipo || '', p.grupo || '',
+        p.sku, p.medida, p.marca, p.nombreComercial || '', p.tipoVehiculo || '', p.grupo || '',
         precioReg(p), p.precioOferta == null ? '' : parseFloat(p.precioOferta), stockTotal(p),
         ...porSede,
       ];

@@ -85,8 +85,8 @@ export default function FichaLlanta({ productoId, compact = false }) {
       <div style={S.imgBox(compact)}>
         {portada ? <img src={portada.url} alt={prod.marca} style={S.img} /> : '🛞'}
         <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span style={S.badge('#2563eb')}>{prod.tipo}</span>
-          {prod.tipo_terreno && <span style={S.badge('#8b5cf6')}>{prod.tipo_terreno}</span>}
+          {prod.tipoVehiculo && <span style={S.badge('#2563eb')}>{prod.tipoVehiculo}</span>}
+          {prod.tipoLlanta && <span style={S.badge('#8b5cf6')}>{prod.tipoLlanta}</span>}
           {prod.garantia && <span style={S.badge('#16a34a')}>{prod.garantia}</span>}
         </div>
       </div>

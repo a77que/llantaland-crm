@@ -164,7 +164,6 @@ model Producto {
   tipoLlanta      String?                        // Tipo de llanta: Carga, Ciudad, Pistera, MT, AT, etc.
   tipoVehiculo    String?                        // Para qué carro va: Pick up, Sedán, Transporte urbano, etc.
   grupo           String?                        // Grupo (Turismo, SUV, etc.)
-  tipo            String       @default("AUTO") // categoria libre: AUTO, CAMIONETA, CAMION, MOTO o personalizada
   precioRegular   Decimal      @db.Decimal(10, 2)
   precioOferta    Decimal?     @db.Decimal(10, 2) // null = sin oferta
   precioProveedor        Decimal? @db.Decimal(10, 2) // costo base del proveedor (para calcular precio de venta)

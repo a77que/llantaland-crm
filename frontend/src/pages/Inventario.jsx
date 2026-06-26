@@ -46,7 +46,6 @@ const COLUMNAS_FIJAS = [
   { key: 'stockTotal',      label: 'Stock Total',     group: 'Stock' },
   // Las columnas de stock por almacén (stock_LX) se generan dinámicamente desde las sedes
   { key: 'sku',             label: 'SKU',             group: 'Producto' },
-  { key: 'tipo',            label: 'Tipo',            group: 'Producto' },
 ];
 
 const STORAGE_KEY = 'inventario_columnas_v2';
@@ -271,8 +270,8 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef, marcas 
     );
   }
 
-  // Tipo — texto libre con sugerencias (no limitado a opciones fijas)
-  if (campo === 'tipo') {
+  // Tipo de vehículo — texto libre con sugerencias (no limitado a opciones fijas)
+  if (campo === 'tipoVehiculo') {
     const tipoColor = { AUTO: '#3b82f6', CAMIONETA: '#8b5cf6', CAMION: '#f59e0b', MOTO: '#ec4899' };
     const sugerencias = [...new Set(['AUTO', 'CAMIONETA', 'CAMION', 'MOTO', ...tipos])];
     if (editing) {
@@ -378,7 +377,8 @@ function CeldaEditable({ value, prodId, campo, onSave, isCustom, colDef, marcas 
 const SORTABLE = {
   medida: 'medida', marca: 'marca', nombreComercial: 'nombreComercial',
   grupo: 'grupo', precioRegular: 'precioRegular', precioOferta: 'precioOferta',
-  descuentoMaximo: 'descuentoMaximo', garantia: 'garantia', sku: 'sku', tipo: 'tipo',
+  descuentoMaximo: 'descuentoMaximo', garantia: 'garantia', sku: 'sku',
+  modelo: 'modelo', tipoLlanta: 'tipoLlanta', tipoVehiculo: 'tipoVehiculo',
   indice_carga: 'indice_carga', velocidad_max: 'velocidad_max',
   cargaMaxNeumatico: 'cargaMaxNeumatico', velocidadMaxKmh: 'velocidadMaxKmh',
   eficienciaCombustible: 'eficienciaCombustible', eficienciaFrenado: 'eficienciaFrenado',
@@ -402,7 +402,7 @@ function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambios
 
   const colDef = customCols.find(c => c.key === campo);
   const isGrupo       = campo === 'grupo';
-  const isTipo        = campo === 'tipo';
+  const isTipo        = campo === 'tipoVehiculo';
   const isMarca       = campo === 'marca';
   const isStockGroup  = campo === '__stock__';
   const isSelectCustom = colDef?.tipo === 'select' && colDef?.opciones?.length > 0;

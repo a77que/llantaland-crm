@@ -42,7 +42,6 @@ const CAMPOS_BD_BASE = [
   { key: 'tipoLlanta',           label: 'Tipo de llanta' },
   { key: 'tipoVehiculo',         label: 'Tipo de vehículo' },
   { key: 'grupo',                label: 'Grupo' },
-  { key: 'tipo',                 label: 'Tipo (AUTO, CAMIONETA, CAMION, MOTO o personalizado)' },
   { key: 'precioRegular',        label: 'Precio Regular', required: true },
   { key: 'precioOferta',         label: 'Precio Oferta' },
   { key: 'descuentoMaximo',      label: 'Descuento Máximo %' },
@@ -189,7 +188,6 @@ const ejecutar = async (req, res, next) => {
         tipoLlanta:            str(record.tipoLlanta),
         tipoVehiculo:          str(record.tipoVehiculo),
         grupo:                 str(record.grupo),
-        tipo:                  normalizarTipo(record.tipo),
         precioRegular:         tienePrecio ? num(precioRaw) : undefined, // omitir si no viene (no pisa el existente)
         precioOferta:          num(record.precioOferta) ?? undefined,
         descuentoMaximo:       num(record.descuentoMaximo) ?? undefined,
@@ -323,7 +321,7 @@ function sugerirCampo(header, sedes = []) {
     'tipo vehiculo':                'tipoVehiculo',
     'tipo de carro':                'tipoVehiculo',
     'grupo':                        'grupo',
-    'tipo':                         'tipo',
+    'tipo':                         'tipoVehiculo',
     'precio regular':               'precioRegular',
     'precio oferta':                'precioOferta',
     'descuento máximo %':           'descuentoMaximo',
@@ -388,7 +386,7 @@ function sugerirCampo(header, sedes = []) {
   if (h.includes('origen') && h.includes('marca'))                         return 'origenMarca';
   if (h.includes('tipo') && h.includes('llanta'))                          return 'tipoLlanta';
   if (h.includes('tipo') && (h.includes('veh') || h.includes('carro') || h.includes('auto'))) return 'tipoVehiculo';
-  if (h.includes('tipo'))                                                   return 'tipo';
+  if (h.includes('tipo'))                                                   return 'tipoVehiculo';
   if (h.includes('grupo') || h.includes('categoria'))                      return 'grupo';
 
   // Stock con nombre de sede en la columna
@@ -551,7 +549,6 @@ const previewUpdate = async (req, res, next) => {
       { key: 'tipoLlanta',      label: 'Tipo de llanta',   grupo: 'Info producto' },
       { key: 'tipoVehiculo',    label: 'Tipo de vehículo', grupo: 'Info producto' },
       { key: 'grupo',           label: 'Grupo',            grupo: 'Info producto' },
-      { key: 'tipo',            label: 'Tipo',             grupo: 'Info producto' },
       { key: 'imagenUrl',       label: 'URL Imagen',       grupo: 'Info producto' },
       { key: 'garantia',        label: 'Garantia',         grupo: 'Tecnico' },
       { key: 'fichaTecnica',    label: 'Ficha Tecnica',    grupo: 'Tecnico' },
@@ -696,8 +693,6 @@ const aplicarUpdate = async (req, res, next) => {
         } else if (['cargaMaxNeumatico', 'velocidadMaxKmh', 'nivelRuido'].includes(campoCRM)) {
           const n = parseInt(valorArchivo);
           if (!isNaN(n)) datosProducto[campoCRM] = n;
-        } else if (campoCRM === 'tipo') {
-          datosProducto.tipo = normalizarTipo(valorArchivo);
         } else if (campoCRM === 'eficienciaCombustible' || campoCRM === 'eficienciaFrenado') {
           datosProducto[campoCRM] = valorArchivo.toUpperCase().charAt(0);
         } else if (campoCRM === 'runFlat') {
@@ -827,7 +822,6 @@ const generarTemplate = async (req, res, next) => {
       { key: 'tipoLlanta',      label: 'Tipo de llanta',       nota: 'Ej: Carga, Ciudad, Pistera, MT, AT',        ej1: 'Ciudad',               ej2: 'AT'                  },
       { key: 'tipoVehiculo',    label: 'Tipo de vehículo',     nota: 'Ej: Pick up, Sedán, Transporte urbano',     ej1: 'Sedán',                ej2: 'Pick up'             },
       { key: 'grupo',           label: 'Grupo',                nota: 'Excelente / Muy Buena / Buena',             ej1: 'Excelente',            ej2: 'Muy Buena'           },
-      { key: 'tipo',            label: 'Tipo',                 nota: 'Categoría libre. Ej: AUTO, CAMIONETA, SUV',  ej1: 'AUTO',                 ej2: 'CAMIONETA'           },
       { key: 'precioRegular',   label: 'Precio Regular',       nota: '← OBLIGATORIO. Número, ej: 250.00',         ej1: 250.00,                 ej2: 480.00                },
       { key: 'precioOferta',    label: 'Precio Oferta',        nota: 'Vacío si no hay oferta',                    ej1: 220.00,                 ej2: ''                    },
       { key: 'descuentoMaximo', label: 'Descuento Máximo %',   nota: 'Número del %, ej: 15',                      ej1: 15,                     ej2: 10                    },
@@ -899,7 +893,6 @@ const generarTemplate = async (req, res, next) => {
       ['Tipo de llanta',     'No',  'Texto libre',                       'Tipo de llanta: Carga, Ciudad, Pistera, MT, AT, etc.'],
       ['Tipo de vehículo',   'No',  'Texto libre',                       'Para qué vehículo va: Pick up, Sedán, Transporte urbano, etc.'],
       ['Grupo',              'No',  'Excelente / Muy Buena / Buena',     'Grupo de calidad del producto.'],
-      ['Tipo',               'No',  'Categoría libre (ej: AUTO, CAMIONETA, SUV, VAN)', 'Se guarda tal como lo escribas (en mayúsculas). Si se omite, se asigna AUTO.'],
       ['Precio Regular',     'No',  'Número decimal (ej: 250.00)',       'Precio de lista sin símbolo de moneda. Si lo dejas vacío en un producto NUEVO se guarda en 0; en uno existente no se modifica.'],
       ['Precio Oferta',      'No',  'Número decimal',                    'Dejar vacío si no hay precio de oferta.'],
       ['Descuento Máximo %', 'No',  'Número (ej: 15)',                   'Porcentaje máximo de descuento permitido.'],
@@ -952,7 +945,6 @@ const exportarCatalogo = async (req, res, next) => {
       { key: 'tipoLlanta',      label: 'Tipo de llanta'       },
       { key: 'tipoVehiculo',    label: 'Tipo de vehículo'     },
       { key: 'grupo',           label: 'Grupo'                },
-      { key: 'tipo',            label: 'Tipo'                 },
       { key: 'precioRegular',   label: 'Precio Regular'       },
       { key: 'precioOferta',    label: 'Precio Oferta'        },
       { key: 'descuentoMaximo', label: 'Descuento Máximo %'   },
