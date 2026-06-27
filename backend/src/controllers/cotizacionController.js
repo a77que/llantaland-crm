@@ -5,12 +5,13 @@ const prisma = new PrismaClient();
 
 const listar = async (req, res, next) => {
   try {
-    const { estado, leadId, page, limit } = req.query;
+    const { estado, leadId, tipoNegocio, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
     const isAdmin = req.usuario?.rol === 'ADMIN';
     const where = {};
     if (estado) where.estado = estado;
     if (leadId) where.leadId = leadId;
+    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
     // Vendedor solo ve sus propias cotizaciones
     if (!isAdmin) where.usuarioId = req.usuario.id;
 
@@ -49,7 +50,7 @@ const crear = async (req, res, next) => {
   try {
     const {
       leadId, medidaLlanta, marcaLlanta, modeloLlanta,
-      cantidad, precioUnit, descuento, notas,
+      cantidad, precioUnit, descuento, notas, tipoNegocio,
       nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
       // Datos de cita ingresados en el CRM
       generarCita, fechaInstalacion, horaInstalacion, localInstalacion: localInstalacionBody,
@@ -133,11 +134,13 @@ const crear = async (req, res, next) => {
     const finalHoraInst         = quiereCita ? (horaInstalacion || null) : null;
     // Si se genera cita y se confirma local+fecha, la cotización nace ACEPTADA
     const estadoInicial         = (quiereCita && finalFechaInst && finalLocalInstalacion) ? 'ACEPTADA' : 'BORRADOR';
+    const negocioFinal          = tipoNegocio || 'LLANTAS';
 
     const cot = await prisma.$transaction(async (tx) => {
       const c = await tx.cotizacion.create({
         data: {
           numero,
+          tipoNegocio:     negocioFinal,
           leadId:          leadId || null,
           usuarioId:       req.usuario.id,
           nombreCliente:   finalNombre,
@@ -175,6 +178,7 @@ const crear = async (req, res, next) => {
           const nuevoLead = await tx.leadCRM.create({
             data: {
               telefono: telCita,
+              tipoNegocio: negocioFinal,
               nombreCliente: finalNombre,
               dniCe: finalDni,
               marcaAuto: finalMarcaAuto, modeloAuto: finalModeloAuto, anioAuto: finalAnioAuto,

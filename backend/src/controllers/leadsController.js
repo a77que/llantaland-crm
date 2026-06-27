@@ -46,7 +46,7 @@ const LEAD_SELECT_VENDEDOR = {
 
 const listar = async (req, res, next) => {
   try {
-    const { paso, ranking, q, hoy, cards, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { paso, ranking, q, hoy, cards, tipoNegocio, page = 1, limit = 50, orderBy, orderDir } = req.query;
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const take = Math.min(parseInt(limit) || 50, 100);
@@ -58,6 +58,7 @@ const listar = async (req, res, next) => {
     const where = {};
     const condicionesAnd = [];
 
+    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
     if (paso) where.pasoActual = paso;
     if (ranking) where.ranking = ranking;
     if (hoy === '1' || hoy === 'true') {

@@ -6,9 +6,23 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// Endpoints genéricos compartidos entre los negocios (Llantas / Patrón) — se les
+// inyecta automáticamente el tipoNegocio activo para que cada vista solo vea lo suyo.
+const NEGOCIO_PATHS = ['/leads', '/citas', '/cotizaciones', '/ventas'];
+
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  const url = config.url || '';
+  if (NEGOCIO_PATHS.some(p => url === p || url.startsWith(p))) {
+    const tipoNegocio = useAuthStore.getState().businessType === 'patron' ? 'PATRON' : 'LLANTAS';
+    if (config.method === 'get') {
+      config.params = { tipoNegocio, ...config.params };
+    } else if (['post', 'put', 'patch'].includes(config.method) && config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
+      if (config.data.tipoNegocio === undefined) config.data.tipoNegocio = tipoNegocio;
+    }
+  }
   return config;
 });
 
@@ -163,6 +177,19 @@ export const citasApi = {
   poll:   ()       => api.get('/citas/poll'),
   actualizar: (id, data) => api.put(`/citas/${id}`, data),
   generarPdf: (id) => api.post(`/citas/${id}/pdf`),
+};
+
+export const patronApi = {
+  personajes:           ()         => api.get('/patron/personajes'),
+  actualizarPersonaje:  (id, data) => api.put(`/patron/personajes/${id}`, data),
+  distritos:            ()         => api.get('/patron/distritos'),
+  crearDistrito:        (data)     => api.post('/patron/distritos', data),
+  actualizarDistrito:   (id, data) => api.put(`/patron/distritos/${id}`, data),
+  eliminarDistrito:     (id)       => api.delete(`/patron/distritos/${id}`),
+  agregados:            ()         => api.get('/patron/agregados'),
+  crearAgregado:        (data)     => api.post('/patron/agregados', data),
+  actualizarAgregado:   (id, data) => api.put(`/patron/agregados/${id}`, data),
+  eliminarAgregado:     (id)       => api.delete(`/patron/agregados/${id}`),
 };
 
 export const vehiculosApi = {

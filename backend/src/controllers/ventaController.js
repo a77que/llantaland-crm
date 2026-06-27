@@ -5,12 +5,13 @@ const prisma = new PrismaClient();
 
 const listar = async (req, res, next) => {
   try {
-    const { estado, tipoVenta, desde, hasta, page, limit } = req.query;
+    const { estado, tipoVenta, tipoNegocio, desde, hasta, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
     const isAdmin = req.usuario?.rol === 'ADMIN';
     const where = {};
     if (estado) where.estado = estado;
     if (tipoVenta) where.tipoVenta = tipoVenta;
+    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
     // Vendedor solo ve sus propias ventas
     if (!isAdmin) where.usuarioId = req.usuario.id;
     if (desde || hasta) {
@@ -59,10 +60,11 @@ const obtener = async (req, res, next) => {
 
 const crear = async (req, res, next) => {
   try {
-    const { items, medidaLlanta, marcaLlanta, modeloLlanta, cantidad, precioUnit, ...rest } = req.body;
+    const { items, medidaLlanta, marcaLlanta, modeloLlanta, cantidad, precioUnit, tipoNegocio, ...rest } = req.body;
 
     const cantFinal   = parseInt(cantidad || 1);
     const precioFinal = parseFloat(precioUnit || 0);
+    const negocioFinal = tipoNegocio || 'LLANTAS';
 
     // Validaciones de integridad
     if (cantFinal <= 0) return res.status(400).json({ error: 'Cantidad debe ser mayor a 0' });
@@ -81,6 +83,7 @@ const crear = async (req, res, next) => {
       const v = await tx.venta.create({
         data: {
           numero,
+          tipoNegocio: negocioFinal,
           usuarioId: req.usuario.id,
           medidaLlanta: medidaLlanta || null,
           marcaLlanta: marcaLlanta || null,

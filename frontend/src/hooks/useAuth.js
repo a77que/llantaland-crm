@@ -1,7 +1,7 @@
 import { useAuthStore } from '../store/authStore';
 
 export function useAuth() {
-  const { token, usuario, setAuth, logout } = useAuthStore();
+  const { token, usuario, setAuth, logout, businessType, setBusinessType } = useAuthStore();
   return {
     token,
     usuario,
@@ -9,5 +9,7 @@ export function useAuth() {
     isAdmin: usuario?.rol === 'ADMIN',
     setAuth,
     logout,
+    businessType,
+    setBusinessType,
   };
 }

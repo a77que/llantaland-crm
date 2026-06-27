@@ -10,6 +10,7 @@
     "migrate:prod": "prisma migrate deploy",
     "generate": "prisma generate",
     "seed": "node src/scripts/seed.js",
+    "seed:patron": "node src/scripts/seedPatron.js",
     "migrate:sheets": "node src/scripts/migrarSheets.js"
   },
   "dependencies": {

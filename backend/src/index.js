@@ -37,6 +37,7 @@ const importarRoutes = require('./routes/importar');
 const vehiculoRoutes = require('./routes/vehiculos');
 const clienteRoutes = require('./routes/clientes');
 const usuarioRoutes = require('./routes/usuarios');
+const patronRoutes = require('./routes/patron');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -90,6 +91,7 @@ app.use('/api/importar', importarRoutes);
 app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/usuarios', usuarioRoutes);
+app.use('/api/patron', patronRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-16-busqueda-factiliza-v13', timestamp: new Date() }));
 

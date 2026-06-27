@@ -3,6 +3,7 @@ const pdfService = require('../services/pdfService');
 const prisma = new PrismaClient();
 
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
+// (negocio Llantas) o ya cotizó un show (negocio Patrón)
 const CITAS_PASOS = [
   'lima_lista',
   'esperando_eleccion_b',
@@ -10,6 +11,7 @@ const CITAS_PASOS = [
   'esperando_datos_cliente',
   'esperando_confirmacion',
   'completado',
+  'cotizado',
 ];
 
 function parseJsonField(v) {
@@ -44,7 +46,7 @@ function stockEnLocalElegido(lead) {
 
 const listar = async (req, res, next) => {
   try {
-    const { q, estado, rango, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { q, estado, rango, tipoNegocio, page = 1, limit = 50, orderBy, orderDir } = req.query;
 
     const take = Math.min(parseInt(limit) || 50, 100);
     const skip = (parseInt(page) - 1) * take;
@@ -59,6 +61,7 @@ const listar = async (req, res, next) => {
     const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
 
     const where = { pasoActual: { in: CITAS_PASOS } };
+    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
 
     // Filtro por rango de fecha de instalación: hoy | manana
     if (rango === 'hoy' || rango === 'manana') {
@@ -148,8 +151,11 @@ const listar = async (req, res, next) => {
 // Polling ligero para notificaciones
 const poll = async (req, res, next) => {
   try {
+    const { tipoNegocio } = req.query;
+    const where = { pasoActual: { in: CITAS_PASOS } };
+    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
     const citas = await prisma.leadCRM.findMany({
-      where: { pasoActual: { in: CITAS_PASOS } },
+      where,
       select: { id: true, updatedAt: true, pasoActual: true },
       orderBy: { updatedAt: 'desc' },
       take: 100,

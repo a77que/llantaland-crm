@@ -92,6 +92,25 @@ enum CasoFlujo {
   E
 }
 
+// Negocio al que pertenece el registro (CRM compartido, varias verticales)
+enum TipoNegocio {
+  LLANTAS
+  PATRON
+}
+
+enum TipoPersonaje {
+  PATRON
+  PATRONA
+  OSO_MARIACHI
+}
+
+enum TipoAgregado {
+  RAMO_FLORES
+  CHOCOLATES
+  PELUCHE
+  OTRO
+}
+
 // ─── USUARIOS Y SESIONES ─────────────────────────────────────────────────────
 
 model Usuario {
@@ -255,6 +274,7 @@ model LeadCRM {
   id                     String      @id @default(cuid())
   telefono               String      @unique       // clave principal = Telefono del sheet
   timestamp              DateTime    @default(now())
+  tipoNegocio            TipoNegocio @default(LLANTAS)
 
   // Datos del cliente (se completan durante el flujo)
   nombreCliente          String?
@@ -293,6 +313,13 @@ model LeadCRM {
   stockMap               Json?       // mapa stock por local
   ofertaPrecios          Json?       // opciones presentadas al cliente
 
+  // Negocio "El Patrón" (shows de personajes)
+  personajeId            String?
+  distritoEvento         String?
+  costoMovilidadAprox    Decimal?    @db.Decimal(10, 2)
+  agregadosSeleccionados Json?       // [{ agregadoId, nombre, precio }]
+  esProvincia            Boolean?
+
   // Cierre
   estadoLogistica        String?
   fechaCita              String?
@@ -314,10 +341,13 @@ model LeadCRM {
   humanTakeover    HumanTakeover?
   ventas           Venta[]
   cotizaciones     Cotizacion[]
+  // Restrict: el personaje del catálogo no se borra si tiene leads asociados
+  personaje        PersonajeShow? @relation(fields: [personajeId], references: [id], onDelete: SetNull)
 
   @@index([pasoActual])
   @@index([ranking])
   @@index([updatedAt])
+  @@index([tipoNegocio])
   @@map("leads_crm")
 }
 
@@ -396,6 +426,7 @@ model LogisticaPendiente {
 model Cotizacion {
   id              String           @id @default(cuid())
   numero          String           @unique
+  tipoNegocio     TipoNegocio      @default(LLANTAS)
   leadId          String?
   usuarioId       String
 
@@ -445,6 +476,7 @@ model Cotizacion {
   @@index([estado])
   @@index([usuarioId])
   @@index([leadId])
+  @@index([tipoNegocio])
   @@map("cotizaciones")
 }
 
@@ -454,6 +486,7 @@ model Cotizacion {
 model Venta {
   id               String        @id @default(cuid())
   numero           String        @unique
+  tipoNegocio      TipoNegocio   @default(LLANTAS)
   leadId           String?                        // link al lead WhatsApp
   clienteId        String?                        // para ventas en tienda
   usuarioId        String
@@ -512,6 +545,7 @@ model Venta {
   @@index([usuarioId])
   @@index([createdAt])
   @@index([leadId])
+  @@index([tipoNegocio])
   @@map("ventas")
 }
 
@@ -604,6 +638,47 @@ model AlertaStock {
   @@index([resuelta])
   @@index([productoId])
   @@map("alertas_stock")
+}
+
+// ─── NEGOCIO "EL PATRÓN" (shows de personajes) ───────────────────────────────
+// Catálogo administrado desde el CRM, vista "Detalles del Patrón"
+
+model PersonajeShow {
+  id          String        @id @default(cuid())
+  nombre      TipoPersonaje @unique
+  precioBase  Decimal       @default(150) @db.Decimal(10, 2)
+  descripcion String?
+  imagenUrl   String?
+  activo      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  leads LeadCRM[]
+
+  @@map("personajes_show")
+}
+
+model DistritoCobertura {
+  id                   String   @id @default(cuid())
+  distrito             String   @unique
+  costoTransporteAprox Decimal? @db.Decimal(10, 2)
+  activo               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("distritos_cobertura")
+}
+
+model AgregadoRegalo {
+  id        String       @id @default(cuid())
+  nombre    String
+  tipo      TipoAgregado
+  precio    Decimal      @db.Decimal(10, 2)
+  activo    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("agregados_regalo")
 }
 
 // ─── WEBHOOK LOGS ─────────────────────────────────────────────────────────────

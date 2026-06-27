@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useLeadsNotification } from '../../context/LeadsNotificationContext';
 import { useCitasNotification } from '../../context/CitasNotificationContext';
 
-const NAV = [
+const NAV_LLANTAS = [
   { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
   { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
   { section: 'WhatsApp',   to: '/citas',         label: 'Citas',                 icon: '📅' },
@@ -20,14 +20,29 @@ const NAV = [
   { section: 'Admin',      to: '/config/apis',   label: 'Config APIs',           icon: '⚙️', adminOnly: true },
 ];
 
+// Negocio "El Patrón" (Sorprendete Perú) — mismas secciones, reetiquetadas para shows.
+const NAV_PATRON = [
+  { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
+  { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
+  { section: 'WhatsApp',   to: '/citas',         label: 'Agenda de Shows',       icon: '📅' },
+  { section: 'Ventas',     to: '/clientes',      label: 'Clientes',              icon: '👥' },
+  { section: 'Ventas',     to: '/cotizaciones',  label: 'Cotizaciones',          icon: '📋' },
+  { section: 'Ventas',     to: '/ventas',        label: 'Ventas',                icon: '💰' },
+  { section: 'Catálogo',   to: '/personajes',    label: 'Personajes y Agregados', icon: '🎭' },
+  { section: 'Admin',      to: '/admin/usuarios',label: 'Usuarios',              icon: '👤', adminOnly: true },
+];
+
 export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollapse, drawerOpen, onClose }) {
-  const { usuario, logout, isAdmin } = useAuth();
+  const { usuario, logout, isAdmin, businessType, setBusinessType } = useAuth();
   const navigate = useNavigate();
   const { count: leadsCount } = useLeadsNotification();
   const { count: citasCount } = useCitasNotification();
   const handleLogout = () => { logout(); navigate('/login'); };
 
+  const esPatron = businessType === 'patron';
+  const NAV = esPatron ? NAV_PATRON : NAV_LLANTAS;
   const links = isAdmin ? NAV : NAV.filter(l => !l.adminOnly);
+  const cambiarNegocio = (tipo) => { setBusinessType(tipo); navigate('/'); };
 
   // Agrupar por sección
   const sections = [];
@@ -83,7 +98,7 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
             />
             <div>
               <div style={{ fontFamily: "'Black Ops One', sans-serif", fontSize: 14, color: '#f5c400', letterSpacing: 1.5 }}>
-                LLANTALAND
+                {esPatron ? 'SORPRENDETE PERÚ' : 'LLANTALAND'}
               </div>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 9, color: 'rgba(255,255,255,.35)', letterSpacing: 2, textTransform: 'uppercase' }}>
                 CRM v2.0
@@ -107,6 +122,25 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
           </button>
         )}
       </div>
+
+      {/* Switcher de negocio */}
+      {(!collapsed || isMobile) && (
+        <div style={{ display: 'flex', gap: 4, padding: '10px 12px', borderBottom: '1px solid #1e1e1e' }}>
+          {[{ key: 'llantas', label: '🛞 Llantas' }, { key: 'patron', label: '🎭 Patrón' }].map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => cambiarNegocio(opt.key)}
+              style={{
+                flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                borderRadius: 6, border: businessType === opt.key ? '1px solid #f5c400' : '1px solid #2a2a2a',
+                background: businessType === opt.key ? 'rgba(245,196,0,.12)' : 'transparent',
+                color: businessType === opt.key ? '#f5c400' : 'rgba(255,255,255,.6)',
+                fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: .5,
+              }}
+            >{opt.label}</button>
+          ))}
+        </div>
+      )}
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto', overflowX: 'hidden' }}>
