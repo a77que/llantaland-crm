@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useRef, useCallback, useEff
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { citasApi } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 function playNotificationSound() {
   try {
@@ -27,69 +28,72 @@ function playNotificationSound() {
   } catch { /* AudioContext no soportado */ }
 }
 
+const LABEL_NEGOCIO = { LLANTAS: 'Llantaland', PATRON: 'Sorprendete Perú' };
+
 const CitasNotificationContext = createContext({
   nuevasIds: new Set(),
   marcarVisto: () => {},
   marcarTodosVistos: () => {},
   count: 0,
+  countLlantas: 0,
+  countPatron: 0,
 });
 
-export function CitasNotificationProvider({ children }) {
-  const [nuevasIds, setNuevasIds] = useState(() => {
+// Mismo patrón que LeadsNotificationContext: un poll independiente por negocio,
+// con su propio set de "vistos" y su propio localStorage namespaced.
+function useNegocioPoll(tipoNegocio) {
+  const [unreadIds, setUnreadIds] = useState(() => {
     try {
-      return new Set(JSON.parse(localStorage.getItem('citas_unread_ids') || '[]'));
+      return new Set(JSON.parse(localStorage.getItem(`citas_unread_ids_${tipoNegocio}`) || '[]'));
     } catch { return new Set(); }
   });
 
   const seenIdsRef = useRef((() => {
     try {
-      return new Set(JSON.parse(localStorage.getItem('citas_seen_ids') || '[]'));
+      return new Set(JSON.parse(localStorage.getItem(`citas_seen_ids_${tipoNegocio}`) || '[]'));
     } catch { return new Set(); }
   })());
 
   const marcarVisto = useCallback((id) => {
-    setNuevasIds(prev => {
+    setUnreadIds(prev => {
+      if (!prev.has(id)) return prev;
       const next = new Set(prev);
       next.delete(id);
-      localStorage.setItem('citas_unread_ids', JSON.stringify([...next]));
+      localStorage.setItem(`citas_unread_ids_${tipoNegocio}`, JSON.stringify([...next]));
       return next;
     });
-  }, []);
+  }, [tipoNegocio]);
 
   const marcarTodosVistos = useCallback(() => {
-    setNuevasIds(new Set());
-    localStorage.setItem('citas_unread_ids', JSON.stringify([]));
-  }, []);
+    setUnreadIds(new Set());
+    localStorage.setItem(`citas_unread_ids_${tipoNegocio}`, JSON.stringify([]));
+  }, [tipoNegocio]);
 
-  // Polling global — igual que leads
   const { data } = useQuery({
-    queryKey: ['citas-notif-poll'],
-    queryFn: () => citasApi.poll(),
+    queryKey: ['citas-notif-poll', tipoNegocio],
+    queryFn: () => citasApi.poll({ tipoNegocio }),
     refetchInterval: 20_000,
     staleTime: 0,
   });
 
   useEffect(() => {
-    if (!data || !seenIdsRef.current) return;
+    if (!data) return;
     const currentIds = data.ids || [];
     const currentSet = new Set(currentIds);
-    const pasoMap   = data.pasos || {};
 
-    // Auto-reconciliar: quitar badge de citas que ya no están en pasos de cita
-    setNuevasIds(prev => {
+    setUnreadIds(prev => {
       if (prev.size === 0) return prev;
       const reconciled = new Set([...prev].filter(id => currentSet.has(id)));
       if (reconciled.size !== prev.size) {
-        localStorage.setItem('citas_unread_ids', JSON.stringify([...reconciled]));
+        localStorage.setItem(`citas_unread_ids_${tipoNegocio}`, JSON.stringify([...reconciled]));
         return reconciled;
       }
       return prev;
     });
 
-    // Primera visita: tomar todo como línea base sin notificar
     if (seenIdsRef.current.size === 0 && currentIds.length > 0) {
       currentIds.forEach(id => seenIdsRef.current.add(id));
-      localStorage.setItem('citas_seen_ids', JSON.stringify(currentIds.slice(-1000)));
+      localStorage.setItem(`citas_seen_ids_${tipoNegocio}`, JSON.stringify(currentIds.slice(-1000)));
       return;
     }
 
@@ -97,12 +101,12 @@ export function CitasNotificationProvider({ children }) {
     if (nuevasArr.length === 0) return;
 
     nuevasArr.forEach(id => seenIdsRef.current.add(id));
-    localStorage.setItem('citas_seen_ids', JSON.stringify([...seenIdsRef.current].slice(-1000)));
+    localStorage.setItem(`citas_seen_ids_${tipoNegocio}`, JSON.stringify([...seenIdsRef.current].slice(-1000)));
 
-    setNuevasIds(prev => {
+    setUnreadIds(prev => {
       const next = new Set(prev);
       nuevasArr.forEach(id => next.add(id));
-      localStorage.setItem('citas_unread_ids', JSON.stringify([...next]));
+      localStorage.setItem(`citas_unread_ids_${tipoNegocio}`, JSON.stringify([...next]));
       return next;
     });
 
@@ -110,26 +114,42 @@ export function CitasNotificationProvider({ children }) {
 
     if (document.hidden && Notification.permission === 'granted') {
       try {
-        new Notification('📅 Nueva cita registrada', {
+        new Notification(`📅 Nueva cita — ${LABEL_NEGOCIO[tipoNegocio]}`, {
           body: `${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} registrada${nuevasArr.length > 1 ? 's' : ''}`,
           icon: '/OsoLogoSVG.svg',
-          tag: 'cita-nueva',
+          tag: `cita-nueva-${tipoNegocio}`,
         });
       } catch { /* ignorar */ }
     }
 
     toast(
-      `📅 ${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} registrada${nuevasArr.length > 1 ? 's' : ''}`,
+      `📅 ${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} de ${LABEL_NEGOCIO[tipoNegocio]}`,
       {
         icon: '🗓️',
         duration: 5000,
         style: { background: '#0f0f0f', color: '#22c55e', border: '1px solid #22c55e', fontWeight: 700 },
       }
     );
-  }, [data]);
+  }, [data, tipoNegocio]);
+
+  return { unreadIds, marcarVisto, marcarTodosVistos };
+}
+
+export function CitasNotificationProvider({ children }) {
+  const llantas = useNegocioPoll('LLANTAS');
+  const patron  = useNegocioPoll('PATRON');
+  const { businessType } = useAuth();
+  const activo = businessType === 'patron' ? patron : llantas;
 
   return (
-    <CitasNotificationContext.Provider value={{ nuevasIds, marcarVisto, marcarTodosVistos, count: nuevasIds.size }}>
+    <CitasNotificationContext.Provider value={{
+      nuevasIds: activo.unreadIds,
+      marcarVisto: activo.marcarVisto,
+      marcarTodosVistos: activo.marcarTodosVistos,
+      count: activo.unreadIds.size,
+      countLlantas: llantas.unreadIds.size,
+      countPatron: patron.unreadIds.size,
+    }}>
       {children}
     </CitasNotificationContext.Provider>
   );

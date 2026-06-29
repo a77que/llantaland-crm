@@ -6,6 +6,7 @@ import { leadsApi, cotizacionesApi } from '../services/api';
 import { BotonWhatsApp } from '../components/WhatsAppButtons';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useLeadsNotification } from '../context/LeadsNotificationContext';
+import { useAuth } from '../hooks/useAuth';
 
 // Columnas ordenables en Leads
 const SORTABLE_LEADS = {
@@ -338,6 +339,7 @@ export default function Leads() {
 
   // Notificaciones globales — estado compartido con Sidebar y BottomNav
   const { nuevosIds, marcarVisto } = useLeadsNotification();
+  const { businessType } = useAuth();
 
   const setParam = (key, val) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
@@ -390,14 +392,14 @@ export default function Leads() {
   }, { replace: true });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', { q, paso, ranking, hoy, cards: cardsParam, page, sortBy, sortDir }],
+    queryKey: ['leads', businessType, { q, paso, ranking, hoy, cards: cardsParam, page, sortBy, sortDir }],
     queryFn: () => leadsApi.listar({ q, paso, ranking, hoy: hoy ? '1' : undefined, cards: cardsParam || undefined, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     placeholderData: (prev) => prev,
     refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
   });
 
   const { data: resumen } = useQuery({
-    queryKey: ['leads-resumen'],
+    queryKey: ['leads-resumen', businessType],
     queryFn: leadsApi.resumen,
     refetchInterval: 20_000,
   });

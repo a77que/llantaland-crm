@@ -35,9 +35,12 @@ const NAV_PATRON = [
 export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollapse, drawerOpen, onClose }) {
   const { usuario, logout, isAdmin, businessType, setBusinessType } = useAuth();
   const navigate = useNavigate();
-  const { count: leadsCount } = useLeadsNotification();
+  const { count: leadsCount, countLlantas: leadsLlantas, countPatron: leadsPatron } = useLeadsNotification();
   const { count: citasCount } = useCitasNotification();
   const handleLogout = () => { logout(); navigate('/login'); };
+
+  // Leads nuevos por negocio, para el badge en el switcher (independiente de cuál estés viendo)
+  const NEGOCIO_LEADS_COUNT = { llantas: leadsLlantas, patron: leadsPatron };
 
   const esPatron = businessType === 'patron';
   const NAV = esPatron ? NAV_PATRON : NAV_LLANTAS;
@@ -123,22 +126,39 @@ export default function Sidebar({ isMobile, isTablet, collapsed, onToggleCollaps
         )}
       </div>
 
-      {/* Switcher de negocio */}
+      {/* Switcher de negocio — el badge avisa leads nuevos de ESE negocio, sin importar cuál estés viendo */}
       {(!collapsed || isMobile) && (
         <div style={{ display: 'flex', gap: 4, padding: '10px 12px', borderBottom: '1px solid #1e1e1e' }}>
-          {[{ key: 'llantas', label: '🛞 Llantas' }, { key: 'patron', label: '🎭 Patrón' }].map(opt => (
-            <button
-              key={opt.key}
-              onClick={() => cambiarNegocio(opt.key)}
-              style={{
-                flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                borderRadius: 6, border: businessType === opt.key ? '1px solid #f5c400' : '1px solid #2a2a2a',
-                background: businessType === opt.key ? 'rgba(245,196,0,.12)' : 'transparent',
-                color: businessType === opt.key ? '#f5c400' : 'rgba(255,255,255,.6)',
-                fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: .5,
-              }}
-            >{opt.label}</button>
-          ))}
+          {[{ key: 'llantas', label: '🛞 Llantas' }, { key: 'patron', label: '🎭 Patrón' }].map(opt => {
+            const nuevos = NEGOCIO_LEADS_COUNT[opt.key] || 0;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => cambiarNegocio(opt.key)}
+                style={{
+                  position: 'relative',
+                  flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  borderRadius: 6, border: businessType === opt.key ? '1px solid #f5c400' : '1px solid #2a2a2a',
+                  background: businessType === opt.key ? 'rgba(245,196,0,.12)' : 'transparent',
+                  color: businessType === opt.key ? '#f5c400' : 'rgba(255,255,255,.6)',
+                  fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: .5,
+                }}
+              >
+                {opt.label}
+                {nuevos > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -6, right: -4,
+                    background: '#ef4444', color: '#fff',
+                    borderRadius: 10, minWidth: 16, height: 16,
+                    fontSize: 9, fontWeight: 900, lineHeight: 1,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '0 3px',
+                    animation: 'pulse 1.5s infinite',
+                  }}>{nuevos > 9 ? '9+' : nuevos}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 

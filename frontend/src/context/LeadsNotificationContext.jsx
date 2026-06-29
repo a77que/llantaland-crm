@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useRef, useCallback, useEff
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { leadsApi } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 function playNotificationSound() {
   try {
@@ -26,76 +27,76 @@ function playNotificationSound() {
   } catch { /* AudioContext no soportado */ }
 }
 
+const LABEL_NEGOCIO = { LLANTAS: 'Llantaland', PATRON: 'Sorprendete Perú' };
+
 const LeadsNotificationContext = createContext({
   nuevosIds: new Set(),
   marcarVisto: () => {},
   marcarTodosVistos: () => {},
   count: 0,
+  countLlantas: 0,
+  countPatron: 0,
 });
 
-export function LeadsNotificationProvider({ children }) {
-  const [nuevosIds, setNuevosIds] = useState(() => {
+// Cada negocio (LLANTAS/PATRON) tiene su propio polling, su propio set de "vistos"
+// y su propio localStorage namespaced — así un lead nuevo de un negocio nunca
+// aparece como notificación ni cuenta en el otro.
+function useNegocioPoll(tipoNegocio) {
+  const [unreadIds, setUnreadIds] = useState(() => {
     try {
-      return new Set(JSON.parse(localStorage.getItem('leads_unread_ids') || '[]'));
+      return new Set(JSON.parse(localStorage.getItem(`leads_unread_ids_${tipoNegocio}`) || '[]'));
     } catch { return new Set(); }
   });
 
   const seenIdsRef = useRef((() => {
     try {
-      return new Set(JSON.parse(localStorage.getItem('leads_seen_ids') || '[]'));
+      return new Set(JSON.parse(localStorage.getItem(`leads_seen_ids_${tipoNegocio}`) || '[]'));
     } catch { return new Set(); }
   })());
 
-  // Pedir permiso de notificaciones del browser una sola vez
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
   const marcarVisto = useCallback((id) => {
-    setNuevosIds(prev => {
+    setUnreadIds(prev => {
+      if (!prev.has(id)) return prev;
       const next = new Set(prev);
       next.delete(id);
-      localStorage.setItem('leads_unread_ids', JSON.stringify([...next]));
+      localStorage.setItem(`leads_unread_ids_${tipoNegocio}`, JSON.stringify([...next]));
       return next;
     });
-  }, []);
+  }, [tipoNegocio]);
 
   const marcarTodosVistos = useCallback(() => {
-    setNuevosIds(new Set());
-    localStorage.setItem('leads_unread_ids', JSON.stringify([]));
-  }, []);
+    setUnreadIds(new Set());
+    localStorage.setItem(`leads_unread_ids_${tipoNegocio}`, JSON.stringify([]));
+  }, [tipoNegocio]);
 
-  // Polling global — corre en cualquier página mientras el usuario esté logueado
+  // tipoNegocio se pasa explícito (no depende del negocio activo en el sidebar):
+  // así este poll sigue corriendo para AMBOS negocios sin importar cuál estés viendo.
   const { data } = useQuery({
-    queryKey: ['leads-notif-poll'],
-    queryFn: () => leadsApi.listar({ page: 1, limit: 50, orderBy: 'updatedAt', orderDir: 'desc' }),
+    queryKey: ['leads-notif-poll', tipoNegocio],
+    queryFn: () => leadsApi.listar({ tipoNegocio, page: 1, limit: 50, orderBy: 'updatedAt', orderDir: 'desc' }),
     refetchInterval: 20_000,
     staleTime: 0,
   });
 
   useEffect(() => {
-    if (!data || !seenIdsRef.current) return;
+    if (!data) return;
     const currentIds = (data.leads || []).map(l => l.id);
     const currentSet = new Set(currentIds);
-    const pasoMap    = new Map((data.leads || []).map(l => [l.id, l.pasoActual]));
 
-    // Auto-reconciliar: quitar badge solo de leads que ya no aparecen en los resultados
-    setNuevosIds(prev => {
+    setUnreadIds(prev => {
       if (prev.size === 0) return prev;
       const reconciled = new Set([...prev].filter(id => currentSet.has(id)));
       if (reconciled.size !== prev.size) {
-        localStorage.setItem('leads_unread_ids', JSON.stringify([...reconciled]));
+        localStorage.setItem(`leads_unread_ids_${tipoNegocio}`, JSON.stringify([...reconciled]));
         return reconciled;
       }
       return prev;
     });
 
-    // Primera visita: tomar todos como línea base sin notificar
+    // Primera visita para este negocio: tomar todos como línea base sin notificar
     if (seenIdsRef.current.size === 0 && currentIds.length > 0) {
       currentIds.forEach(id => seenIdsRef.current.add(id));
-      localStorage.setItem('leads_seen_ids', JSON.stringify(currentIds.slice(-1000)));
+      localStorage.setItem(`leads_seen_ids_${tipoNegocio}`, JSON.stringify(currentIds.slice(-1000)));
       return;
     }
 
@@ -103,41 +104,62 @@ export function LeadsNotificationProvider({ children }) {
     if (nuevosArr.length === 0) return;
 
     nuevosArr.forEach(id => seenIdsRef.current.add(id));
-    localStorage.setItem('leads_seen_ids', JSON.stringify([...seenIdsRef.current].slice(-1000)));
+    localStorage.setItem(`leads_seen_ids_${tipoNegocio}`, JSON.stringify([...seenIdsRef.current].slice(-1000)));
 
-    setNuevosIds(prev => {
+    setUnreadIds(prev => {
       const next = new Set(prev);
       nuevosArr.forEach(id => next.add(id));
-      localStorage.setItem('leads_unread_ids', JSON.stringify([...next]));
+      localStorage.setItem(`leads_unread_ids_${tipoNegocio}`, JSON.stringify([...next]));
       return next;
     });
 
-    // Sonido — siempre, sin importar en qué pestaña esté el usuario
     playNotificationSound();
 
-    // Notificación del browser cuando la ventana está minimizada o en otra pestaña
     if (document.hidden && Notification.permission === 'granted') {
       try {
-        new Notification('📱 Nuevo lead WhatsApp', {
+        new Notification(`📱 Nuevo lead — ${LABEL_NEGOCIO[tipoNegocio]}`, {
           body: `${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} esperando atención`,
           icon: '/OsoLogoSVG.svg',
-          tag: 'lead-nuevo',
+          tag: `lead-nuevo-${tipoNegocio}`,
         });
       } catch { /* browsers que bloquean notificaciones */ }
     }
 
     toast(
-      `📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de WhatsApp`,
+      `📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de ${LABEL_NEGOCIO[tipoNegocio]}`,
       {
         icon: '🔔',
         duration: 5000,
         style: { background: '#0f0f0f', color: '#f5c400', border: '1px solid #f5c400', fontWeight: 700 },
       }
     );
-  }, [data]);
+  }, [data, tipoNegocio]);
+
+  return { unreadIds, marcarVisto, marcarTodosVistos };
+}
+
+export function LeadsNotificationProvider({ children }) {
+  // Pedir permiso de notificaciones del browser una sola vez
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const llantas = useNegocioPoll('LLANTAS');
+  const patron  = useNegocioPoll('PATRON');
+  const { businessType } = useAuth();
+  const activo = businessType === 'patron' ? patron : llantas;
 
   return (
-    <LeadsNotificationContext.Provider value={{ nuevosIds, marcarVisto, marcarTodosVistos, count: nuevosIds.size }}>
+    <LeadsNotificationContext.Provider value={{
+      nuevosIds: activo.unreadIds,
+      marcarVisto: activo.marcarVisto,
+      marcarTodosVistos: activo.marcarTodosVistos,
+      count: activo.unreadIds.size,
+      countLlantas: llantas.unreadIds.size,
+      countPatron: patron.unreadIds.size,
+    }}>
       {children}
     </LeadsNotificationContext.Provider>
   );

@@ -52,7 +52,7 @@ function Badge({ children }) {
 }
 
 export default function Dashboard() {
-  const { isAdmin, usuario } = useAuth();
+  const { isAdmin, usuario, businessType } = useAuth();
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
 
@@ -61,11 +61,11 @@ export default function Dashboard() {
     queryFn: () => { const hoy = new Date().toISOString().split('T')[0]; return adminApi.resumen({ desde: hoy, hasta: hoy }); },
     enabled: isAdmin,
   });
-  const { data: ventasRecientes } = useQuery({ queryKey: ['ventas-recientes'], queryFn: () => ventasApi.listar({ limit: 5, page: 1 }) });
-  const { data: cotsRecientes } = useQuery({ queryKey: ['cots-recientes'], queryFn: () => cotizacionesApi.listar({ limit: 5, page: 1 }) });
+  const { data: ventasRecientes } = useQuery({ queryKey: ['ventas-recientes', businessType], queryFn: () => ventasApi.listar({ limit: 5, page: 1 }) });
+  const { data: cotsRecientes } = useQuery({ queryKey: ['cots-recientes', businessType], queryFn: () => cotizacionesApi.listar({ limit: 5, page: 1 }) });
   const { data: clientesData } = useQuery({ queryKey: ['clientes-total'], queryFn: () => clientesApi.listar({ limit: 1, page: 1 }) });
-  const { data: citasData } = useQuery({ queryKey: ['citas-dash'], queryFn: () => citasApi.listar({ limit: 1, page: 1 }) });
-  const { data: leadsResumen } = useQuery({ queryKey: ['leads-resumen-dash'], queryFn: leadsApi.resumen, refetchInterval: 30_000 });
+  const { data: citasData } = useQuery({ queryKey: ['citas-dash', businessType], queryFn: () => citasApi.listar({ limit: 1, page: 1 }) });
+  const { data: leadsResumen } = useQuery({ queryKey: ['leads-resumen-dash', businessType], queryFn: leadsApi.resumen, refetchInterval: 30_000 });
   const { data: stockAlertas } = useQuery({ queryKey: ['stock-critico'], queryFn: () => adminApi.stockCritico(), enabled: isAdmin });
 
   if (isLoading && isAdmin) return <LoadingSpinner fullPage />;

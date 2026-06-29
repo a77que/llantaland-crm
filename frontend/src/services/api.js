@@ -174,7 +174,7 @@ export const usuariosApi = {
 
 export const citasApi = {
   listar: (params) => api.get('/citas', { params }),
-  poll:   ()       => api.get('/citas/poll'),
+  poll:   (params) => api.get('/citas/poll', { params }),
   actualizar: (id, data) => api.put(`/citas/${id}`, data),
   generarPdf: (id) => api.post(`/citas/${id}/pdf`),
 };

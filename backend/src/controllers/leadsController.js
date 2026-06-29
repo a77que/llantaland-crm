@@ -227,14 +227,16 @@ const actualizar = async (req, res, next) => {
 
 const resumen = async (req, res, next) => {
   try {
+    const { tipoNegocio } = req.query;
+    const where = tipoNegocio ? { tipoNegocio } : {};
     const hoyInicio  = inicioHoy();
     const ayerInicio = inicioAyer();
     const [porPaso, porRanking, total, hoy, ayer] = await Promise.all([
-      prisma.leadCRM.groupBy({ by: ['pasoActual'], _count: true }),
-      prisma.leadCRM.groupBy({ by: ['ranking'], _count: true }),
-      prisma.leadCRM.count(),
-      prisma.leadCRM.count({ where: { timestamp: { gte: hoyInicio } } }),
-      prisma.leadCRM.count({ where: { timestamp: { gte: ayerInicio, lt: hoyInicio } } }),
+      prisma.leadCRM.groupBy({ by: ['pasoActual'], _count: true, where }),
+      prisma.leadCRM.groupBy({ by: ['ranking'], _count: true, where }),
+      prisma.leadCRM.count({ where }),
+      prisma.leadCRM.count({ where: { ...where, timestamp: { gte: hoyInicio } } }),
+      prisma.leadCRM.count({ where: { ...where, timestamp: { gte: ayerInicio, lt: hoyInicio } } }),
     ]);
     res.json({ porPaso, porRanking, total, hoy, ayer });
   } catch (err) {
