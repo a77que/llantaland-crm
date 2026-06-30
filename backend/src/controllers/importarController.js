@@ -23,7 +23,11 @@ function explicarErrorPrisma(err) {
       if (/must not be null/.test(m[2])) return `El campo "${m[1]}" quedó vacío o con un valor no válido (revisa que sea del tipo correcto, ej. números sin símbolos de moneda)`;
       return `Valor inválido para el campo "${m[1]}"`;
     }
-    return 'Los datos de la fila tienen un formato inválido para la base de datos';
+    // Mostrar un fragmento útil del error real para facilitar el diagnóstico
+    const unknown = (err.message || '').match(/Unknown argument `(\w+)`/);
+    if (unknown) return `Campo desconocido "${unknown[1]}" — revisa el mapeo de columnas`;
+    const lastLine = String(err.message || '').split('\n').map(l => l.trim()).filter(Boolean).pop() || '';
+    return lastLine ? `Error de validación: ${lastLine.slice(0, 150)}` : 'Los datos de la fila tienen un formato inválido para la base de datos';
   }
   // Recortar mensajes largos de otros errores
   const lineas = String(err?.message || 'Error desconocido').split('\n').map(l => l.trim()).filter(Boolean);
@@ -682,6 +686,7 @@ const aplicarUpdate = async (req, res, next) => {
       const datosProducto = {};
       const datosStock = {};
       for (const [colIdxStr, campoCRM] of Object.entries(updateMapeo)) {
+        if (!campoCRM || campoCRM === '_skip') continue; // ignorar columnas marcadas como "No actualizar"
         const valorArchivo = String(row[parseInt(colIdxStr)] ?? '').trim();
         if (!valorArchivo) continue;
         if (campoCRM.startsWith('stock_')) {
