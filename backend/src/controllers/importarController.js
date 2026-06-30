@@ -460,7 +460,12 @@ function generarReporteUpdate(headers, dataRows, resultadosFila, dryRun) {
 
   const wb = XLSXStyle.utils.book_new();
   XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
-  return XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' }).toString('base64');
+  return XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+// Wrapper base64 para compatibilidad con aplicarUpdate (JSON response)
+function generarReporteUpdateBase64(headers, dataRows, resultadosFila, dryRun) {
+  return generarReporteUpdate(headers, dataRows, resultadosFila, dryRun).toString('base64');
 }
 
 // Upsert de stock por sede para un producto.
@@ -760,7 +765,7 @@ const aplicarUpdate = async (req, res, next) => {
     let reporteError = null;
     if (dataRows.length <= 10000) {
       try {
-        reporteBase64 = generarReporteUpdate(rows[0], dataRows, resultadosFila, dryRun);
+        reporteBase64 = generarReporteUpdateBase64(rows[0], dataRows, resultadosFila, dryRun);
       } catch (e) {
         reporteError = e.message;
         console.error('No se pudo generar el reporte Excel:', e.message, e.stack);
@@ -778,6 +783,54 @@ const aplicarUpdate = async (req, res, next) => {
       reporteBase64,
       reporteError,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── Endpoint dedicado: genera el reporte Excel y lo devuelve como descarga directa ──
+// Re-corre la Fase 1 (sin escrituras en BD) para reconstruir resultadosFila, luego
+// genera y devuelve el xlsx directamente sin pasar por base64 en JSON.
+const descargarReporteUpdate = async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
+
+    const { matchColIdx, matchCampoCRM, updateMapeo: updateMapeoRaw } = req.body;
+    const updateMapeo = typeof updateMapeoRaw === 'string' ? JSON.parse(updateMapeoRaw) : updateMapeoRaw;
+    const matchIdx = parseInt(matchColIdx);
+
+    if (isNaN(matchIdx) || !matchCampoCRM) return res.status(400).json({ error: 'matchColIdx y matchCampoCRM son requeridos' });
+
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+    const dataRows = rows.slice(1);
+
+    const sedes = await prisma.sede.findMany({ where: { activo: true } });
+    const sedeMap = Object.fromEntries(sedes.map(s => [s.codigoLocal, s.id]));
+
+    const todosProd = await prisma.producto.findMany({ where: { activo: true }, select: { id: true, [matchCampoCRM]: true } });
+    const porMatch = new Map();
+    for (const p of todosProd) {
+      const key = String(p[matchCampoCRM] ?? '').trim().toLowerCase();
+      if (key && !porMatch.has(key)) porMatch.set(key, p);
+    }
+
+    const resultadosFila = [];
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const valorMatch = String(row[matchIdx] ?? '').trim();
+      if (!valorMatch) { resultadosFila.push({ estado: 'vacio', detalle: 'Sin valor en la columna de match' }); continue; }
+      const producto = porMatch.get(valorMatch.toLowerCase());
+      if (!producto) { resultadosFila.push({ estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` }); continue; }
+      resultadosFila.push({ estado: 'actualizado', detalle: 'Actualizado correctamente' });
+    }
+
+    const buf = generarReporteUpdate(rows[0], dataRows, resultadosFila, false);
+    const filename = `reporte_actualizacion_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buf.length);
+    res.end(buf);
   } catch (err) {
     next(err);
   }
@@ -1016,4 +1069,4 @@ const exportarCatalogo = async (req, res, next) => {
   }
 };
 
-module.exports = { preview, ejecutar, previewUpdate, aplicarUpdate, generarTemplate, exportarCatalogo };
+module.exports = { preview, ejecutar, previewUpdate, aplicarUpdate, descargarReporteUpdate, generarTemplate, exportarCatalogo };

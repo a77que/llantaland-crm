@@ -216,4 +216,5 @@ export const importarApi = {
   ejecutar: (formData) => api.post('/importar/ejecutar', formData, IMPORT_OPTS),
   previewUpdate: (formData) => api.post('/importar/preview-update', formData, IMPORT_OPTS),
   aplicarUpdate: (formData) => api.post('/importar/aplicar-update', formData, IMPORT_OPTS),
+  reporteUpdate: (formData) => api.post('/importar/reporte-update', formData, { ...IMPORT_OPTS, responseType: 'blob' }),
 };

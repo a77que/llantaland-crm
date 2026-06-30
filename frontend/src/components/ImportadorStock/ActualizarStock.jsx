@@ -48,6 +48,7 @@ export default function ActualizarStock() {
   const [updateMapeo, setUpdateMapeo] = useState({}); // { colIdx: campoCRM }
   const [previewRes, setPreviewRes] = useState(null); // dry-run result
   const [resultado, setResultado] = useState(null);   // apply result
+  const [descargando, setDescargando] = useState(false);
   const paso = resultado ? 4 : previewRes ? 3 : info ? (matchCol !== null ? 2 : 1) : 0;
 
   // ── Step 1: subir archivo ─────────────────────────────────────────────────
@@ -109,7 +110,32 @@ export default function ActualizarStock() {
     onError: (e) => toast.error(e?.error || 'Error al aplicar'),
   });
 
-  const reset = () => { setArchivo(null); setInfo(null); setMatchCol(null); setUpdateMapeo({}); setPreviewRes(null); setResultado(null); };
+  const reset = () => { setArchivo(null); setInfo(null); setMatchCol(null); setUpdateMapeo({}); setPreviewRes(null); setResultado(null); setDescargando(false); };
+
+  const descargarReporteDirecto = async () => {
+    if (!archivo || !matchCol) return;
+    setDescargando(true);
+    try {
+      const fd = new FormData();
+      fd.append('archivo', archivo);
+      fd.append('matchColIdx', matchCol.colIdx);
+      fd.append('matchCampoCRM', matchCol.campoCRM);
+      fd.append('updateMapeo', JSON.stringify(updateMapeo));
+      const blob = await importarApi.reporteUpdate(fd);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_actualizacion_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo generar el reporte Excel');
+    } finally {
+      setDescargando(false);
+    }
+  };
 
   // Descarga el reporte Excel (base64) que devuelve el backend con filas sombreadas
   const descargarReporte = (base64, esPreview) => {
@@ -484,18 +510,14 @@ export default function ActualizarStock() {
             </div>
           )}
 
-          {resultado.reporteError && (
-            <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, fontSize: 12, color: '#c2410c' }}>
-              No se pudo generar el reporte Excel: {resultado.reporteError}
-            </div>
-          )}
-
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {resultado.reporteBase64 && (
-              <button style={S.btn('#0891b2')} onClick={() => descargarReporte(resultado.reporteBase64, false)}>
-                📥 Descargar Excel con resultados sombreados
-              </button>
-            )}
+            <button
+              style={S.btn('#0891b2')}
+              onClick={descargarReporteDirecto}
+              disabled={descargando}
+            >
+              {descargando ? '⏳ Generando Excel...' : '📥 Descargar Excel con resultados'}
+            </button>
             <button style={S.btn('#3b82f6')} onClick={reset}>
               Actualizar otro archivo
             </button>
