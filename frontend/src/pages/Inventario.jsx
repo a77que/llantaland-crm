@@ -396,7 +396,8 @@ function MassBulkApply({ columnasVisibles, customCols, seleccionados, setCambios
 
   // Columnas editables: sin stock individual (se agrupan bajo __stock__)
   const editableCols = [
-    ...columnasVisibles.filter(c => c.key !== 'medida' && c.key !== 'stockTotal' && !c.key.startsWith('stock_')),
+    // precioRegular excluido — es auto-calculado desde precioOferta (+5%)
+    ...columnasVisibles.filter(c => c.key !== 'medida' && c.key !== 'stockTotal' && c.key !== 'precioRegular' && !c.key.startsWith('stock_')),
     ...(stockCols.length > 0 ? [{ key: '__stock__', label: 'Stock' }] : []),
   ];
 
@@ -828,7 +829,8 @@ export default function Inventario() {
 
                       const isStockTotal = col.key === 'stockTotal';
                       const isCustom = col.key.startsWith('custom_');
-                      const isEditable = col.key !== 'medida' && col.key !== 'runFlat' && !isStockTotal;
+                      // precioRegular es auto-calculado desde precioOferta (+5%) — no editable aquí
+                      const isEditable = col.key !== 'medida' && col.key !== 'runFlat' && col.key !== 'precioRegular' && !isStockTotal;
 
                       // En modo edición masiva: guardar en estado local
                       const onSaveMasivo = (prodId, campo, valor, isC) => {
