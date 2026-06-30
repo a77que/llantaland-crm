@@ -471,11 +471,13 @@ export default function ActualizarStock() {
             >
               {applyMut.isPending ? '⏳ Actualizando...' : `✅ Aplicar ${previewRes.actualizados} actualizaciones`}
             </button>
-            {previewRes.reporteBase64 && (
-              <button style={S.btn('#0891b2', true)} onClick={() => descargarReporte(previewRes.reporteBase64, true)}>
-                📥 Descargar Excel con resultados
-              </button>
-            )}
+            <button
+              style={S.btn('#0891b2', true)}
+              onClick={descargarReporteDirecto}
+              disabled={descargando}
+            >
+              {descargando ? '⏳ Generando...' : '📥 Descargar Excel preview'}
+            </button>
             <button style={S.btn('#64748b', true)} onClick={() => setPreviewRes(null)}>
               ← Volver a editar
             </button>
