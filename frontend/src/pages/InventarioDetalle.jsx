@@ -279,27 +279,22 @@ export default function InventarioDetalle() {
 }
 
 function StockCotizacion({ prod, stockTotal }) {
-  const [qty, setQty] = useState(4);
+  const [sedeModal, setSedeModal] = useState(null);
 
   const oferta  = parseFloat(prod.precioOferta)  || 0;
   const regular = parseFloat(prod.precioRegular)  || 0;
   const descMax = parseFloat(prod.descuentoMaximo) || 0;
-  const precioMinimo = oferta > 0 && descMax > 0 ? oferta * (1 - descMax / 100) : null;
 
-  // Sedes con stock > 0, ordenadas de mayor a menor cantidad
-  const sedesConStock = useMemo(() =>
-    (prod.stocks || []).filter(s => s.cantidad > 0).sort((a, b) => b.cantidad - a.cantidad),
-  [prod.stocks]);
-
-  const sedesSinStock = useMemo(() =>
-    (prod.stocks || []).filter(s => s.cantidad <= 0),
+  const todasLasSedes = useMemo(() =>
+    [...(prod.stocks || [])].sort((a, b) => b.cantidad - a.cantidad),
   [prod.stocks]);
 
   const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
-  const fmtN = (v) => Number(v || 0).toFixed(2);
 
-  const totalOferta  = oferta  * qty;
-  const totalRegular = regular * qty;
+  const stockColor = (s) =>
+    s.cantidad <= 0 ? '#dc2626' :
+    s.cantidad <= s.stockMinimo ? '#f97316' :
+    s.cantidad <= s.stockMinimo * 2 ? '#eab308' : '#16a34a';
 
   return (
     <div>
@@ -317,143 +312,263 @@ function StockCotizacion({ prod, stockTotal }) {
         <div style={{ fontSize: 40 }}>{stockTotal > 10 ? '✅' : stockTotal > 0 ? '⚠️' : '❌'}</div>
       </div>
 
-      {/* ── Precios para cotizar ── */}
+      {/* ── Precios rápidos ── */}
       {(oferta > 0 || regular > 0) && (
-        <Seccion titulo="💰 Precios para cotizar">
-          <div style={{ display: 'grid', gridTemplateColumns: regular > 0 ? '1fr 1fr' : '1fr', gap: 10, marginBottom: descMax > 0 ? 12 : 0 }}>
-            {regular > 0 && (
-              <div style={{ background: 'var(--color-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Precio regular</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-text-muted)', textDecoration: 'line-through', opacity: .7 }}>{fmt(regular)}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+          {regular > 0 && (
+            <div style={{ background: 'var(--color-surface)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--color-border)' }}>
+              <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Regular</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>{fmt(regular)}</div>
+            </div>
+          )}
+          <div style={{ background: oferta > 0 ? '#f0fdf4' : 'var(--color-surface)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', border: oferta > 0 ? '1.5px solid #bbf7d0' : '1px solid var(--color-border)', gridColumn: regular > 0 ? undefined : '1 / -1' }}>
+            <div style={{ fontSize: 9, color: oferta > 0 ? '#16a34a' : 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Oferta</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: oferta > 0 ? '#16a34a' : 'var(--color-text)' }}>{fmt(oferta > 0 ? oferta : regular)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sedes clickeables ── */}
+      <Seccion titulo="📍 Stock por tienda / almacén — haz clic para cotizar">
+        {todasLasSedes.length === 0 && (
+          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sin stock registrado en ninguna sede</div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {todasLasSedes.map(s => {
+            const col  = stockColor(s);
+            const pct  = Math.min(100, (s.cantidad / Math.max(s.stockMinimo * 4, 20)) * 100);
+            const sinStock = s.cantidad <= 0;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setSedeModal(s)}
+                style={{
+                  width: '100%', textAlign: 'left', cursor: 'pointer',
+                  background: sinStock ? 'var(--color-bg)' : 'var(--color-bg)',
+                  border: `1.5px solid ${col}50`,
+                  borderRadius: 10, padding: '11px 14px',
+                  opacity: sinStock ? .65 : 1,
+                  transition: 'border-color .15s, box-shadow .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = col; e.currentTarget.style.boxShadow = `0 2px 12px ${col}30`; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = `${col}50`; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: sinStock ? 0 : 7 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>{s.sede?.nombre}</span>
+                    <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 5, background: 'var(--color-surface)', color: 'var(--color-text-muted)', fontFamily: 'monospace', border: '1px solid var(--color-border)' }}>{s.sede?.codigoLocal}</span>
+                    {s.sede?.distrito && <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>{s.sede.distrito}</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 900, color: col }}>{sinStock ? 'Sin stock' : `${s.cantidad} uds`}</span>
+                    <span style={{ fontSize: 11, color: col, fontWeight: 700 }}>→</span>
+                  </div>
+                </div>
+                {!sinStock && (
+                  <div style={{ background: '#e2e8f0', borderRadius: 3, height: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 3, background: col, width: `${pct}%`, minWidth: 4 }} />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+          Haz clic en una tienda para ver el detalle y cotizar desde esa ubicación
+        </div>
+      </Seccion>
+
+      {/* ── Modal de cotización por sede ── */}
+      {sedeModal && (
+        <ModalCotizacion
+          sede={sedeModal}
+          prod={prod}
+          oferta={oferta}
+          regular={regular}
+          descMax={descMax}
+          onClose={() => setSedeModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ModalCotizacion({ sede, prod, oferta, regular, descMax, onClose }) {
+  const [qty, setQty] = useState(() => {
+    const n = Math.min(4, sede.cantidad > 0 ? sede.cantidad : 4);
+    return n > 0 ? n : 1;
+  });
+
+  // Cerrar con ESC
+  useEffect(() => {
+    const fn = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', fn);
+    return () => document.removeEventListener('keydown', fn);
+  }, [onClose]);
+
+  const precioMinimo = oferta > 0 && descMax > 0 ? oferta * (1 - descMax / 100) : null;
+  const col  = sede.cantidad <= 0 ? '#dc2626' : sede.cantidad <= sede.stockMinimo ? '#f97316' : sede.cantidad <= sede.stockMinimo * 2 ? '#eab308' : '#16a34a';
+  const pct  = Math.min(100, (sede.cantidad / Math.max(sede.stockMinimo * 4, 20)) * 100);
+  const sinStock = sede.cantidad <= 0;
+
+  const fmtN = (v) => Number(v || 0).toFixed(2);
+  const totalOferta  = oferta  * qty;
+  const totalRegular = regular * qty;
+
+  const cubre = !sinStock && (sede.cantidad >= qty
+    ? '✅ Esta sede puede cubrir el pedido'
+    : `⚠️ Solo ${sede.cantidad} uds aquí (faltan ${qty - sede.cantidad})`);
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: 'var(--color-surface)', borderRadius: 16, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column' }}>
+
+        {/* ── Header ── */}
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--color-text)' }}>{sede.sede?.nombre}</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+              <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, background: 'var(--color-bg)', color: 'var(--color-text-muted)', fontFamily: 'monospace', border: '1px solid var(--color-border)' }}>{sede.sede?.codigoLocal}</span>
+              {sede.sede?.distrito && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>📍 {sede.sede.distrito}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '6px 11px', fontSize: 16, cursor: 'pointer', color: 'var(--color-text)', lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* ── Producto ── */}
+          <div style={{ background: 'var(--color-bg)', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+            <span style={{ fontWeight: 700 }}>{prod.marca} {prod.nombreComercial || ''}</span>
+            <span style={{ marginLeft: 8, color: 'var(--color-primary)', fontWeight: 700 }}>{prod.medida}</span>
+            <span style={{ marginLeft: 8, color: 'var(--color-text-muted)', fontSize: 11, fontFamily: 'monospace' }}>{prod.sku}</span>
+          </div>
+
+          {/* ── Stock en esta sede ── */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: .8, marginBottom: 8 }}>Stock disponible en esta sede</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+              <div style={{ fontSize: 36, fontWeight: 900, color: col }}>{sede.cantidad}</div>
+              <div style={{ fontSize: 14, color: col, fontWeight: 700 }}>unidades</div>
+            </div>
+            {!sinStock && (
+              <>
+                <div style={{ background: '#e2e8f0', borderRadius: 4, height: 7, overflow: 'hidden', marginBottom: 5 }}>
+                  <div style={{ height: '100%', borderRadius: 4, background: col, width: `${pct}%`, minWidth: 6, transition: 'width .3s' }} />
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Stock mínimo configurado: {sede.stockMinimo} uds</div>
+              </>
+            )}
+            {sinStock && (
+              <div style={{ padding: '8px 12px', background: '#fef2f2', borderRadius: 8, fontSize: 13, color: '#dc2626', fontWeight: 700, border: '1px solid #fecaca' }}>
+                ❌ Sin stock disponible en esta sede
               </div>
             )}
-            <div style={{ background: oferta > 0 ? '#f0fdf4' : 'var(--color-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', border: oferta > 0 ? '1.5px solid #bbf7d0' : 'none' }}>
-              <div style={{ fontSize: 10, color: oferta > 0 ? '#16a34a' : 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>
-                {oferta > 0 ? '🏷️ Precio oferta' : 'Precio'}
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: oferta > 0 ? '#16a34a' : 'var(--color-text)' }}>
-                {fmt(oferta > 0 ? oferta : regular)}
-              </div>
-            </div>
-          </div>
-          {descMax > 0 && (
-            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5 }}>
-              <span style={{ color: '#1d4ed8', fontWeight: 600 }}>Descuento máx. permitido: <strong>{descMax}%</strong></span>
-              {precioMinimo !== null && (
-                <span style={{ color: '#1d4ed8', fontWeight: 800 }}>→ {fmt(precioMinimo)}</span>
-              )}
-            </div>
-          )}
-        </Seccion>
-      )}
-
-      {/* ── Calculadora de cotización ── */}
-      {oferta > 0 && (
-        <Seccion titulo="🧮 Calculadora de cotización">
-          {/* Selector de cantidad */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-            {[1, 2, 3, 4, 5, 6].map(n => (
-              <button key={n} onClick={() => setQty(n)} style={{
-                padding: '6px 14px', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                border: qty === n ? '2px solid #f5c400' : '1.5px solid var(--color-border)',
-                background: qty === n ? 'rgba(245,196,0,.12)' : 'var(--color-bg)',
-                color: qty === n ? '#f5c400' : 'var(--color-text)',
-              }}>{n}</button>
-            ))}
-            <input
-              type="number" min="1" max="999"
-              value={qty}
-              onChange={e => { const v = parseInt(e.target.value); if (v > 0) setQty(v); }}
-              style={{ width: 64, padding: '6px 8px', borderRadius: 6, fontSize: 13, border: '1.5px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', textAlign: 'center' }}
-            />
           </div>
 
-          {/* Tabla de totales */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: 'var(--color-bg)' }}>
-                <th style={{ padding: '7px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>Concepto</th>
-                <th style={{ padding: '7px 10px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>Unit.</th>
-                <th style={{ padding: '7px 10px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>× {qty}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {regular > 0 && (
-                <tr>
-                  <td style={{ padding: '7px 10px', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)' }}>Precio regular</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(regular)}</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)', fontWeight: 700 }}>S/ {fmtN(totalRegular)}</td>
-                </tr>
-              )}
-              <tr style={{ background: 'rgba(22,163,74,.06)' }}>
-                <td style={{ padding: '9px 10px', fontWeight: 700, color: '#16a34a', borderBottom: '1px solid var(--color-border)' }}>🏷️ Precio oferta</td>
-                <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#16a34a', borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(oferta)}</td>
-                <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 900, color: '#16a34a', fontSize: 15, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(totalOferta)}</td>
-              </tr>
-              {precioMinimo !== null && (
-                <tr style={{ background: 'rgba(29,78,216,.05)' }}>
-                  <td style={{ padding: '7px 10px', color: '#1d4ed8', borderBottom: '1px solid var(--color-border)', fontSize: 12 }}>Con desc. máx. ({descMax}%)</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#1d4ed8', fontSize: 12, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(precioMinimo)}</td>
-                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 800, color: '#1d4ed8', fontSize: 13, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(precioMinimo * qty)}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          {/* Ahorro vs regular */}
-          {regular > 0 && oferta > 0 && regular > oferta && (
-            <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 12.5, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
-              💚 Ahorro total vs. precio regular: S/ {fmtN(totalRegular - totalOferta)}
-            </div>
-          )}
-        </Seccion>
-      )}
-
-      {/* ── Disponibilidad por local ── */}
-      <Seccion titulo="📍 Disponibilidad por local">
-        {sedesConStock.length === 0 && sedesSinStock.length === 0 && (
-          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sin stock registrado</div>
-        )}
-
-        {/* Locales CON stock */}
-        {sedesConStock.map(s => {
-          const pct   = Math.min(100, (s.cantidad / Math.max(s.stockMinimo * 4, 20)) * 100);
-          const color = s.cantidad <= s.stockMinimo ? '#dc2626' : s.cantidad <= s.stockMinimo * 2 ? '#f97316' : '#16a34a';
-          const cubre = oferta > 0 ? (s.cantidad >= qty ? '✅ Cubre el pedido' : `⚠️ Solo ${s.cantidad} (faltan ${qty - s.cantidad})`) : null;
-          return (
-            <div key={s.id} style={{ marginBottom: 14, padding: '10px 12px', background: 'var(--color-bg)', borderRadius: 8, border: `1px solid ${color}30` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{s.sede?.nombre}</span>
-                  <span style={{ marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 5, background: 'var(--color-surface)', color: 'var(--color-text-muted)', fontFamily: 'monospace', border: '1px solid var(--color-border)' }}>{s.sede?.codigoLocal}</span>
+          {/* ── Precios ── */}
+          {(oferta > 0 || regular > 0) && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: .8, marginBottom: 8 }}>Precios</div>
+              <div style={{ display: 'grid', gridTemplateColumns: regular > 0 && oferta > 0 ? '1fr 1fr' : '1fr', gap: 8 }}>
+                {regular > 0 && (
+                  <div style={{ background: 'var(--color-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--color-border)' }}>
+                    <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Precio regular</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>S/ {fmtN(regular)}</div>
+                  </div>
+                )}
+                {oferta > 0 && (
+                  <div style={{ background: '#f0fdf4', borderRadius: 8, padding: '10px 12px', textAlign: 'center', border: '1.5px solid #bbf7d0' }}>
+                    <div style={{ fontSize: 9, color: '#16a34a', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>🏷️ Precio oferta</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#16a34a' }}>S/ {fmtN(oferta)}</div>
+                  </div>
+                )}
+              </div>
+              {descMax > 0 && precioMinimo && (
+                <div style={{ marginTop: 8, background: '#eff6ff', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#1d4ed8' }}>
+                  <span>Desc. máx. permitido: <strong>{descMax}%</strong></span>
+                  <span style={{ fontWeight: 800 }}>Precio mín: S/ {fmtN(precioMinimo)}</span>
                 </div>
-                <span style={{ fontSize: 16, fontWeight: 900, color }}>{s.cantidad} uds</span>
-              </div>
-              <div style={{ background: '#e2e8f0', borderRadius: 4, height: 5, overflow: 'hidden', marginBottom: 5 }}>
-                <div style={{ height: '100%', borderRadius: 4, background: color, width: `${pct}%`, minWidth: 4 }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-muted)' }}>
-                <span>{s.sede?.distrito || '—'} · Mín: {s.stockMinimo} uds</span>
-                {cubre && <span style={{ fontWeight: 700, color: s.cantidad >= qty ? '#16a34a' : '#f97316' }}>{cubre}</span>}
-              </div>
+              )}
             </div>
-          );
-        })}
+          )}
 
-        {/* Locales SIN stock (colapsados) */}
-        {sedesSinStock.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .5 }}>Sin stock:</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {sedesSinStock.map(s => (
-                <span key={s.id} style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
-                  {s.sede?.codigoLocal} — {s.sede?.nombre}
-                </span>
-              ))}
+          {/* ── Calculadora ── */}
+          {oferta > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: .8, marginBottom: 10 }}>Calculadora de cotización</div>
+
+              {/* Selector cantidad */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                {[1, 2, 3, 4, 5, 6].map(n => (
+                  <button key={n} onClick={() => setQty(n)} style={{
+                    padding: '7px 15px', borderRadius: 7, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    border: qty === n ? '2px solid #f5c400' : '1.5px solid var(--color-border)',
+                    background: qty === n ? 'rgba(245,196,0,.12)' : 'var(--color-bg)',
+                    color: qty === n ? '#f5c400' : 'var(--color-text)',
+                  }}>{n}</button>
+                ))}
+                <input
+                  type="number" min="1" max="999" value={qty}
+                  onChange={e => { const v = parseInt(e.target.value); if (v > 0) setQty(v); }}
+                  style={{ width: 68, padding: '7px 8px', borderRadius: 7, fontSize: 14, border: '1.5px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', textAlign: 'center' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', alignSelf: 'center' }}>llantas</span>
+              </div>
+
+              {/* Tabla */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, background: 'var(--color-bg)', borderRadius: 8, overflow: 'hidden' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>Concepto</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>× 1</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>× {qty}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {regular > 0 && (
+                    <tr>
+                      <td style={{ padding: '8px 12px', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)' }}>Precio regular</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(regular)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--color-text-muted)', textDecoration: 'line-through', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(totalRegular)}</td>
+                    </tr>
+                  )}
+                  <tr style={{ background: 'rgba(22,163,74,.07)' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#16a34a', borderBottom: precioMinimo ? '1px solid var(--color-border)' : 'none' }}>🏷️ Precio oferta</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#16a34a', borderBottom: precioMinimo ? '1px solid var(--color-border)' : 'none' }}>S/ {fmtN(oferta)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 900, color: '#16a34a', fontSize: 16, borderBottom: precioMinimo ? '1px solid var(--color-border)' : 'none' }}>S/ {fmtN(totalOferta)}</td>
+                  </tr>
+                  {precioMinimo && (
+                    <tr style={{ background: 'rgba(29,78,216,.05)' }}>
+                      <td style={{ padding: '8px 12px', color: '#1d4ed8', fontSize: 12 }}>Con desc. máx. ({descMax}%)</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: '#1d4ed8', fontSize: 12 }}>S/ {fmtN(precioMinimo)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, color: '#1d4ed8' }}>S/ {fmtN(precioMinimo * qty)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Ahorro */}
+              {regular > 0 && oferta > 0 && regular > oferta && (
+                <div style={{ marginTop: 10, padding: '9px 14px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 13, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
+                  💚 Ahorro vs. precio regular: <strong>S/ {fmtN(totalRegular - totalOferta)}</strong>
+                </div>
+              )}
+
+              {/* ¿Cubre el pedido? */}
+              {cubre && (
+                <div style={{ marginTop: 8, padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, textAlign: 'center', background: sede.cantidad >= qty ? 'rgba(22,163,74,.08)' : 'rgba(249,115,22,.08)', color: sede.cantidad >= qty ? '#16a34a' : '#f97316', border: `1px solid ${sede.cantidad >= qty ? '#bbf7d0' : '#fed7aa'}` }}>
+                  {cubre}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-      </Seccion>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 }
