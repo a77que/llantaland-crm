@@ -678,7 +678,7 @@ const aplicarUpdate = async (req, res, next) => {
       const producto = porMatch.get(valorMatch.toLowerCase());
       if (!producto) {
         noEncontrados++;
-        if (noEncontradosLista.length < 200) noEncontradosLista.push({ fila: i + 2, valor: valorMatch });
+        noEncontradosLista.push({ fila: i + 2, valor: valorMatch });
         resultadosFila[i] = { estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` };
         continue;
       }
