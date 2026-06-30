@@ -795,8 +795,7 @@ const descargarReporteUpdate = async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
 
-    const { matchColIdx, matchCampoCRM, updateMapeo: updateMapeoRaw } = req.body;
-    const updateMapeo = typeof updateMapeoRaw === 'string' ? JSON.parse(updateMapeoRaw) : updateMapeoRaw;
+    const { matchColIdx, matchCampoCRM } = req.body;
     const matchIdx = parseInt(matchColIdx);
 
     if (isNaN(matchIdx) || !matchCampoCRM) return res.status(400).json({ error: 'matchColIdx y matchCampoCRM son requeridos' });
@@ -805,27 +804,23 @@ const descargarReporteUpdate = async (req, res, next) => {
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
     const dataRows = rows.slice(1);
 
-    const sedes = await prisma.sede.findMany({ where: { activo: true } });
-    const sedeMap = Object.fromEntries(sedes.map(s => [s.codigoLocal, s.id]));
-
-    const todosProd = await prisma.producto.findMany({ where: { activo: true }, select: { id: true, [matchCampoCRM]: true } });
+    // Sin select dinámico — mismo patrón que aplicarUpdate para evitar errores de Prisma
+    const todosProd = await prisma.producto.findMany({ where: { activo: true } });
     const porMatch = new Map();
     for (const p of todosProd) {
       const key = String(p[matchCampoCRM] ?? '').trim().toLowerCase();
       if (key && !porMatch.has(key)) porMatch.set(key, p);
     }
 
-    const resultadosFila = [];
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
+    const resultadosFila = dataRows.map((row) => {
       const valorMatch = String(row[matchIdx] ?? '').trim();
-      if (!valorMatch) { resultadosFila.push({ estado: 'vacio', detalle: 'Sin valor en la columna de match' }); continue; }
-      const producto = porMatch.get(valorMatch.toLowerCase());
-      if (!producto) { resultadosFila.push({ estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` }); continue; }
-      resultadosFila.push({ estado: 'actualizado', detalle: 'Actualizado correctamente' });
-    }
+      if (!valorMatch) return { estado: 'vacio', detalle: 'Sin valor en la columna de match' };
+      return porMatch.has(valorMatch.toLowerCase())
+        ? { estado: 'actualizado', detalle: 'Encontrado en CRM' }
+        : { estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` };
+    });
 
-    const buf = generarReporteUpdate(rows[0], dataRows, resultadosFila, false);
+    const buf = generarReporteUpdate(rows[0] || [], dataRows, resultadosFila, false);
     const filename = `reporte_actualizacion_${new Date().toISOString().slice(0, 10)}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
