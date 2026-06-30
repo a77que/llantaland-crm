@@ -130,8 +130,13 @@ export default function ActualizarStock() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error('No se pudo generar el reporte Excel');
+    } catch (err) {
+      let msg = 'No se pudo generar el reporte Excel';
+      try {
+        const blob = err instanceof Blob ? err : null;
+        if (blob) { const t = await blob.text(); msg = JSON.parse(t)?.error || msg; }
+      } catch {}
+      toast.error(msg, { duration: 8000 });
     } finally {
       setDescargando(false);
     }
