@@ -484,13 +484,19 @@ export default function ActualizarStock() {
             </div>
           )}
 
+          {resultado.reporteError && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 6, fontSize: 12, color: '#c2410c' }}>
+              No se pudo generar el reporte Excel: {resultado.reporteError}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {resultado.reporteBase64 && (
               <button style={S.btn('#0891b2')} onClick={() => descargarReporte(resultado.reporteBase64, false)}>
                 📥 Descargar Excel con resultados sombreados
               </button>
             )}
-            <button style={S.btn('#3b82f6', !resultado.reporteBase64 ? false : true)} onClick={reset}>
+            <button style={S.btn('#3b82f6')} onClick={reset}>
               Actualizar otro archivo
             </button>
           </div>

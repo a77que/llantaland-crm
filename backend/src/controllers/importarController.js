@@ -460,7 +460,7 @@ function generarReporteUpdate(headers, dataRows, resultadosFila, dryRun) {
 
   const wb = XLSXStyle.utils.book_new();
   XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
-  return XLSXStyle.write(wb, { type: 'base64', bookType: 'xlsx' });
+  return XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' }).toString('base64');
 }
 
 // Upsert de stock por sede para un producto.
@@ -513,7 +513,7 @@ function generarReporteCrear(headers, dataRowsRaw, resultadosFila) {
   ws['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
   const wb = XLSXStyle.utils.book_new();
   XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
-  return XLSXStyle.write(wb, { type: 'base64', bookType: 'xlsx' });
+  return XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' }).toString('base64');
 }
 
 // ─── ACTUALIZAR STOCK ─────────────────────────────────────────────────────────
@@ -757,11 +757,13 @@ const aplicarUpdate = async (req, res, next) => {
 
     // Reporte Excel con filas sombreadas según resultado (verde=ok, naranja=no encontrado, rojo=error)
     let reporteBase64 = null;
+    let reporteError = null;
     if (dataRows.length <= 10000) {
       try {
         reporteBase64 = generarReporteUpdate(rows[0], dataRows, resultadosFila, dryRun);
       } catch (e) {
-        console.error('No se pudo generar el reporte Excel:', e.message);
+        reporteError = e.message;
+        console.error('No se pudo generar el reporte Excel:', e.message, e.stack);
       }
     }
 
@@ -774,6 +776,7 @@ const aplicarUpdate = async (req, res, next) => {
       total: dataRows.length,
       cambiosMuestra,
       reporteBase64,
+      reporteError,
     });
   } catch (err) {
     next(err);
