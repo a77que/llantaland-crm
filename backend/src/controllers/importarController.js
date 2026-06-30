@@ -414,12 +414,6 @@ function normalizarTipo(tipo) {
  * Agrega columnas RESULTADO y DETALLE al final.
  */
 function generarReporteUpdate(headers, dataRows, resultadosFila, dryRun) {
-  const ESTILOS = {
-    actualizado:   { fill: 'C6EFCE', font: '006100' },
-    no_encontrado: { fill: 'FFD8A8', font: '9C5700' },
-    error:         { fill: 'FFC7CE', font: '9C0006' },
-    vacio:         { fill: 'EFEFEF', font: '777777' },
-  };
   const LABEL = {
     actualizado:   dryRun ? 'SE ACTUALIZARÁ' : 'ACTUALIZADO',
     no_encontrado: 'NO ENCONTRADO EN CRM',
@@ -433,34 +427,51 @@ function generarReporteUpdate(headers, dataRows, resultadosFila, dryRun) {
     return [...headers.map((_, c) => row[c] ?? ''), LABEL[r.estado], r.detalle || ''];
   })];
 
-  const ws = XLSXStyle.utils.aoa_to_sheet(aoa);
-  const nCols = head.length;
-
-  // Header en negrita
-  for (let c = 0; c < nCols; c++) {
-    const addr = XLSXStyle.utils.encode_cell({ r: 0, c });
-    if (ws[addr]) ws[addr].s = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } } };
-  }
-
-  // Sombrear cada fila según su estado
-  for (let r = 0; r < dataRows.length; r++) {
-    const estado = (resultadosFila[r] || {}).estado || 'vacio';
-    const st = ESTILOS[estado];
-    for (let c = 0; c < nCols; c++) {
-      const addr = XLSXStyle.utils.encode_cell({ r: r + 1, c });
-      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
-      ws[addr].s = {
-        fill: { patternType: 'solid', fgColor: { rgb: st.fill } },
-        font: { color: { rgb: st.font } },
-      };
+  // Primero intenta con xlsx-js-style (colores por fila); si falla, usa xlsx plano
+  try {
+    const ESTILOS = {
+      actualizado:   { fill: 'C6EFCE', font: '006100' },
+      no_encontrado: { fill: 'FFD8A8', font: '9C5700' },
+      error:         { fill: 'FFC7CE', font: '9C0006' },
+      vacio:         { fill: 'EFEFEF', font: '777777' },
+    };
+    // Estilos reutilizados por referencia para minimizar objetos en memoria
+    const CELL_STYLE = {};
+    for (const [k, v] of Object.entries(ESTILOS)) {
+      CELL_STYLE[k] = { fill: { patternType: 'solid', fgColor: { rgb: v.fill } }, font: { color: { rgb: v.font } } };
     }
+    const HEADER_STYLE = { font: { bold: true }, fill: { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } } };
+
+    const ws = XLSXStyle.utils.aoa_to_sheet(aoa);
+    const nCols = head.length;
+
+    for (let c = 0; c < nCols; c++) {
+      const addr = XLSXStyle.utils.encode_cell({ r: 0, c });
+      if (ws[addr]) ws[addr].s = HEADER_STYLE;
+    }
+    for (let r = 0; r < dataRows.length; r++) {
+      const estado = (resultadosFila[r] || {}).estado || 'vacio';
+      const st = CELL_STYLE[estado] || CELL_STYLE.vacio;
+      for (let c = 0; c < nCols; c++) {
+        const addr = XLSXStyle.utils.encode_cell({ r: r + 1, c });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+        ws[addr].s = st;
+      }
+    }
+    ws['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
+
+    const wb = XLSXStyle.utils.book_new();
+    XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
+    return XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  } catch (styleErr) {
+    console.error('xlsx-js-style falló, generando Excel sin colores:', styleErr.message);
+    // Fallback: xlsx estándar sin estilos — siempre funciona
+    const ws2 = XLSX.utils.aoa_to_sheet(aoa);
+    ws2['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
+    const wb2 = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb2, ws2, 'Resultado');
+    return XLSX.write(wb2, { type: 'buffer', bookType: 'xlsx' });
   }
-
-  ws['!cols'] = head.map(h => ({ wch: Math.min(Math.max(String(h).length + 2, 10), 32) }));
-
-  const wb = XLSXStyle.utils.book_new();
-  XLSXStyle.utils.book_append_sheet(wb, ws, 'Resultado');
-  return XLSXStyle.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
 // Wrapper base64 para compatibilidad con aplicarUpdate (JSON response)

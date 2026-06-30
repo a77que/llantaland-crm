@@ -114,6 +114,15 @@ export default function ActualizarStock() {
 
   const descargarReporteDirecto = async () => {
     if (!archivo || !matchCol) return;
+
+    // Si el backend ya devolvió el reporte en base64 (dentro de previewRes o resultado), usarlo directamente
+    const b64 = resultado?.reporteBase64 || previewRes?.reporteBase64;
+    if (b64) {
+      descargarReporte(b64, !resultado);
+      return;
+    }
+
+    // Fallback: pedir el reporte al endpoint dedicado (re-procesa el archivo)
     setDescargando(true);
     try {
       const fd = new FormData();
@@ -133,10 +142,11 @@ export default function ActualizarStock() {
     } catch (err) {
       let msg = 'No se pudo generar el reporte Excel';
       try {
-        const blob = err instanceof Blob ? err : null;
-        if (blob) { const t = await blob.text(); msg = JSON.parse(t)?.error || msg; }
+        const text = err instanceof Blob ? await err.text() : (err?.error || err?.message || '');
+        const parsed = typeof text === 'string' ? JSON.parse(text) : text;
+        msg = parsed?.error || parsed?.message || msg;
       } catch {}
-      toast.error(msg, { duration: 8000 });
+      toast.error(msg, { duration: 12000 });
     } finally {
       setDescargando(false);
     }
