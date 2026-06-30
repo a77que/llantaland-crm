@@ -8,7 +8,6 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const soles = (v) => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : `S/ ${Number(v).toFixed(2)}`;
 
-// Precio de venta = precio proveedor + suma de costos activos (fijos y %).
 function calcCostos(prov, costos) {
   const base = Number(prov) || 0;
   let total = 0;
@@ -22,14 +21,39 @@ function calcCostos(prov, costos) {
   return { total, detalle };
 }
 
+// Columnas que se ordenan en el backend (campo real en BD)
+const BACKEND_SORT = {
+  marca:                  'marca',
+  precioProveedor:        'precioProveedor',
+  precioReferencialVenta: 'precioReferencialVenta',
+};
+
+// Columnas calculadas en el frontend — requieren cargar todos los productos
+const CLIENT_SORT = new Set(['costoTotal', 'venta', 'diferencia', 'pct']);
+
 export default function Precios() {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('marca');
+  const [sortDir, setSortDir] = useState('asc');
   const [costos, setCostos] = useState([]);
   const [costosDirty, setCostosDirty] = useState(false);
-  const [edits, setEdits] = useState({}); // { [id]: { precioProveedor, precioReferencialVenta } }
+  const [edits, setEdits] = useState({});
+
+  const isClientSort = CLIENT_SORT.has(sortBy);
+
+  const handleSort = (col) => {
+    if (sortBy === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(col);
+      // Para diferencia/%, empezar por asc muestra los más negativos (rojos) primero
+      setSortDir('asc');
+    }
+    setPage(1);
+  };
 
   // ── Costos globales ──
   const { data: costosData, isLoading: loadingCostos } = useQuery({ queryKey: ['costos-venta'], queryFn: adminApi.getCostos });
@@ -50,9 +74,16 @@ export default function Precios() {
   const delCosto = (i) => { setCostos(cs => cs.filter((_, j) => j !== i)); setCostosDirty(true); };
 
   // ── Productos ──
+  // Cuando el sort es por columna calculada, cargamos todo (limit 1000) para ordenar globalmente
   const { data, isLoading } = useQuery({
-    queryKey: ['precios-productos', q, page],
-    queryFn: () => productosApi.listar({ q: q || undefined, page, limit: 50, orderBy: 'marca', orderDir: 'asc' }),
+    queryKey: ['precios-productos', q, isClientSort ? 'all' : page, sortBy, sortDir],
+    queryFn: () => productosApi.listar({
+      q: q || undefined,
+      page: isClientSort ? 1 : page,
+      limit: isClientSort ? 1000 : 50,
+      orderBy: isClientSort ? 'marca' : (BACKEND_SORT[sortBy] || 'marca'),
+      orderDir: isClientSort ? 'asc' : sortDir,
+    }),
     keepPreviousData: true,
   });
   const productos = data?.data || [];
@@ -79,22 +110,74 @@ export default function Precios() {
     guardarPrecio.mutate({ id: prod.id, campo, valor: nuevo === '' ? '' : Number(nuevo) });
   };
 
+  // filaCalculo usa valorActual (incluye edits no guardados) para mostrar en pantalla
+  const filaCalculo = (prod) => {
+    const prov = valorActual(prod, 'precioProveedor');
+    const ref  = valorActual(prod, 'precioReferencialVenta');
+    const { total: costoTotal, detalle } = calcCostos(prov, costos);
+    const venta    = (Number(prov) || 0) + costoTotal;
+    const tieneRef = ref !== '' && !isNaN(Number(ref));
+    const dif      = tieneRef ? Number(ref) - venta : null;
+    const pct      = (tieneRef && venta > 0) ? (dif / venta) * 100 : null;
+    const col      = dif === null ? 'var(--color-text-muted)' : dif >= 0 ? '#16a34a' : '#dc2626';
+    return { prov, ref, costoTotal, detalle, venta, dif, pct, col, tieneRef };
+  };
+
+  // sortFila usa valores brutos de BD (no edits) para que el orden sea estable
+  const sortFila = (prod) => {
+    const prov = Number(prod.precioProveedor) || 0;
+    const ref  = Number(prod.precioReferencialVenta) || 0;
+    const { total: costoTotal } = calcCostos(prov, costos);
+    const venta = prov + costoTotal;
+    const dif   = ref > 0 ? ref - venta : null;
+    const pct   = (dif !== null && venta > 0) ? (dif / venta) * 100 : null;
+    return { costoTotal, venta, dif, pct };
+  };
+
+  // Orden client-side: solo aplica cuando sortBy es columna calculada
+  const productosSorted = useMemo(() => {
+    if (!isClientSort || productos.length === 0) return productos;
+    const NEG_INF = sortDir === 'asc' ? Infinity : -Infinity;
+    return [...productos].sort((a, b) => {
+      const fa = sortFila(a);
+      const fb = sortFila(b);
+      const va = fa[sortBy] ?? NEG_INF;
+      const vb = fb[sortBy] ?? NEG_INF;
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }, [productos, sortBy, sortDir, costos, isClientSort]); // eslint-disable-line
+
   if (isLoading && !data) return <LoadingSpinner fullPage />;
 
   const inp = { width: 90, padding: '6px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13, textAlign: 'right' };
-  const th = { padding: '9px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--color-text-muted)', borderBottom: '2px solid var(--color-border)', whiteSpace: 'nowrap' };
-  const td = { padding: '8px 10px', borderBottom: '1px solid var(--color-border)', fontSize: 13, whiteSpace: 'nowrap' };
+  const td  = { padding: '8px 10px', borderBottom: '1px solid var(--color-border)', fontSize: 13, whiteSpace: 'nowrap' };
 
-  const filaCalculo = (prod) => {
-    const prov = valorActual(prod, 'precioProveedor');
-    const ref = valorActual(prod, 'precioReferencialVenta');
-    const { total: costoTotal, detalle } = calcCostos(prov, costos);
-    const venta = (Number(prov) || 0) + costoTotal;
-    const tieneRef = ref !== '' && !isNaN(Number(ref));
-    const dif = tieneRef ? Number(ref) - venta : null;
-    const pct = (tieneRef && venta > 0) ? (dif / venta) * 100 : null;
-    const col = dif === null ? 'var(--color-text-muted)' : dif >= 0 ? '#16a34a' : '#dc2626';
-    return { prov, ref, costoTotal, detalle, venta, dif, pct, col, tieneRef };
+  const ThSort = ({ col, label, align = 'right' }) => {
+    const active = sortBy === col;
+    const arrow  = active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ' ⇅';
+    return (
+      <th
+        onClick={() => handleSort(col)}
+        title={`Ordenar por ${label}`}
+        style={{
+          padding: '9px 10px',
+          textAlign: align,
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: .5,
+          color: active ? '#f5c400' : 'var(--color-text-muted)',
+          borderBottom: `2px solid ${active ? '#f5c400' : 'var(--color-border)'}`,
+          background: active ? 'rgba(245,196,0,.05)' : 'var(--color-surface)',
+          whiteSpace: 'nowrap',
+          cursor: 'pointer',
+          userSelect: 'none',
+          transition: 'color .15s, border-color .15s, background .15s',
+        }}
+      >
+        {label}<span style={{ opacity: active ? 1 : 0.4, fontSize: 10 }}>{arrow}</span>
+      </th>
+    );
   };
 
   return (
@@ -149,10 +232,17 @@ export default function Precios() {
       <input value={q} onChange={e => { setQ(e.target.value); setPage(1); }} placeholder="Buscar marca, modelo, medida o SKU…"
         style={{ width: '100%', padding: '9px 14px', fontSize: 14, border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', color: 'var(--color-text)', marginBottom: 12, boxSizing: 'border-box' }} />
 
+      {/* Aviso cuando se carga todo para ordenar columnas calculadas */}
+      {isClientSort && (
+        <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 6, padding: '6px 12px', marginBottom: 10 }}>
+          ⚡ Ordenando por <strong>{sortBy === 'diferencia' ? 'Diferencia S/' : sortBy === 'pct' ? '% Margen' : sortBy === 'venta' ? 'Precio venta' : 'Costos'}</strong> — cargando todos los productos para orden global ({total} productos).
+        </div>
+      )}
+
       {/* Tabla / cards */}
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {productos.map(prod => {
+          {productosSorted.map(prod => {
             const f = filaCalculo(prod);
             return (
               <div key={prod.id} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: 12 }}>
@@ -181,17 +271,17 @@ export default function Precios() {
           <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)' }}>
             <thead>
               <tr>
-                <th style={th}>Producto</th>
-                <th style={{ ...th, textAlign: 'right' }}>Precio proveedor</th>
-                <th style={{ ...th, textAlign: 'right' }}>Costos</th>
-                <th style={{ ...th, textAlign: 'right' }}>Precio venta</th>
-                <th style={{ ...th, textAlign: 'right' }}>Precio referencial</th>
-                <th style={{ ...th, textAlign: 'right' }}>Diferencia</th>
-                <th style={{ ...th, textAlign: 'right' }}>%</th>
+                <ThSort col="marca"                  label="Producto"          align="left" />
+                <ThSort col="precioProveedor"        label="Precio proveedor"              />
+                <ThSort col="costoTotal"             label="Costos"                        />
+                <ThSort col="venta"                  label="Precio venta"                  />
+                <ThSort col="precioReferencialVenta" label="Precio referencial"            />
+                <ThSort col="diferencia"             label="Diferencia"                    />
+                <ThSort col="pct"                    label="%"                             />
               </tr>
             </thead>
             <tbody>
-              {productos.map(prod => {
+              {productosSorted.map(prod => {
                 const f = filaCalculo(prod);
                 return (
                   <tr key={prod.id}>
@@ -210,7 +300,9 @@ export default function Precios() {
                     <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: f.col }}>{f.dif === null ? '—' : soles(f.dif)}</td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 800 }}>
                       {f.pct === null ? <span style={{ color: 'var(--color-text-muted)' }}>—</span> : (
-                        <span style={{ background: f.col + '18', color: f.col, padding: '3px 8px', borderRadius: 999, fontSize: 12 }}>{f.pct >= 0 ? '▲ +' : '▼ '}{f.pct.toFixed(1)}%</span>
+                        <span style={{ background: f.col + '18', color: f.col, padding: '3px 8px', borderRadius: 999, fontSize: 12 }}>
+                          {f.pct >= 0 ? '▲ +' : '▼ '}{f.pct.toFixed(1)}%
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -221,18 +313,33 @@ export default function Precios() {
         </div>
       )}
 
-      {productos.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>No hay productos con ese filtro.</div>}
+      {productosSorted.length === 0 && !isLoading && (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>No hay productos con ese filtro.</div>
+      )}
 
-      {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 18 }}>
-          <button disabled={page === 1} onClick={() => setPage(p => p - 1)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: page === 1 ? 'var(--color-text-muted)' : 'var(--color-text)', cursor: page === 1 ? 'default' : 'pointer' }}>← Anterior</button>
-          <span style={{ color: 'var(--color-text-muted)', fontSize: 13, lineHeight: '36px' }}>{page} / {totalPages}</span>
-          <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: page === totalPages ? 'var(--color-text-muted)' : 'var(--color-text)', cursor: page === totalPages ? 'default' : 'pointer' }}>Siguiente →</button>
+      {/* Paginación — solo cuando NO hay sort por columna calculada */}
+      {!isClientSort && totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 18 }}>
+          <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
+            style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: page === 1 ? 'var(--color-text-muted)' : 'var(--color-text)', cursor: page === 1 ? 'default' : 'pointer' }}>
+            ← Anterior
+          </button>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{page} / {totalPages}</span>
+          <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)}
+            style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: page === totalPages ? 'var(--color-text-muted)' : 'var(--color-text)', cursor: page === totalPages ? 'default' : 'pointer' }}>
+            Siguiente →
+          </button>
+        </div>
+      )}
+      {isClientSort && total > 0 && (
+        <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 14 }}>
+          Mostrando {productosSorted.length} de {total} producto{total !== 1 ? 's' : ''} (orden global)
         </div>
       )}
 
       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 14 }}>
         <strong>Diferencia</strong> = precio referencial (mercado) − precio de venta calculado. En <span style={{ color: '#16a34a', fontWeight: 700 }}>verde</span> cuando el mercado está por encima (tienes margen); en <span style={{ color: '#dc2626', fontWeight: 700 }}>rojo</span> cuando tu precio supera al de mercado.
+        Haz clic en cualquier columna para ordenar. Haz clic de nuevo para invertir el orden.
       </div>
     </div>
   );
