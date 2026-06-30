@@ -456,7 +456,4 @@ function StockCotizacion({ prod, stockTotal }) {
       </Seccion>
     </div>
   );
-      </div>
-    </div>
-  );
 }

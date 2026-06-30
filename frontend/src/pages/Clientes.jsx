@@ -193,7 +193,7 @@ export default function Clientes() {
         style={{
           textAlign:'left', padding:'10px 14px', fontSize:11, fontWeight:700,
           color: isActive ? '#f5c400' : 'var(--color-text-muted)',
-          textTransform:'uppercase', background:'var(--color-bg)',
+          textTransform:'uppercase',
           borderBottom:'1px solid var(--color-border)', whiteSpace:'nowrap',
           cursor: field ? 'pointer' : 'default', userSelect:'none',
           background: isActive ? '#fffbeb' : 'var(--color-bg)',
