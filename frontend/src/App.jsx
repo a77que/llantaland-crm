@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore';
 import Layout from './components/Layout/Layout';
 import PrivateRoute from './components/common/PrivateRoute';
 import AdminRoute from './components/common/AdminRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Pages
 import Login from './pages/Login';
@@ -34,6 +35,7 @@ export default function App() {
   const token = useAuthStore((s) => s.token);
 
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
@@ -71,5 +73,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
