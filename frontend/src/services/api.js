@@ -112,6 +112,7 @@ export const productosApi = {
   faltantesImagenExport: () => api.get('/productos/imagenes/faltantes-export', { responseType: 'blob', timeout: 120000 }),
   incompletos: () => api.get('/productos/incompletos', { timeout: 60000 }),
   enriquecerMasivo: (ids) => api.post('/productos/enriquecer-masivo', { ids }, { timeout: 240000 }),
+  sincronizarPrecioRegular: () => api.post('/productos/sync-precios-regulares'),
   subirImagen: (id, formData) => api.post(`/productos/${id}/imagenes`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

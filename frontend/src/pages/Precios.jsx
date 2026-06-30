@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { productosApi, adminApi } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import { useIsMobile } from '../hooks/useIsMobile';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
@@ -21,19 +22,20 @@ function calcCostos(prov, costos) {
   return { total, detalle };
 }
 
-// Columnas que se ordenan en el backend (campo real en BD)
+// Columnas backend-sortables (campo real en BD)
 const BACKEND_SORT = {
-  marca:                  'marca',
-  precioProveedor:        'precioProveedor',
-  precioReferencialVenta: 'precioReferencialVenta',
+  marca:           'marca',
+  precioProveedor: 'precioProveedor',
+  precioOferta:    'precioOferta',
 };
 
 // Columnas calculadas en el frontend — requieren cargar todos los productos
-const CLIENT_SORT = new Set(['costoTotal', 'venta', 'diferencia', 'pct']);
+const CLIENT_SORT = new Set(['costoTotal', 'diferencia', 'pct']);
 
 export default function Precios() {
   const qc = useQueryClient();
   const isMobile = useIsMobile();
+  const { isAdmin } = useAuth();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('marca');
@@ -49,7 +51,6 @@ export default function Precios() {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(col);
-      // Para diferencia/%, empezar por asc muestra los más negativos (rojos) primero
       setSortDir('asc');
     }
     setPage(1);
@@ -73,9 +74,17 @@ export default function Precios() {
   const addCosto = () => { setCostos(cs => [...cs, { nombre: '', tipo: 'fijo', valor: 0, activo: true }]); setCostosDirty(true); };
   const delCosto = (i) => { setCostos(cs => cs.filter((_, j) => j !== i)); setCostosDirty(true); };
 
+  // ── Sync precio regular ──
+  const syncMutation = useMutation({
+    mutationFn: () => productosApi.sincronizarPrecioRegular(),
+    onSuccess: (data) => {
+      toast.success(`Precio regular generado para ${data.actualizados} productos`);
+      qc.invalidateQueries({ queryKey: ['precios-productos'] });
+    },
+    onError: () => toast.error('Error al sincronizar precios regulares'),
+  });
+
   // ── Productos ──
-  // Cuando el sort es por columna calculada, cargamos TODO el catálogo (all=true omite el cap
-  // de 100 registros en el backend) para que el orden sea global, no solo de la página actual.
   const { data, isLoading } = useQuery({
     queryKey: ['precios-productos', q, isClientSort ? 'all' : page, sortBy, sortDir],
     queryFn: () => productosApi.listar({
@@ -114,26 +123,27 @@ export default function Precios() {
 
   // filaCalculo usa valorActual (incluye edits no guardados) para mostrar en pantalla
   const filaCalculo = (prod) => {
-    const prov = valorActual(prod, 'precioProveedor');
-    const ref  = valorActual(prod, 'precioReferencialVenta');
+    const prov   = valorActual(prod, 'precioProveedor');
+    const oferta = valorActual(prod, 'precioOferta');
     const { total: costoTotal, detalle } = calcCostos(prov, costos);
-    const venta    = (Number(prov) || 0) + costoTotal;
-    const tieneRef = ref !== '' && !isNaN(Number(ref));
-    const dif      = tieneRef ? Number(ref) - venta : null;
-    const pct      = (tieneRef && venta > 0) ? (dif / venta) * 100 : null;
-    const col      = dif === null ? 'var(--color-text-muted)' : dif >= 0 ? '#16a34a' : '#dc2626';
-    return { prov, ref, costoTotal, detalle, venta, dif, pct, col, tieneRef };
+    const breakEven    = (Number(prov) || 0) + costoTotal;
+    const tieneOferta  = oferta !== '' && !isNaN(Number(oferta)) && Number(oferta) > 0;
+    const precioRegular = tieneOferta ? Math.round(Number(oferta) * 1.05 * 100) / 100 : null;
+    const dif  = tieneOferta ? Number(oferta) - breakEven : null;
+    const pct  = (tieneOferta && breakEven > 0) ? (dif / breakEven) * 100 : null;
+    const col  = dif === null ? 'var(--color-text-muted)' : dif >= 0 ? '#16a34a' : '#dc2626';
+    return { prov, oferta, costoTotal, detalle, breakEven, precioRegular, dif, pct, col, tieneOferta };
   };
 
   // sortFila usa valores brutos de BD (no edits) para que el orden sea estable
   const sortFila = (prod) => {
-    const prov = Number(prod.precioProveedor) || 0;
-    const ref  = Number(prod.precioReferencialVenta) || 0;
+    const prov   = Number(prod.precioProveedor) || 0;
+    const oferta = Number(prod.precioOferta) || 0;
     const { total: costoTotal } = calcCostos(prov, costos);
-    const venta = prov + costoTotal;
-    const dif   = ref > 0 ? ref - venta : null;
-    const pct   = (dif !== null && venta > 0) ? (dif / venta) * 100 : null;
-    return { costoTotal, venta, dif, pct };
+    const breakEven  = prov + costoTotal;
+    const diferencia = oferta > 0 ? oferta - breakEven : null;
+    const pct        = (diferencia !== null && breakEven > 0) ? (diferencia / breakEven) * 100 : null;
+    return { costoTotal, diferencia, pct };
   };
 
   // Orden client-side: solo aplica cuando sortBy es columna calculada
@@ -187,9 +197,20 @@ export default function Precios() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700 }}>🧮 Precios y Margen</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Calcula el precio de venta desde el precio proveedor + costos, y compáralo con el precio de mercado.</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Ingresa el precio oferta de cada producto. El precio regular se genera automáticamente (+5%).</div>
         </div>
-        <Link to="/inventario" style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Inventario</Link>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isAdmin && (
+            <button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              title="Calcula precio regular (= precio oferta +5%) para todos los productos del catálogo"
+              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #6366f1', background: syncMutation.isPending ? '#3730a3' : 'rgba(99,102,241,.12)', color: '#818cf8', fontSize: 12, fontWeight: 700, cursor: syncMutation.isPending ? 'default' : 'pointer' }}>
+              {syncMutation.isPending ? '⏳ Generando…' : '🔄 Generar precio regular (todos)'}
+            </button>
+          )}
+          <Link to="/inventario" style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Inventario</Link>
+        </div>
       </div>
 
       {/* ── Configuración de costos globales ── */}
@@ -237,7 +258,7 @@ export default function Precios() {
       {/* Aviso cuando se carga todo para ordenar columnas calculadas */}
       {isClientSort && (
         <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 6, padding: '6px 12px', marginBottom: 10 }}>
-          ⚡ Ordenando por <strong>{sortBy === 'diferencia' ? 'Diferencia S/' : sortBy === 'pct' ? '% Margen' : sortBy === 'venta' ? 'Precio venta' : 'Costos'}</strong> — cargando todos los productos para orden global ({total} productos).
+          ⚡ Ordenando por <strong>{sortBy === 'diferencia' ? 'Diferencia S/' : sortBy === 'pct' ? '% Margen' : 'Costos'}</strong> — cargando todos los productos para orden global ({total} productos).
         </div>
       )}
 
@@ -253,12 +274,14 @@ export default function Precios() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio proveedor<br />
                     <input type="number" step="0.01" value={valorActual(prod, 'precioProveedor')} onChange={e => onEdit(prod.id, 'precioProveedor', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioProveedor')} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} /></label>
-                  <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio referencial<br />
-                    <input type="number" step="0.01" value={valorActual(prod, 'precioReferencialVenta')} onChange={e => onEdit(prod.id, 'precioReferencialVenta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioReferencialVenta')} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} /></label>
+                  <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio oferta<br />
+                    <input type="number" step="0.01" value={valorActual(prod, 'precioOferta')} onChange={e => onEdit(prod.id, 'precioOferta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioOferta')} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} /></label>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, fontSize: 13 }}>
-                  <span style={{ color: 'var(--color-text-muted)' }}>Costos: <strong>{soles(f.costoTotal)}</strong></span>
-                  <span>Venta: <strong style={{ color: '#1d4ed8' }}>{soles(f.venta)}</strong></span>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  Costos: <strong>{soles(f.costoTotal)}</strong>
+                  {f.precioRegular !== null && (
+                    <span style={{ marginLeft: 10 }}>Regular: <strong style={{ color: '#f59e0b' }}>{soles(f.precioRegular)}</strong></span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 13, fontWeight: 800, color: f.col }}>
                   <span>Dif: {f.dif === null ? '—' : soles(f.dif)}</span>
@@ -273,13 +296,13 @@ export default function Precios() {
           <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-surface)' }}>
             <thead>
               <tr>
-                <ThSort col="marca"                  label="Producto"          align="left" />
-                <ThSort col="precioProveedor"        label="Precio proveedor"              />
-                <ThSort col="costoTotal"             label="Costos"                        />
-                <ThSort col="venta"                  label="Precio venta"                  />
-                <ThSort col="precioReferencialVenta" label="Precio referencial"            />
-                <ThSort col="diferencia"             label="Diferencia"                    />
-                <ThSort col="pct"                    label="%"                             />
+                <ThSort col="marca"           label="Producto"         align="left" />
+                <ThSort col="precioProveedor" label="Precio proveedor"              />
+                <ThSort col="costoTotal"      label="Costos"                        />
+                <ThSort col="precioOferta"    label="Precio oferta"                 />
+                <th style={{ padding: '9px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--color-text-muted)', borderBottom: '2px solid var(--color-border)', whiteSpace: 'nowrap' }}>Precio regular</th>
+                <ThSort col="diferencia"      label="Diferencia"                    />
+                <ThSort col="pct"             label="%"                             />
               </tr>
             </thead>
             <tbody>
@@ -295,9 +318,11 @@ export default function Precios() {
                       <input type="number" step="0.01" value={valorActual(prod, 'precioProveedor')} onChange={e => onEdit(prod.id, 'precioProveedor', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioProveedor')} placeholder="0.00" style={inp} />
                     </td>
                     <td style={{ ...td, textAlign: 'right', color: 'var(--color-text-muted)' }} title={f.detalle.join('\n') || 'Sin costos'}>{soles(f.costoTotal)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: '#1d4ed8' }}>{soles(f.venta)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
-                      <input type="number" step="0.01" value={valorActual(prod, 'precioReferencialVenta')} onChange={e => onEdit(prod.id, 'precioReferencialVenta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioReferencialVenta')} placeholder="mercado" style={inp} />
+                      <input type="number" step="0.01" value={valorActual(prod, 'precioOferta')} onChange={e => onEdit(prod.id, 'precioOferta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioOferta')} placeholder="0.00" style={{ ...inp, borderColor: f.tieneOferta ? '#1d4ed8' : undefined }} />
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#f59e0b' }}>
+                      {f.precioRegular !== null ? soles(f.precioRegular) : <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>—</span>}
                     </td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 800, color: f.col }}>{f.dif === null ? '—' : soles(f.dif)}</td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 800 }}>
@@ -340,8 +365,9 @@ export default function Precios() {
       )}
 
       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 14 }}>
-        <strong>Diferencia</strong> = precio referencial (mercado) − precio de venta calculado. En <span style={{ color: '#16a34a', fontWeight: 700 }}>verde</span> cuando el mercado está por encima (tienes margen); en <span style={{ color: '#dc2626', fontWeight: 700 }}>rojo</span> cuando tu precio supera al de mercado.
-        Haz clic en cualquier columna para ordenar. Haz clic de nuevo para invertir el orden.
+        <strong>Precio oferta</strong> = precio final al cliente. <strong>Precio regular</strong> = precio oferta + 5% (generado automáticamente, se muestra tachado al cliente como referencia).{' '}
+        <strong>Diferencia</strong> = precio oferta − costo total (proveedor + gastos). En <span style={{ color: '#16a34a', fontWeight: 700 }}>verde</span> cuando tu ganancia es positiva; en <span style={{ color: '#dc2626', fontWeight: 700 }}>rojo</span> cuando vendes por debajo del costo.
+        Haz clic en cualquier columna para ordenar.
       </div>
     </div>
   );

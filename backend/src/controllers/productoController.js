@@ -115,19 +115,24 @@ const actualizar = async (req, res, next) => {
   try {
     const data = { ...req.body };
     if (data.medida) data.medidaNorm = normalizarMedida(data.medida);
-    // Campos de precio numéricos. Los nullable aceptan vacío → null; precioRegular
-    // (obligatorio) nunca se pone en null: si llega vacío/ inválido se ignora.
+    // precioRegular se auto-calcula desde precioOferta (+5%); no se acepta manual.
+    delete data.precioRegular;
+
     const NULLABLES = ['precioProveedor', 'precioReferencialVenta', 'precioOferta'];
-    for (const f of [...NULLABLES, 'precioRegular']) {
+    for (const f of NULLABLES) {
       if (!(f in data)) continue;
       const v = data[f];
       if (v === '' || v === null || v === undefined) {
-        if (NULLABLES.includes(f)) data[f] = null; else delete data[f];
+        data[f] = null;
       } else if (isNaN(parseFloat(v))) {
         delete data[f];
       } else {
         data[f] = parseFloat(v);
       }
+    }
+    // Auto-calcular precio regular = precio oferta + 5%
+    if ('precioOferta' in data && data.precioOferta !== null) {
+      data.precioRegular = Math.round(data.precioOferta * 1.05 * 100) / 100;
     }
     const producto = await prisma.producto.update({
       where: { id: req.params.id },
@@ -683,4 +688,30 @@ const aplicarImagen = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo };
+// Recalcula precioRegular (= precioOferta * 1.05) para todos los productos activos
+// que ya tienen precioOferta. Llamar una vez tras deploy para sincronizar el catálogo.
+const sincronizarPrecioRegular = async (req, res, next) => {
+  try {
+    const productos = await prisma.producto.findMany({
+      where: { activo: true, precioOferta: { not: null } },
+      select: { id: true, precioOferta: true },
+    });
+    let actualizados = 0;
+    const BATCH = 100;
+    for (let i = 0; i < productos.length; i += BATCH) {
+      const lote = productos.slice(i, i + BATCH);
+      await prisma.$transaction(
+        lote.map(p => prisma.producto.update({
+          where: { id: p.id },
+          data: { precioRegular: Math.round(p.precioOferta * 1.05 * 100) / 100 },
+        }))
+      );
+      actualizados += lote.length;
+    }
+    res.json({ ok: true, actualizados });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular };
