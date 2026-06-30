@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -378,6 +378,284 @@ function LoadSpeedSection({ indice_carga, velocidad_max, cargaMaxNeumatico, velo
   );
 }
 
+// ── Panel de stock y cotización por tienda ────────────────────────────────────
+
+function StockCotizacionPanel({ prod, stockTotal }) {
+  const [sedeModal, setSedeModal] = useState(null);
+
+  const oferta  = parseFloat(prod.precioOferta)  || 0;
+  const regular = parseFloat(prod.precioRegular)  || 0;
+  const descMax = parseFloat(prod.descuentoMaximo) || 0;
+
+  const todasLasSedes = useMemo(() =>
+    [...(prod.stocks || [])].sort((a, b) => b.cantidad - a.cantidad),
+  [prod.stocks]);
+
+  if (todasLasSedes.length === 0) return null;
+
+  const fmtP = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
+
+  const stockColor = (s) =>
+    s.cantidad <= 0 ? '#dc2626' :
+    s.cantidad <= s.stockMinimo ? '#f97316' :
+    s.cantidad <= s.stockMinimo * 2 ? '#eab308' : '#16a34a';
+
+  return (
+    <div style={{ background:'var(--color-bg)', borderRadius:12, padding:'14px 16px', border:'1px solid var(--color-border)' }}>
+      <div style={{ fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:1, color:'var(--color-primary)', marginBottom:12 }}>
+        🏪 Stock por tienda — haz clic para cotizar
+      </div>
+
+      {/* Precios rápidos */}
+      {(oferta > 0 || regular > 0) && (
+        <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+          {regular > 0 && (
+            <div style={{ padding:'6px 12px', borderRadius:8, background:'var(--color-surface)', border:'1px solid var(--color-border)', textAlign:'center' }}>
+              <div style={{ fontSize:9, color:'var(--color-text-muted)', textTransform:'uppercase', fontWeight:700 }}>Regular</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'var(--color-text-muted)', textDecoration:'line-through' }}>{fmtP(regular)}</div>
+            </div>
+          )}
+          {oferta > 0 && (
+            <div style={{ padding:'6px 14px', borderRadius:8, background:'#f0fdf4', border:'1.5px solid #bbf7d0', textAlign:'center' }}>
+              <div style={{ fontSize:9, color:'#16a34a', textTransform:'uppercase', fontWeight:700 }}>🏷️ Oferta</div>
+              <div style={{ fontSize:18, fontWeight:900, color:'#16a34a' }}>{fmtP(oferta)}</div>
+            </div>
+          )}
+          {descMax > 0 && oferta > 0 && (
+            <div style={{ padding:'6px 12px', borderRadius:8, background:'#eff6ff', border:'1px solid #bfdbfe', textAlign:'center' }}>
+              <div style={{ fontSize:9, color:'#1d4ed8', textTransform:'uppercase', fontWeight:700 }}>Mín. con desc.</div>
+              <div style={{ fontSize:14, fontWeight:800, color:'#1d4ed8' }}>{fmtP(oferta * (1 - descMax / 100))}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tarjetas clickeables */}
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {todasLasSedes.map(s => {
+          const col = stockColor(s);
+          const pct = Math.min(100, (s.cantidad / Math.max(s.stockMinimo * 4, 20)) * 100);
+          const sinStock = s.cantidad <= 0;
+          return (
+            <button
+              key={s.id}
+              onClick={() => setSedeModal(s)}
+              style={{
+                width:'100%', textAlign:'left', cursor:'pointer',
+                background:'var(--color-surface)', border:`1.5px solid ${col}50`,
+                borderRadius:9, padding:'9px 13px', opacity: sinStock ? .6 : 1,
+                transition:'border-color .15s, box-shadow .15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = col; e.currentTarget.style.boxShadow = `0 2px 10px ${col}25`; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = `${col}50`; e.currentTarget.style.boxShadow = 'none'; }}
+            >
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: sinStock ? 0 : 5 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:'var(--color-text)' }}>{s.sede?.nombre}</span>
+                  <span style={{ fontSize:10, padding:'1px 5px', borderRadius:4, background:'var(--color-bg)', color:'var(--color-text-muted)', fontFamily:'monospace', border:'1px solid var(--color-border)' }}>{s.sede?.codigoLocal}</span>
+                  {s.sede?.distrito && <span style={{ fontSize:10, color:'var(--color-text-muted)' }}>{s.sede.distrito}</span>}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:14, fontWeight:900, color:col }}>{sinStock ? 'Sin stock' : `${s.cantidad} uds`}</span>
+                  <span style={{ fontSize:11, color:col }}>→</span>
+                </div>
+              </div>
+              {!sinStock && (
+                <div style={{ background:'#e2e8f0', borderRadius:3, height:3, overflow:'hidden' }}>
+                  <div style={{ height:'100%', borderRadius:3, background:col, width:`${pct}%`, minWidth:4 }} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop:8, fontSize:11, color:'var(--color-text-muted)', textAlign:'center' }}>
+        Toca una tienda para ver el detalle y cotizar
+      </div>
+
+      {sedeModal && (
+        <CotizacionModal
+          sede={sedeModal}
+          prod={prod}
+          oferta={oferta}
+          regular={regular}
+          descMax={descMax}
+          onClose={() => setSedeModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CotizacionModal({ sede, prod, oferta, regular, descMax, onClose }) {
+  const [qty, setQty] = useState(() => Math.max(1, Math.min(4, sede.cantidad > 0 ? sede.cantidad : 4)));
+
+  useEffect(() => {
+    const fn = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', fn);
+    return () => document.removeEventListener('keydown', fn);
+  }, [onClose]);
+
+  const precioMinimo = oferta > 0 && descMax > 0 ? oferta * (1 - descMax / 100) : null;
+  const col  = sede.cantidad <= 0 ? '#dc2626' : sede.cantidad <= sede.stockMinimo ? '#f97316' : sede.cantidad <= sede.stockMinimo * 2 ? '#eab308' : '#16a34a';
+  const pct  = Math.min(100, (sede.cantidad / Math.max(sede.stockMinimo * 4, 20)) * 100);
+  const sinStock = sede.cantidad <= 0;
+  const fmtN = (v) => Number(v || 0).toFixed(2);
+  const totalOferta  = oferta  * qty;
+  const totalRegular = regular * qty;
+  const cubre = !sinStock && (sede.cantidad >= qty
+    ? '✅ Esta sede puede cubrir el pedido'
+    : `⚠️ Solo ${sede.cantidad} uds aquí (faltan ${qty - sede.cantidad})`);
+
+  return (
+    <div
+      style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.78)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background:'var(--color-surface)', borderRadius:16, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 24px 80px rgba(0,0,0,.55)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'16px 20px 12px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:800 }}>{sede.sede?.nombre}</div>
+            <div style={{ display:'flex', gap:7, alignItems:'center', marginTop:4 }}>
+              <span style={{ fontSize:10, padding:'2px 6px', borderRadius:5, background:'var(--color-bg)', color:'var(--color-text-muted)', fontFamily:'monospace', border:'1px solid var(--color-border)' }}>{sede.sede?.codigoLocal}</span>
+              {sede.sede?.distrito && <span style={{ fontSize:11, color:'var(--color-text-muted)' }}>📍 {sede.sede.distrito}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:'var(--color-bg)', border:'1px solid var(--color-border)', borderRadius:8, padding:'6px 10px', fontSize:15, cursor:'pointer', color:'var(--color-text)' }}>✕</button>
+        </div>
+
+        <div style={{ padding:'14px 20px', display:'flex', flexDirection:'column', gap:14 }}>
+
+          {/* Producto */}
+          <div style={{ background:'var(--color-bg)', borderRadius:8, padding:'8px 12px', fontSize:13 }}>
+            <span style={{ fontWeight:700 }}>{prod.marca} {prod.nombreComercial || ''}</span>
+            <span style={{ marginLeft:8, color:'var(--color-primary)', fontWeight:700 }}>{prod.medida}</span>
+          </div>
+
+          {/* Stock en esta sede */}
+          <div>
+            <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', color:'var(--color-text-muted)', letterSpacing:.8, marginBottom:6 }}>Stock en esta sede</div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+              <div style={{ fontSize:34, fontWeight:900, color:col }}>{sede.cantidad}</div>
+              <div style={{ fontSize:13, color:col, fontWeight:700 }}>unidades</div>
+            </div>
+            {!sinStock && (
+              <>
+                <div style={{ background:'#e2e8f0', borderRadius:4, height:6, overflow:'hidden', marginBottom:4 }}>
+                  <div style={{ height:'100%', borderRadius:4, background:col, width:`${pct}%`, minWidth:6 }} />
+                </div>
+                <div style={{ fontSize:11, color:'var(--color-text-muted)' }}>Stock mínimo: {sede.stockMinimo} uds</div>
+              </>
+            )}
+            {sinStock && (
+              <div style={{ padding:'8px 12px', background:'#fef2f2', borderRadius:8, fontSize:13, color:'#dc2626', fontWeight:700, border:'1px solid #fecaca' }}>
+                ❌ Sin stock en esta sede
+              </div>
+            )}
+          </div>
+
+          {/* Precios */}
+          {(oferta > 0 || regular > 0) && (
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', color:'var(--color-text-muted)', letterSpacing:.8, marginBottom:7 }}>Precios</div>
+              <div style={{ display:'grid', gridTemplateColumns: regular > 0 && oferta > 0 ? '1fr 1fr' : '1fr', gap:8 }}>
+                {regular > 0 && (
+                  <div style={{ background:'var(--color-bg)', borderRadius:8, padding:'9px 12px', textAlign:'center', border:'1px solid var(--color-border)' }}>
+                    <div style={{ fontSize:9, color:'var(--color-text-muted)', textTransform:'uppercase', fontWeight:700, marginBottom:2 }}>Regular</div>
+                    <div style={{ fontSize:16, fontWeight:700, color:'var(--color-text-muted)', textDecoration:'line-through' }}>S/ {fmtN(regular)}</div>
+                  </div>
+                )}
+                {oferta > 0 && (
+                  <div style={{ background:'#f0fdf4', borderRadius:8, padding:'9px 12px', textAlign:'center', border:'1.5px solid #bbf7d0' }}>
+                    <div style={{ fontSize:9, color:'#16a34a', textTransform:'uppercase', fontWeight:700, marginBottom:2 }}>🏷️ Oferta</div>
+                    <div style={{ fontSize:20, fontWeight:900, color:'#16a34a' }}>S/ {fmtN(oferta)}</div>
+                  </div>
+                )}
+              </div>
+              {precioMinimo && (
+                <div style={{ marginTop:7, background:'#eff6ff', borderRadius:8, padding:'7px 12px', display:'flex', justifyContent:'space-between', fontSize:12, color:'#1d4ed8' }}>
+                  <span>Desc. máx. <strong>{descMax}%</strong></span>
+                  <span style={{ fontWeight:800 }}>Precio mín: S/ {fmtN(precioMinimo)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Calculadora */}
+          {oferta > 0 && (
+            <div>
+              <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', color:'var(--color-text-muted)', letterSpacing:.8, marginBottom:9 }}>Calculadora de cotización</div>
+              <div style={{ display:'flex', gap:5, marginBottom:11, flexWrap:'wrap' }}>
+                {[1,2,3,4,5,6].map(n => (
+                  <button key={n} onClick={() => setQty(n)} style={{
+                    padding:'7px 14px', borderRadius:7, fontSize:13, fontWeight:700, cursor:'pointer',
+                    border: qty === n ? '2px solid #f5c400' : '1.5px solid var(--color-border)',
+                    background: qty === n ? 'rgba(245,196,0,.12)' : 'var(--color-bg)',
+                    color: qty === n ? '#f5c400' : 'var(--color-text)',
+                  }}>{n}</button>
+                ))}
+                <input
+                  type="number" min="1" max="999" value={qty}
+                  onChange={e => { const v = parseInt(e.target.value); if (v > 0) setQty(v); }}
+                  style={{ width:64, padding:'7px 8px', borderRadius:7, fontSize:13, border:'1.5px solid var(--color-border)', background:'var(--color-bg)', color:'var(--color-text)', textAlign:'center' }}
+                />
+                <span style={{ fontSize:11, color:'var(--color-text-muted)', alignSelf:'center' }}>llantas</span>
+              </div>
+
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, background:'var(--color-bg)', borderRadius:8, overflow:'hidden' }}>
+                <thead>
+                  <tr>
+                    {['Concepto','× 1',`× ${qty}`].map((h,i) => (
+                      <th key={i} style={{ padding:'7px 11px', textAlign: i===0 ? 'left' : 'right', fontSize:10, fontWeight:700, textTransform:'uppercase', color:'var(--color-text-muted)', borderBottom:'1px solid var(--color-border)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {regular > 0 && (
+                    <tr>
+                      <td style={{ padding:'7px 11px', color:'var(--color-text-muted)', textDecoration:'line-through', borderBottom:'1px solid var(--color-border)' }}>Precio regular</td>
+                      <td style={{ padding:'7px 11px', textAlign:'right', color:'var(--color-text-muted)', textDecoration:'line-through', borderBottom:'1px solid var(--color-border)' }}>S/ {fmtN(regular)}</td>
+                      <td style={{ padding:'7px 11px', textAlign:'right', color:'var(--color-text-muted)', textDecoration:'line-through', fontWeight:700, borderBottom:'1px solid var(--color-border)' }}>S/ {fmtN(totalRegular)}</td>
+                    </tr>
+                  )}
+                  <tr style={{ background:'rgba(22,163,74,.07)' }}>
+                    <td style={{ padding:'9px 11px', fontWeight:700, color:'#16a34a', borderBottom: precioMinimo ? '1px solid var(--color-border)' : 'none' }}>🏷️ Precio oferta</td>
+                    <td style={{ padding:'9px 11px', textAlign:'right', fontWeight:700, color:'#16a34a', borderBottom: precioMinimo ? '1px solid var(--color-border)' : 'none' }}>S/ {fmtN(oferta)}</td>
+                    <td style={{ padding:'9px 11px', textAlign:'right', fontWeight:900, color:'#16a34a', fontSize:15, borderBottom: precioMinimo ? '1px solid var(--color-border)' : 'none' }}>S/ {fmtN(totalOferta)}</td>
+                  </tr>
+                  {precioMinimo && (
+                    <tr style={{ background:'rgba(29,78,216,.05)' }}>
+                      <td style={{ padding:'7px 11px', color:'#1d4ed8', fontSize:12 }}>Con desc. máx. ({descMax}%)</td>
+                      <td style={{ padding:'7px 11px', textAlign:'right', color:'#1d4ed8', fontSize:12 }}>S/ {fmtN(precioMinimo)}</td>
+                      <td style={{ padding:'7px 11px', textAlign:'right', fontWeight:800, color:'#1d4ed8' }}>S/ {fmtN(precioMinimo * qty)}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {regular > 0 && oferta > 0 && regular > oferta && (
+                <div style={{ marginTop:9, padding:'8px 13px', background:'#f0fdf4', borderRadius:8, border:'1px solid #bbf7d0', fontSize:13, color:'#16a34a', fontWeight:700, textAlign:'center' }}>
+                  💚 Ahorro vs. regular: <strong>S/ {fmtN(totalRegular - totalOferta)}</strong>
+                </div>
+              )}
+
+              {cubre && (
+                <div style={{ marginTop:7, padding:'8px 13px', borderRadius:8, fontSize:13, fontWeight:700, textAlign:'center', background: sede.cantidad >= qty ? 'rgba(22,163,74,.08)' : 'rgba(249,115,22,.08)', color: sede.cantidad >= qty ? '#16a34a' : '#f97316', border:`1px solid ${sede.cantidad >= qty ? '#bbf7d0' : '#fed7aa'}` }}>
+                  {cubre}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Modal principal ───────────────────────────────────────────────────────────
 export default function ProductoModal({ prodId, onClose, comparar = [], setComparar = () => {}, ocultarGestion = false, onCotizar = null, onVerComparacion = () => {} }) {
   const navigate = useNavigate();
@@ -565,6 +843,9 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                   </div>
                 </div>
               )}
+
+              {/* ── Cotización por tienda ── */}
+              <StockCotizacionPanel prod={prod} stockTotal={stockTotal} />
 
               {prod.imagenUrl && (
                 <div style={{ textAlign:'center' }}>
