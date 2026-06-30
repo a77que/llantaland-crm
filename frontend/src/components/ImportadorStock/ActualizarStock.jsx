@@ -237,7 +237,7 @@ export default function ActualizarStock() {
             </div>
             {matchCol && (
               <div style={{ marginTop: 12, padding: '8px 14px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', fontSize: 12.5 }}>
-                🎯 Match por: <strong>{info.columnas[matchCol.colIdx].nombre}</strong> → campo CRM <strong>{matchCol.campoCRM}</strong>
+                🎯 Match por: <strong>{info.columnas[matchCol.colIdx]?.nombre}</strong> → campo CRM <strong>{matchCol.campoCRM}</strong>
               </div>
             )}
           </div>
@@ -318,7 +318,7 @@ export default function ActualizarStock() {
                       const color = campoInfo ? GRUPOS_COLOR[campoInfo.grupo] : '#64748b';
                       return (
                         <span key={colIdx} style={S.badge(color)}>
-                          {info.columnas[colIdx].nombre} → {campoInfo?.label || campo}
+                          {info.columnas[parseInt(colIdx)]?.nombre || colIdx} → {campoInfo?.label || campo}
                         </span>
                       );
                     })}
