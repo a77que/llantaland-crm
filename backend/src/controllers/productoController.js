@@ -11,6 +11,7 @@ const prisma = new PrismaClient();
 const SORT_FIELDS = {
   medida: 'medida', marca: 'marca', nombreComercial: 'nombreComercial',
   grupo: 'grupo', precioRegular: 'precioRegular', precioOferta: 'precioOferta',
+  precioProveedor: 'precioProveedor', precioReferencialVenta: 'precioReferencialVenta',
   descuentoMaximo: 'descuentoMaximo', garantia: 'garantia',
   indice_carga: 'indice_carga', velocidad_max: 'velocidad_max',
   cargaMaxNeumatico: 'cargaMaxNeumatico', velocidadMaxKmh: 'velocidadMaxKmh',
@@ -21,8 +22,10 @@ const SORT_FIELDS = {
 
 const listar = async (req, res, next) => {
   try {
-    const { medida, marca, tipo, sedeId, q, page, limit, orderBy, orderDir } = req.query;
-    const { skip, take } = paginar(page, limit);
+    const { medida, marca, tipo, sedeId, q, page, limit, orderBy, orderDir, all } = req.query;
+    // all=true omite la paginación — solo para vistas admin que necesitan todos los registros
+    const fetchAll = all === 'true' || all === '1';
+    const { skip, take } = fetchAll ? { skip: 0, take: undefined } : paginar(page, limit);
     const where = { activo: true };
     const and = [];
 
@@ -65,7 +68,8 @@ const listar = async (req, res, next) => {
     const [total, productos] = await Promise.all([
       prisma.producto.count({ where }),
       prisma.producto.findMany({
-        where, skip, take,
+        where,
+        ...(fetchAll ? {} : { skip, take }),
         orderBy: { [sortField]: sortDir },
         include: {
           stocks: sedeId

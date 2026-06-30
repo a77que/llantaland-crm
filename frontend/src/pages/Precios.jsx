@@ -74,13 +74,15 @@ export default function Precios() {
   const delCosto = (i) => { setCostos(cs => cs.filter((_, j) => j !== i)); setCostosDirty(true); };
 
   // ── Productos ──
-  // Cuando el sort es por columna calculada, cargamos todo (limit 1000) para ordenar globalmente
+  // Cuando el sort es por columna calculada, cargamos TODO el catálogo (all=true omite el cap
+  // de 100 registros en el backend) para que el orden sea global, no solo de la página actual.
   const { data, isLoading } = useQuery({
     queryKey: ['precios-productos', q, isClientSort ? 'all' : page, sortBy, sortDir],
     queryFn: () => productosApi.listar({
       q: q || undefined,
       page: isClientSort ? 1 : page,
-      limit: isClientSort ? 1000 : 50,
+      all: isClientSort ? 'true' : undefined,
+      limit: isClientSort ? undefined : 50,
       orderBy: isClientSort ? 'marca' : (BACKEND_SORT[sortBy] || 'marca'),
       orderDir: isClientSort ? 'asc' : sortDir,
     }),
