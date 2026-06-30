@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -271,45 +271,191 @@ export default function InventarioDetalle() {
           </Seccion>
         </div>
 
-        {/* Columna stock */}
+        {/* Columna stock + cotización */}
+        <StockCotizacion prod={prod} stockTotal={stockTotal} />
+      </div>
+    </div>
+  );
+}
+
+function StockCotizacion({ prod, stockTotal }) {
+  const [qty, setQty] = useState(4);
+
+  const oferta  = parseFloat(prod.precioOferta)  || 0;
+  const regular = parseFloat(prod.precioRegular)  || 0;
+  const descMax = parseFloat(prod.descuentoMaximo) || 0;
+  const precioMinimo = oferta > 0 && descMax > 0 ? oferta * (1 - descMax / 100) : null;
+
+  // Sedes con stock > 0, ordenadas de mayor a menor cantidad
+  const sedesConStock = useMemo(() =>
+    (prod.stocks || []).filter(s => s.cantidad > 0).sort((a, b) => b.cantidad - a.cantidad),
+  [prod.stocks]);
+
+  const sedesSinStock = useMemo(() =>
+    (prod.stocks || []).filter(s => s.cantidad <= 0),
+  [prod.stocks]);
+
+  const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
+  const fmtN = (v) => Number(v || 0).toFixed(2);
+
+  const totalOferta  = oferta  * qty;
+  const totalRegular = regular * qty;
+
+  return (
+    <div>
+      {/* ── Stock total badge ── */}
+      <div style={{
+        background: stockTotal > 10 ? '#f0fdf4' : stockTotal > 0 ? '#fff7ed' : '#fef2f2',
+        borderRadius: 10, padding: '14px 18px',
+        border: `1px solid ${stockTotal > 10 ? '#bbf7d0' : stockTotal > 0 ? '#fed7aa' : '#fecaca'}`,
+        marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
         <div>
-          {/* Stock total badge */}
-          <div style={{ background: stockTotal > 10 ? '#f0fdf4' : stockTotal > 0 ? '#fff7ed' : '#fef2f2', borderRadius: 10, padding: '14px 18px', border: `1px solid ${stockTotal > 10 ? '#bbf7d0' : stockTotal > 0 ? '#fed7aa' : '#fecaca'}`, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: 1 }}>Stock total</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: stockTotal > 10 ? '#16a34a' : stockTotal > 0 ? '#f97316' : '#dc2626' }}>{stockTotal} uds</div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', letterSpacing: 1 }}>Stock total</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: stockTotal > 10 ? '#16a34a' : stockTotal > 0 ? '#f97316' : '#dc2626' }}>{stockTotal} uds</div>
+        </div>
+        <div style={{ fontSize: 40 }}>{stockTotal > 10 ? '✅' : stockTotal > 0 ? '⚠️' : '❌'}</div>
+      </div>
+
+      {/* ── Precios para cotizar ── */}
+      {(oferta > 0 || regular > 0) && (
+        <Seccion titulo="💰 Precios para cotizar">
+          <div style={{ display: 'grid', gridTemplateColumns: regular > 0 ? '1fr 1fr' : '1fr', gap: 10, marginBottom: descMax > 0 ? 12 : 0 }}>
+            {regular > 0 && (
+              <div style={{ background: 'var(--color-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Precio regular</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-text-muted)', textDecoration: 'line-through', opacity: .7 }}>{fmt(regular)}</div>
+              </div>
+            )}
+            <div style={{ background: oferta > 0 ? '#f0fdf4' : 'var(--color-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', border: oferta > 0 ? '1.5px solid #bbf7d0' : 'none' }}>
+              <div style={{ fontSize: 10, color: oferta > 0 ? '#16a34a' : 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>
+                {oferta > 0 ? '🏷️ Precio oferta' : 'Precio'}
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: oferta > 0 ? '#16a34a' : 'var(--color-text)' }}>
+                {fmt(oferta > 0 ? oferta : regular)}
+              </div>
             </div>
-            <div style={{ fontSize: 40 }}>{stockTotal > 10 ? '✅' : stockTotal > 0 ? '⚠️' : '❌'}</div>
+          </div>
+          {descMax > 0 && (
+            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5 }}>
+              <span style={{ color: '#1d4ed8', fontWeight: 600 }}>Descuento máx. permitido: <strong>{descMax}%</strong></span>
+              {precioMinimo !== null && (
+                <span style={{ color: '#1d4ed8', fontWeight: 800 }}>→ {fmt(precioMinimo)}</span>
+              )}
+            </div>
+          )}
+        </Seccion>
+      )}
+
+      {/* ── Calculadora de cotización ── */}
+      {oferta > 0 && (
+        <Seccion titulo="🧮 Calculadora de cotización">
+          {/* Selector de cantidad */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <button key={n} onClick={() => setQty(n)} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                border: qty === n ? '2px solid #f5c400' : '1.5px solid var(--color-border)',
+                background: qty === n ? 'rgba(245,196,0,.12)' : 'var(--color-bg)',
+                color: qty === n ? '#f5c400' : 'var(--color-text)',
+              }}>{n}</button>
+            ))}
+            <input
+              type="number" min="1" max="999"
+              value={qty}
+              onChange={e => { const v = parseInt(e.target.value); if (v > 0) setQty(v); }}
+              style={{ width: 64, padding: '6px 8px', borderRadius: 6, fontSize: 13, border: '1.5px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', textAlign: 'center' }}
+            />
           </div>
 
-          {/* Stock por sede */}
-          <Seccion titulo="📍 Stock por local">
-            {prod.stocks?.length > 0 ? prod.stocks.map(s => {
-              const pct = Math.min(100, (s.cantidad / Math.max(s.stockMinimo * 4, 20)) * 100);
-              const color = s.cantidad <= s.stockMinimo ? '#dc2626' : s.cantidad <= s.stockMinimo * 2 ? '#f97316' : '#16a34a';
-              return (
-                <div key={s.id} style={{ marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <div>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{s.sede?.nombre}</span>
-                      <span style={{ marginLeft: 8, fontSize: 10, padding: '1px 6px', borderRadius: 6, background: '#f1f5f9', color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{s.sede?.codigoLocal}</span>
-                    </div>
-                    <span style={{ fontSize: 14, fontWeight: 800, color }}>
-                      {s.cantidad} uds
-                      {s.cantidad <= s.stockMinimo && <span style={{ marginLeft: 4, fontSize: 12 }}>⚠️</span>}
-                    </span>
-                  </div>
-                  <div style={{ background: '#e2e8f0', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 4, background: color, width: `${pct}%`, minWidth: 4, transition: 'width .3s' }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>Mínimo: {s.stockMinimo} uds — {s.sede?.distrito}</div>
+          {/* Tabla de totales */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'var(--color-bg)' }}>
+                <th style={{ padding: '7px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>Concepto</th>
+                <th style={{ padding: '7px 10px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>Unit.</th>
+                <th style={{ padding: '7px 10px', textAlign: 'right', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>× {qty}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {regular > 0 && (
+                <tr>
+                  <td style={{ padding: '7px 10px', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)' }}>Precio regular</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(regular)}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: 'var(--color-text-muted)', textDecoration: 'line-through', borderBottom: '1px solid var(--color-border)', fontWeight: 700 }}>S/ {fmtN(totalRegular)}</td>
+                </tr>
+              )}
+              <tr style={{ background: 'rgba(22,163,74,.06)' }}>
+                <td style={{ padding: '9px 10px', fontWeight: 700, color: '#16a34a', borderBottom: '1px solid var(--color-border)' }}>🏷️ Precio oferta</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 700, color: '#16a34a', borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(oferta)}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right', fontWeight: 900, color: '#16a34a', fontSize: 15, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(totalOferta)}</td>
+              </tr>
+              {precioMinimo !== null && (
+                <tr style={{ background: 'rgba(29,78,216,.05)' }}>
+                  <td style={{ padding: '7px 10px', color: '#1d4ed8', borderBottom: '1px solid var(--color-border)', fontSize: 12 }}>Con desc. máx. ({descMax}%)</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', color: '#1d4ed8', fontSize: 12, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(precioMinimo)}</td>
+                  <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 800, color: '#1d4ed8', fontSize: 13, borderBottom: '1px solid var(--color-border)' }}>S/ {fmtN(precioMinimo * qty)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {/* Ahorro vs regular */}
+          {regular > 0 && oferta > 0 && regular > oferta && (
+            <div style={{ marginTop: 10, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 12.5, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
+              💚 Ahorro total vs. precio regular: S/ {fmtN(totalRegular - totalOferta)}
+            </div>
+          )}
+        </Seccion>
+      )}
+
+      {/* ── Disponibilidad por local ── */}
+      <Seccion titulo="📍 Disponibilidad por local">
+        {sedesConStock.length === 0 && sedesSinStock.length === 0 && (
+          <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sin stock registrado</div>
+        )}
+
+        {/* Locales CON stock */}
+        {sedesConStock.map(s => {
+          const pct   = Math.min(100, (s.cantidad / Math.max(s.stockMinimo * 4, 20)) * 100);
+          const color = s.cantidad <= s.stockMinimo ? '#dc2626' : s.cantidad <= s.stockMinimo * 2 ? '#f97316' : '#16a34a';
+          const cubre = oferta > 0 ? (s.cantidad >= qty ? '✅ Cubre el pedido' : `⚠️ Solo ${s.cantidad} (faltan ${qty - s.cantidad})`) : null;
+          return (
+            <div key={s.id} style={{ marginBottom: 14, padding: '10px 12px', background: 'var(--color-bg)', borderRadius: 8, border: `1px solid ${color}30` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{s.sede?.nombre}</span>
+                  <span style={{ marginLeft: 8, fontSize: 10, padding: '2px 6px', borderRadius: 5, background: 'var(--color-surface)', color: 'var(--color-text-muted)', fontFamily: 'monospace', border: '1px solid var(--color-border)' }}>{s.sede?.codigoLocal}</span>
                 </div>
-              );
-            }) : (
-              <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sin stock registrado</div>
-            )}
-          </Seccion>
-        </div>
+                <span style={{ fontSize: 16, fontWeight: 900, color }}>{s.cantidad} uds</span>
+              </div>
+              <div style={{ background: '#e2e8f0', borderRadius: 4, height: 5, overflow: 'hidden', marginBottom: 5 }}>
+                <div style={{ height: '100%', borderRadius: 4, background: color, width: `${pct}%`, minWidth: 4 }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--color-text-muted)' }}>
+                <span>{s.sede?.distrito || '—'} · Mín: {s.stockMinimo} uds</span>
+                {cubre && <span style={{ fontWeight: 700, color: s.cantidad >= qty ? '#16a34a' : '#f97316' }}>{cubre}</span>}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Locales SIN stock (colapsados) */}
+        {sedesSinStock.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .5 }}>Sin stock:</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {sedesSinStock.map(s => (
+                <span key={s.id} style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
+                  {s.sede?.codigoLocal} — {s.sede?.nombre}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </Seccion>
+    </div>
+  );
       </div>
     </div>
   );
