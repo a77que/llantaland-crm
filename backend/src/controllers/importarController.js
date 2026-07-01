@@ -534,6 +534,38 @@ function generarReporteCrear(headers, dataRowsRaw, resultadosFila) {
 
 // ─── ACTUALIZAR STOCK ─────────────────────────────────────────────────────────
 
+// Campos de match que usan comparación por tokens (orden no importa)
+const CAMPOS_TOKEN_MATCH = new Set(['nombreComercial', 'marca_nombreComercial', 'marca_modelo']);
+
+/**
+ * Normaliza un texto para match insensible al orden de palabras:
+ * quita tildes, pasa a minúsculas, conserva alfanuméricos / - ,
+ * divide en tokens, los ordena y los une.
+ * Ejemplo: "MICHELIN ENERGY SAVER+ 205/55R16" === "205/55R16 MICHELIN ENERGY SAVER+"
+ */
+function normalizarTokensMatch(str) {
+  if (!str) return '';
+  return String(str)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // quitar tildes
+    .toLowerCase()
+    .replace(/[^a-z0-9\/\-\.]/g, ' ')                  // solo alfanum, /, -, .
+    .split(/\s+/).filter(Boolean).sort().join(' ');
+}
+
+/** Clave de match para un producto dado el campo elegido. */
+function claveProductoMatch(p, campo) {
+  if (campo === 'marca_nombreComercial') return normalizarTokensMatch(`${p.marca ?? ''} ${p.nombreComercial ?? ''}`);
+  if (campo === 'marca_modelo')          return normalizarTokensMatch(`${p.marca ?? ''} ${p.modelo ?? ''}`);
+  if (CAMPOS_TOKEN_MATCH.has(campo))     return normalizarTokensMatch(String(p[campo] ?? ''));
+  return String(p[campo] ?? '').trim().toLowerCase();
+}
+
+/** Clave de match para el valor de la fila del archivo. */
+function claveFilaMatch(valorMatch, campo) {
+  if (CAMPOS_TOKEN_MATCH.has(campo)) return normalizarTokensMatch(valorMatch);
+  return valorMatch.toLowerCase();
+}
+
 /**
  * Retorna columnas del archivo + campos disponibles para match/update en el CRM.
  */
@@ -554,8 +586,11 @@ const previewUpdate = async (req, res, next) => {
     const sedes = await prisma.sede.findMany({ where: { activo: true }, orderBy: { codigoLocal: 'asc' } });
 
     const camposMatch = [
-      { key: 'sku',    label: 'SKU',    descripcion: 'Código único del producto' },
-      { key: 'medida', label: 'Medida', descripcion: 'Ej: 195/65R15' },
+      { key: 'sku',                  label: 'SKU',                descripcion: 'Código único del producto' },
+      { key: 'medida',               label: 'Medida',             descripcion: 'Ej: 195/65R15' },
+      { key: 'nombreComercial',      label: 'Nombre Comercial',   descripcion: 'Busca por nombre (orden de palabras no importa)' },
+      { key: 'marca_nombreComercial',label: 'Marca + Nombre',     descripcion: 'Combina marca y nombre, ignora el orden' },
+      { key: 'marca_modelo',         label: 'Marca + Modelo',     descripcion: 'Combina marca y modelo, ignora el orden' },
     ];
 
     const camposUpdate = [
@@ -676,11 +711,11 @@ const aplicarUpdate = async (req, res, next) => {
     const resultadosFila = new Array(dataRows.length); // estado por fila (alineado por índice)
     const cambiosMuestra = []; // máx 10 para mostrar preview
 
-    // ── Pre-cargar productos activos en memoria (1 consulta, match insensible a mayúsculas) ──
+    // ── Pre-cargar productos activos en memoria (1 consulta, match insensible a mayúsculas y orden) ──
     const todosProd = await prisma.producto.findMany({ where: { activo: true }, include: { stocks: true } });
     const porMatch = new Map();
     for (const p of todosProd) {
-      const key = String(p[matchCampoCRM] ?? '').trim().toLowerCase();
+      const key = claveProductoMatch(p, matchCampoCRM);
       if (key && !porMatch.has(key)) porMatch.set(key, p);
     }
 
@@ -691,7 +726,7 @@ const aplicarUpdate = async (req, res, next) => {
       const valorMatch = String(row[matchIdx] ?? '').trim();
       if (!valorMatch) { resultadosFila[i] = { estado: 'vacio', detalle: 'Sin valor en la columna de match' }; continue; }
 
-      const producto = porMatch.get(valorMatch.toLowerCase());
+      const producto = porMatch.get(claveFilaMatch(valorMatch, matchCampoCRM));
       if (!producto) {
         noEncontrados++;
         noEncontradosLista.push({ fila: i + 2, valor: valorMatch });
@@ -819,14 +854,14 @@ const descargarReporteUpdate = async (req, res, next) => {
     const todosProd = await prisma.producto.findMany({ where: { activo: true } });
     const porMatch = new Map();
     for (const p of todosProd) {
-      const key = String(p[matchCampoCRM] ?? '').trim().toLowerCase();
+      const key = claveProductoMatch(p, matchCampoCRM);
       if (key && !porMatch.has(key)) porMatch.set(key, p);
     }
 
     const resultadosFila = dataRows.map((row) => {
       const valorMatch = String(row[matchIdx] ?? '').trim();
       if (!valorMatch) return { estado: 'vacio', detalle: 'Sin valor en la columna de match' };
-      return porMatch.has(valorMatch.toLowerCase())
+      return porMatch.has(claveFilaMatch(valorMatch, matchCampoCRM))
         ? { estado: 'actualizado', detalle: 'Encontrado en CRM' }
         : { estado: 'no_encontrado', detalle: `"${valorMatch}" no existe en el CRM` };
     });
