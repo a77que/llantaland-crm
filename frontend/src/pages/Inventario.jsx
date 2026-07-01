@@ -502,11 +502,12 @@ export default function Inventario() {
 
   // Estado en URL — preserva búsqueda al volver desde detalle
   const [searchParams, setSearchParams] = useSearchParams();
-  const q      = searchParams.get('q')      || '';
-  const tipo   = searchParams.get('tipo')   || '';
-  const page   = parseInt(searchParams.get('page')  || '1');
-  const sortBy = searchParams.get('sortBy') || '';
-  const sortDir= searchParams.get('sortDir')|| 'asc';
+  const q             = searchParams.get('q')             || '';
+  const tipo          = searchParams.get('tipo')          || '';
+  const page          = parseInt(searchParams.get('page') || '1');
+  const sortBy        = searchParams.get('sortBy')        || '';
+  const sortDir       = searchParams.get('sortDir')       || 'asc';
+  const soloConStock  = searchParams.get('soloConStock') === 'true';
 
   const setParam = (key, val) => {
     setSearchParams(prev => {
@@ -536,8 +537,8 @@ export default function Inventario() {
   const [eliminandoMasivo, setEliminandoMasivo] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['productos', { q, tipo, page, sortBy, sortDir }],
-    queryFn: () => productosApi.listar({ q, tipo, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
+    queryKey: ['productos', { q, tipo, page, sortBy, sortDir, soloConStock }],
+    queryFn: () => productosApi.listar({ q, tipo, page, limit: 50, orderBy: sortBy, orderDir: sortDir, ...(soloConStock && { soloConStock: 'true' }) }),
     keepPreviousData: true,
   });
 
@@ -749,6 +750,18 @@ export default function Inventario() {
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
+        <button
+          onClick={() => setParam('soloConStock', soloConStock ? '' : 'true')}
+          style={{
+            padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            border: `2px solid ${soloConStock ? '#16a34a' : 'var(--color-border)'}`,
+            background: soloConStock ? '#f0fdf4' : 'var(--color-surface)',
+            color: soloConStock ? '#16a34a' : 'var(--color-text-muted)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {soloConStock ? '✅ Solo con stock' : '📦 Mostrar todos'}
+        </button>
       </div>
 
       {isLoading ? <LoadingSpinner fullPage /> : productos.length === 0 ? (

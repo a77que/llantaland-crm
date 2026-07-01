@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -70,6 +70,18 @@ export default function CotizacionNueva() {
     queryFn: () => productosApi.listar({ q: buscarQuery || undefined, limit: 50, ...(medida && !buscarQuery ? { medida } : {}) }),
     enabled: buscarActivo,
   });
+
+  // Catálogo ordenado: primero productos con stock, luego sin stock (mayor stock primero)
+  const productosCatalogo = useMemo(() => {
+    const list = productos?.data || [];
+    return [...list].sort((a, b) => {
+      const sa = a.stocks?.reduce((s, x) => s + x.cantidad, 0) ?? 0;
+      const sb = b.stocks?.reduce((s, x) => s + x.cantidad, 0) ?? 0;
+      if (sa > 0 && sb === 0) return -1;
+      if (sa === 0 && sb > 0) return 1;
+      return sb - sa;
+    });
+  }, [productos]);
 
   // Sugerencias ajax de medida mientras se tipea
   const { data: medidaSugeridas = [] } = useQuery({
@@ -267,11 +279,11 @@ export default function CotizacionNueva() {
                     {['Medida', 'Marca', 'Modelo', 'Precio', 'Stock', '', ''].map((h, i) => <th key={i} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--color-bg)' }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
-                    {(productos?.data || []).map(p => {
+                    {productosCatalogo.map(p => {
                       const yaEsta = items.some(it => it.producto.id === p.id);
                       const stockTotal = p.stocks?.reduce((a, s) => a + s.cantidad, 0) ?? 0;
                       return (
-                        <tr key={p.id} style={{ background: yaEsta ? '#f0fdf4' : undefined, borderBottom: '1px solid var(--color-border)' }}>
+                        <tr key={p.id} style={{ background: yaEsta ? '#f0fdf4' : stockTotal === 0 ? '#fafafa' : undefined, borderBottom: '1px solid var(--color-border)', opacity: stockTotal === 0 ? 0.6 : 1 }}>
                           <td style={{ padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }} onClick={() => setModalProdId(p.id)}>{p.medida}</td>
                           <td style={{ padding: '6px 10px' }}>{p.marca}</td>
                           <td style={{ padding: '6px 10px', color: 'var(--color-text-muted)' }}>{p.nombreComercial || '—'}</td>
@@ -282,7 +294,7 @@ export default function CotizacionNueva() {
                         </tr>
                       );
                     })}
-                    {productos?.data?.length === 0 && <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-muted)' }}>Sin resultados</td></tr>}
+                    {productosCatalogo.length === 0 && <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-muted)' }}>Sin resultados</td></tr>}
                   </tbody>
                 </table>
               </div>

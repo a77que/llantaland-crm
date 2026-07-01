@@ -99,7 +99,8 @@ const resetearCRM = async (req, res, next) => {
 const listarPrecios = async (req, res, next) => {
   try {
     const { medida } = req.query;
-    const where = { activo: true };
+    // Solo mostrar al cliente productos con stock disponible
+    const where = { activo: true, stocks: { some: { cantidad: { gt: 0 } } } };
     // Clave canónica: "145 / 65 r 16", "165R13C", "35X12,5R20", "650R16", "195/50ZR15" → forma única.
     // Coincidencia INCLUSIVA por medidaNorm (la Z/RF/C/LT se descartan en la clave).
     const medidaNorm = medida ? normalizarMedida(medida) : null;
@@ -114,7 +115,7 @@ const listarPrecios = async (req, res, next) => {
     // Fallback robusto: si no hubo match (p.ej. producto aún sin medidaNorm backfilleado),
     // comparar normalizando en memoria los valores guardados.
     if (medidaNorm && productos.length === 0) {
-      const todos = await prisma.producto.findMany({ where: { activo: true }, include: { stocks: { include: { sede: true } } } });
+      const todos = await prisma.producto.findMany({ where: { activo: true, stocks: { some: { cantidad: { gt: 0 } } } }, include: { stocks: { include: { sede: true } } } });
       productos = todos.filter(p => normalizarMedida(p.medida) === medidaNorm);
     }
 

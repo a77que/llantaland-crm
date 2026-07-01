@@ -22,7 +22,7 @@ const SORT_FIELDS = {
 
 const listar = async (req, res, next) => {
   try {
-    const { medida, marca, tipo, sedeId, q, page, limit, orderBy, orderDir, all } = req.query;
+    const { medida, marca, tipo, sedeId, q, page, limit, orderBy, orderDir, all, soloConStock } = req.query;
     // all=true omite la paginación — solo para vistas admin que necesitan todos los registros
     const fetchAll = all === 'true' || all === '1';
     const { skip, take } = fetchAll ? { skip: 0, take: undefined } : paginar(page, limit);
@@ -61,6 +61,7 @@ const listar = async (req, res, next) => {
       and.push({ OR: or });
     }
     if (and.length) where.AND = and;
+    if (soloConStock === 'true') where.stocks = { some: { cantidad: { gt: 0 } } };
 
     const sortField = SORT_FIELDS[orderBy] || 'createdAt';
     const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
