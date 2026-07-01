@@ -579,8 +579,20 @@ const previewUpdate = async (req, res, next) => {
 
     if (!rows.length) return res.status(400).json({ error: 'Archivo vacío' });
 
-    const headers = rows[0].map((h) => String(h || '').trim());
-    const previewRows = rows.slice(1, 6);
+    // Buscar la primera fila que tenga al menos 2 celdas no vacías → es la fila de encabezados
+    // Esto maneja archivos con filas de título antes de los encabezados reales
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(6, rows.length); i++) {
+      const nonEmpty = (rows[i] || []).filter(c => String(c || '').trim()).length;
+      if (nonEmpty >= 2) { headerRowIdx = i; break; }
+    }
+
+    const rawHeaders = rows[headerRowIdx] || [];
+    const headers = rawHeaders.map((h, i) => {
+      const s = String(h || '').trim();
+      return s || `Columna${i + 1}`;   // columnas sin nombre reciben nombre genérico
+    });
+    const previewRows = rows.slice(headerRowIdx + 1, headerRowIdx + 6);
 
     // Sedes para campos de stock dinámicos
     const sedes = await prisma.sede.findMany({ where: { activo: true }, orderBy: { codigoLocal: 'asc' } });
@@ -668,7 +680,7 @@ const previewUpdate = async (req, res, next) => {
     res.json({
       columnas: headers.map((h, i) => ({ nombre: h, sugerencias: sugerencias[i] })),
       preview: previewRows,
-      totalFilas: rows.length - 1,
+      totalFilas: rows.length - headerRowIdx - 1,
       camposMatch,
       camposUpdate,
     });
@@ -698,7 +710,13 @@ const aplicarUpdate = async (req, res, next) => {
 
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-    const dataRows = rows.slice(1);
+
+    // Misma lógica de detección de encabezados que en previewUpdate
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(6, rows.length); i++) {
+      if ((rows[i] || []).filter(c => String(c || '').trim()).length >= 2) { headerRowIdx = i; break; }
+    }
+    const dataRows = rows.slice(headerRowIdx + 1);
 
     // Cargar sedes para mapear stock_LX → sedeId
     const sedes = await prisma.sede.findMany({ where: { activo: true } });
@@ -848,7 +866,11 @@ const descargarReporteUpdate = async (req, res, next) => {
 
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
-    const dataRows = rows.slice(1);
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(6, rows.length); i++) {
+      if ((rows[i] || []).filter(c => String(c || '').trim()).length >= 2) { headerRowIdx = i; break; }
+    }
+    const dataRows = rows.slice(headerRowIdx + 1);
 
     // Sin select dinámico — mismo patrón que aplicarUpdate para evitar errores de Prisma
     const todosProd = await prisma.producto.findMany({ where: { activo: true } });

@@ -49,31 +49,43 @@ export default function ActualizarStock() {
   const [previewRes, setPreviewRes] = useState(null); // dry-run result
   const [resultado, setResultado] = useState(null);   // apply result
   const [descargando, setDescargando] = useState(false);
+  const [errorArchivo, setErrorArchivo] = useState(null); // error visible al analizar
   const paso = resultado ? 4 : previewRes ? 3 : info ? (matchCol !== null ? 2 : 1) : 0;
 
   // ── Step 1: subir archivo ─────────────────────────────────────────────────
   const parseMut = useMutation({
     mutationFn: (file) => { const fd = new FormData(); fd.append('archivo', file); return importarApi.previewUpdate(fd); },
     onSuccess: (data) => {
-      setInfo(data);
+      setErrorArchivo(null);
+      const columnas = data?.columnas || [];
+      setInfo({ ...data, columnas });
       setMatchCol(null);
       setUpdateMapeo({});
       setPreviewRes(null);
       setResultado(null);
+      if (columnas.length === 0) {
+        setErrorArchivo('No se detectaron columnas. Verifica que la primera fila del archivo contenga los encabezados de cada columna.');
+        return;
+      }
       // Auto-sugerir match
-      const matchIdx = data.columnas.findIndex(c => c.sugerencias?.matchSugerido);
-      if (matchIdx >= 0) setMatchCol({ colIdx: matchIdx, campoCRM: data.columnas[matchIdx].sugerencias.matchSugerido });
+      const matchIdx = columnas.findIndex(c => c.sugerencias?.matchSugerido);
+      if (matchIdx >= 0) setMatchCol({ colIdx: matchIdx, campoCRM: columnas[matchIdx].sugerencias.matchSugerido });
       // Auto-sugerir updates
       const autoUpdate = {};
-      data.columnas.forEach((c, i) => { if (c.sugerencias?.updateSugerido) autoUpdate[i] = c.sugerencias.updateSugerido; });
+      columnas.forEach((c, i) => { if (c.sugerencias?.updateSugerido) autoUpdate[i] = c.sugerencias.updateSugerido; });
       setUpdateMapeo(autoUpdate);
     },
-    onError: (e) => toast.error(e?.error || 'Error al leer el archivo'),
+    onError: (e) => {
+      const msg = e?.error || e?.message || 'Error al analizar el archivo';
+      setErrorArchivo(msg);
+      toast.error(msg);
+    },
   });
 
   const onDrop = useCallback((files) => {
     const f = files[0]; if (!f) return;
-    setArchivo(f); parseMut.mutate(f);
+    setArchivo(f); setInfo(null); setMatchCol(null); setUpdateMapeo({}); setPreviewRes(null); setResultado(null); setErrorArchivo(null);
+    parseMut.mutate(f);
   }, []);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop, maxFiles: 1,
@@ -110,7 +122,7 @@ export default function ActualizarStock() {
     onError: (e) => toast.error(e?.error || 'Error al aplicar'),
   });
 
-  const reset = () => { setArchivo(null); setInfo(null); setMatchCol(null); setUpdateMapeo({}); setPreviewRes(null); setResultado(null); setDescargando(false); };
+  const reset = () => { setArchivo(null); setInfo(null); setMatchCol(null); setUpdateMapeo({}); setPreviewRes(null); setResultado(null); setDescargando(false); setErrorArchivo(null); };
 
   const descargarReporteDirecto = async () => {
     if (!archivo || !matchCol) return;
@@ -216,7 +228,16 @@ export default function ActualizarStock() {
           )}
         </div>
         {parseMut.isPending && <div style={{ marginTop: 12, fontSize: 13, color: 'var(--color-text-muted)' }}>⏳ Analizando archivo...</div>}
-        {archivo && info && (
+        {errorArchivo && (
+          <div style={{ marginTop: 12, padding: '12px 16px', background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca', fontSize: 13, color: '#dc2626' }}>
+            ❌ <strong>Error al analizar el archivo:</strong> {errorArchivo}
+            <div style={{ marginTop: 6, fontSize: 12, color: '#991b1b' }}>
+              Verifica que el archivo sea un Excel (.xlsx) o CSV válido y que la primera fila tenga los encabezados de las columnas.
+              Si el problema persiste, intenta volver a subir el archivo.
+            </div>
+          </div>
+        )}
+        {archivo && info && !errorArchivo && (
           <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 13 }}>
             ✅ <strong>{archivo.name}</strong> — {info.totalFilas} filas · {info.columnas.length} columnas detectadas
           </div>
