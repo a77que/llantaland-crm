@@ -647,7 +647,9 @@ const previewUpdate = async (req, res, next) => {
       let updateSugerido = null;
       if (hl.includes('precio') && (hl.includes('regular') || hl.includes('lista'))) updateSugerido = 'precioRegular';
       else if (hl.includes('precio') && (hl.includes('oferta') || hl.includes('especial'))) updateSugerido = 'precioOferta';
-      else if (hl.includes('precio') && !hl.includes('oferta')) updateSugerido = 'precioRegular';
+      else if (hl.includes('precio') && (hl.includes('referencial') || hl.includes('mercado') || hl.includes('ref'))) updateSugerido = 'precioReferencialVenta';
+      else if (hl.includes('precio') && (hl.includes('proveedor') || hl.includes('costo') || hl.includes('cost'))) updateSugerido = 'precioProveedor';
+      else if (hl.includes('precio') && !hl.includes('total')) updateSugerido = 'precioRegular';
       else if (hl.includes('nombre') || hl.includes('comercial') || hl.includes('model')) updateSugerido = 'nombreComercial';
       else if (hl === 'grupo' || hl === 'categoria' || hl === 'categoría') updateSugerido = 'grupo';
       else if (hl.includes('imagen') || hl.includes('foto') || hl.includes('url')) updateSugerido = 'imagenUrl';
@@ -829,7 +831,7 @@ const aplicarUpdate = async (req, res, next) => {
     let reporteError = null;
     if (dataRows.length <= 10000) {
       try {
-        reporteBase64 = generarReporteUpdateBase64(rows[0], dataRows, resultadosFila, dryRun);
+        reporteBase64 = generarReporteUpdateBase64(rows[headerRowIdx] || rows[0], dataRows, resultadosFila, dryRun);
       } catch (e) {
         reporteError = e.message;
         console.error('No se pudo generar el reporte Excel:', e.message, e.stack);
