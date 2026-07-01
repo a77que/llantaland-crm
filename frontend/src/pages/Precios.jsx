@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { productosApi, adminApi } from '../services/api';
@@ -86,17 +86,18 @@ export default function Precios() {
   });
 
   // ── Productos ──
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['precios-productos', q, isClientSort ? 'all' : page, sortBy, sortDir],
     queryFn: () => productosApi.listar({
       q: q || undefined,
       page: isClientSort ? 1 : page,
       all: isClientSort ? 'true' : undefined,
+      noStocks: isClientSort ? 'true' : undefined,  // evita JOIN costoso al cargar todos para ordenar
       limit: isClientSort ? undefined : 50,
       orderBy: isClientSort ? 'marca' : (BACKEND_SORT[sortBy] || 'marca'),
       orderDir: isClientSort ? 'asc' : sortDir,
     }),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
   const productos = data?.data || [];
   const total = data?.total || 0;
@@ -161,6 +162,7 @@ export default function Precios() {
   }, [productos, sortBy, sortDir, costos, isClientSort]); // eslint-disable-line
 
   if (isLoading && !data) return <LoadingSpinner fullPage />;
+  if (isError && !data) return <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>Error al cargar los productos. Recarga la página.</div>;
 
   const inp = { width: 90, padding: '6px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13, textAlign: 'right' };
   const td  = { padding: '8px 10px', borderBottom: '1px solid var(--color-border)', fontSize: 13, whiteSpace: 'nowrap' };
