@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { paginar } = require('../utils/helpers');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const listar = async (req, res, next) => {
   try {

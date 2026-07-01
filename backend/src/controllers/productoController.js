@@ -1,11 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
 const path = require('path');
 const { paginar } = require('../utils/helpers');
 const XLSXStyle = require('xlsx-js-style');
 const { normalizarMedida, pareceMedida } = require('../utils/medida');
 const { llamarIA } = require('../services/iaService');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // Campos permitidos para ordenar (evita injection)
 const SORT_FIELDS = {

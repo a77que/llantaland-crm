@@ -2,9 +2,8 @@
  * API exclusiva para el flujo n8n — reemplaza Google Sheets.
  * Cada endpoint corresponde a una operación de hoja del flujo.
  */
-const { PrismaClient } = require('@prisma/client');
 const { normalizarMedida } = require('../utils/medida');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // ─── CRM SHEET ───────────────────────────────────────────────────────────────
 

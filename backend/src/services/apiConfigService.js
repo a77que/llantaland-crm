@@ -3,8 +3,7 @@
  * Prioridad: lo guardado en BD (config_api_busqueda) sobre las variables de entorno.
  * Cache corto en memoria para no consultar la BD en cada llamada.
  */
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 let _cache = null;
 let _cacheTs = 0;

@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 const pdfService = require('../services/pdfService');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
 // (negocio Llantas) o ya cotizó un show (negocio Patrón)

@@ -1,9 +1,8 @@
 const XLSX = require('xlsx');
 const XLSXStyle = require('xlsx-js-style');
-const { PrismaClient } = require('@prisma/client');
 const { normalizarMedida, dimensionesMedida } = require('../utils/medida');
 
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // Traduce los errores técnicos de Prisma a mensajes entendibles en español
 function explicarErrorPrisma(err) {

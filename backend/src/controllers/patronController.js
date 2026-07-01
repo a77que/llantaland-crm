@@ -2,8 +2,7 @@
  * Catálogo administrado del negocio "El Patrón" (shows de personajes).
  * CRUD simple para Personajes, Distritos de cobertura y Agregados de regalo.
  */
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // ─── PERSONAJES ──────────────────────────────────────────────────────────────
 

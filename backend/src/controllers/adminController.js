@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 const XLSXStyle = require('xlsx-js-style');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const stockCritico = async (req, res, next) => {
   try {
