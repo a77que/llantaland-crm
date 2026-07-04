@@ -63,11 +63,12 @@ const listar = async (req, res, next) => {
     if (hoy === '1' || hoy === 'true') {
       where.timestamp = { gte: inicioHoy() };
     }
-    // "Solo pendientes": oculta lo ya cotizado (el vendedor lo cierra aparte) y
-    // lo marcado manualmente como "cliente no desea nada" — deja solo lo que
-    // realmente falta atender.
+    // "Solo pendientes": oculta lo que YA TIENE una cotización real generada
+    // (el vendedor ya hizo su trabajo con ese lead — independiente del paso
+    // interno del bot) y lo marcado manualmente como "cliente no desea nada".
+    // Deja solo lo que realmente falta atender.
     if (pendientes === '1' || pendientes === 'true') {
-      condicionesAnd.push({ pasoActual: { not: 'cotizado' } });
+      condicionesAnd.push({ cotizaciones: { none: {} } });
       condicionesAnd.push({ descartadoEn: null });
     }
     // Tarjetas de contador seleccionadas (selección múltiple, combinadas con OR)

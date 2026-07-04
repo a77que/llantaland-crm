@@ -447,8 +447,11 @@ export default function Leads() {
     return next;
   }, { replace: true });
 
-  const cambiarVista = (nuevaVista) => setSearchParams(prev => {
-    const next = new URLSearchParams(prev);
+  // Cada pestaña arranca con los filtros limpios — evita que un filtro de
+  // búsqueda/paso/tarjeta activo en una pestaña oculte leads inesperadamente
+  // al cambiar a la otra.
+  const cambiarVista = (nuevaVista) => setSearchParams(() => {
+    const next = new URLSearchParams();
     next.set('vista', nuevaVista);
     next.set('page', '1');
     return next;
