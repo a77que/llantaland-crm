@@ -45,7 +45,9 @@ const RANKING_ICON  = { caliente: '🔥', tibio: '🌡️', frio: '❄️' };
 const etiquetaTarjeta = (key) =>
   key === 'hoy' ? 'Hoy'
   : key === 'ayer' ? 'Ayer'
-  : key === 'completados' ? 'Completados'
+  : key === 'no_desea' ? '❌ No desea nada'
+  : key === 'con_cotizacion' ? '✅ Con cotización'
+  : key === 'sin_cotizacion' ? '⏳ Sin cotización'
   : RANKING_ICON[key] ? `${RANKING_ICON[key]} ${key}` : key;
 
 const badge = (color) => ({ display: 'inline-block', padding: '2px 9px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: color + '22', color });
@@ -529,12 +531,15 @@ export default function Leads() {
             { num: resumen.total, label: 'Total', color: 'var(--color-primary)', key: 'total' },
             { num: resumen.hoy,   label: 'Hoy',   color: '#3b82f6', key: 'hoy' },
             { num: resumen.ayer,  label: 'Ayer',  color: '#6366f1', key: 'ayer' },
-            ...(resumen.porRanking || []).filter(r => r.ranking).map(r => ({
-              num: r._count, label: `${RANKING_ICON[r.ranking]} ${r.ranking}`, color: RANKING_COLOR[r.ranking], key: r.ranking,
-            })),
-            ...(resumen.porPaso || []).filter(p => p.pasoActual === 'completado').map(p => ({
-              num: p._count, label: 'Completados', color: '#22c55e', key: 'completados',
-            })),
+            ...(vista === 'pendientes'
+              ? (resumen.porRanking || []).filter(r => r.ranking).map(r => ({
+                  num: r._count, label: `${RANKING_ICON[r.ranking]} ${r.ranking}`, color: RANKING_COLOR[r.ranking], key: r.ranking,
+                }))
+              : [
+                  { num: resumen.noDesea ?? 0,       label: '❌ No desea nada',  color: '#6b7280', key: 'no_desea' },
+                  { num: resumen.conCotizacion ?? 0, label: '✅ Con cotización', color: '#16a34a', key: 'con_cotizacion' },
+                  { num: resumen.sinCotizacion ?? 0, label: '⏳ Sin cotización', color: '#f59e0b', key: 'sin_cotizacion' },
+                ]),
           ].map((s, i) => {
             const activa = s.key !== 'total' && tarjetasActivas.has(s.key);
             return (
@@ -607,32 +612,6 @@ export default function Leads() {
           value={q}
           onChange={e => setParam('q', e.target.value)}
         />
-        <select
-          style={{
-            flex: '1 1 140px', padding: '10px 12px', fontSize: 13,
-            border: '1.5px solid var(--color-border)', borderRadius: 10,
-            background: 'var(--color-surface)', color: 'var(--color-text)',
-          }}
-          value={paso}
-          onChange={e => setParam('paso', e.target.value)}
-        >
-          <option value="">Todos los pasos</option>
-          {Object.entries(PASO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <select
-          style={{
-            flex: '0 0 auto', padding: '10px 12px', fontSize: 13,
-            border: '1.5px solid var(--color-border)', borderRadius: 10,
-            background: 'var(--color-surface)', color: 'var(--color-text)',
-          }}
-          value={ranking}
-          onChange={e => setParam('ranking', e.target.value)}
-        >
-          <option value="">Ranking</option>
-          <option value="caliente">🔥 Caliente</option>
-          <option value="tibio">🌡️ Tibio</option>
-          <option value="frio">❄️ Frío</option>
-        </select>
       </div>
 
       {/* Lista */}

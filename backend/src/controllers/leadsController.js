@@ -8,12 +8,14 @@ const inicioAyer = () => { const d = inicioHoy(); d.setDate(d.getDate() - 1); re
 // Se combinan entre sí con OR (selección múltiple: ej. "ayer" + "caliente"
 // muestra los leads de ayer junto con todos los calientes).
 const CARD_FILTROS = {
-  hoy:         () => ({ timestamp: { gte: inicioHoy() } }),
-  ayer:        () => ({ timestamp: { gte: inicioAyer(), lt: inicioHoy() } }),
-  caliente:    () => ({ ranking: 'caliente' }),
-  tibio:       () => ({ ranking: 'tibio' }),
-  frio:        () => ({ ranking: 'frio' }),
-  completados: () => ({ pasoActual: 'completado' }),
+  hoy:            () => ({ timestamp: { gte: inicioHoy() } }),
+  ayer:           () => ({ timestamp: { gte: inicioAyer(), lt: inicioHoy() } }),
+  caliente:       () => ({ ranking: 'caliente' }),
+  tibio:          () => ({ ranking: 'tibio' }),
+  frio:           () => ({ ranking: 'frio' }),
+  no_desea:       () => ({ descartadoEn: { not: null } }),
+  con_cotizacion: () => ({ cotizaciones: { some: {} } }),
+  sin_cotizacion: () => ({ cotizaciones: { none: {} }, descartadoEn: null }),
 };
 
 // Campos permitidos para ordenar
@@ -267,14 +269,17 @@ const resumen = async (req, res, next) => {
     const where = tipoNegocio ? { tipoNegocio } : {};
     const hoyInicio  = inicioHoy();
     const ayerInicio = inicioAyer();
-    const [porPaso, porRanking, total, hoy, ayer] = await Promise.all([
+    const [porPaso, porRanking, total, hoy, ayer, noDesea, conCotizacion, sinCotizacion] = await Promise.all([
       prisma.leadCRM.groupBy({ by: ['pasoActual'], _count: true, where }),
       prisma.leadCRM.groupBy({ by: ['ranking'], _count: true, where }),
       prisma.leadCRM.count({ where }),
       prisma.leadCRM.count({ where: { ...where, timestamp: { gte: hoyInicio } } }),
       prisma.leadCRM.count({ where: { ...where, timestamp: { gte: ayerInicio, lt: hoyInicio } } }),
+      prisma.leadCRM.count({ where: { ...where, descartadoEn: { not: null } } }),
+      prisma.leadCRM.count({ where: { ...where, cotizaciones: { some: {} } } }),
+      prisma.leadCRM.count({ where: { ...where, cotizaciones: { none: {} }, descartadoEn: null } }),
     ]);
-    res.json({ porPaso, porRanking, total, hoy, ayer });
+    res.json({ porPaso, porRanking, total, hoy, ayer, noDesea, conCotizacion, sinCotizacion });
   } catch (err) {
     next(err);
   }
