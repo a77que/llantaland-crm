@@ -471,6 +471,7 @@ const guardarColaReintento = async (req, res, next) => {
 const PASOS_NO_RECUPERABLES = new Set([
   'nuevo', 'completado', 'finalizado', 'venta_registrada', 'opt_out', 'cancelado',
   'sin_stock', // su medida no tiene stock: no hay nada que recuperar
+  'cotizado', // ya se le mostró precio/tienda, queda a la espera de un vendedor: no es abandono
 ]);
 
 // Nombre amable de cada paso para mostrarlo en el recordatorio al cliente.
@@ -491,6 +492,7 @@ const PASO_AMIGABLE = {
   esperando_eleccion_b:         'eligiendo el local de instalación',
   esperando_eleccion_local_lima:'eligiendo tu tienda en Lima',
   esperando_confirmacion:       'confirmando tu cita',
+  cotizado:                     'esperando el contacto de un asesor',
 };
 
 // Ventanas de tiempo por nivel: [desde_min, hasta_min) de inactividad

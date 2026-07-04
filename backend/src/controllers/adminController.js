@@ -134,7 +134,7 @@ const seedCitasTest = async (req, res, next) => {
       where: { telefono: '51900000001' },
       update: {
         nombreCliente: 'Carlos Mendoza Ríos', dniCe: '46123789',
-        pasoActual: 'esperando_confirmacion', ranking: 'caliente',
+        pasoActual: 'cotizado', ranking: 'caliente',
         marcaAuto: 'Toyota', modeloAuto: 'Corolla', anioAuto: 2019,
         medidaDetectada: '195/65R15', marcaLlanta: 'Michelin', modeloLlanta: 'Energy Saver',
         cantidadLlantas: 4, precioLlanta: 380.00,
@@ -143,7 +143,7 @@ const seedCitasTest = async (req, res, next) => {
       create: {
         telefono: '51900000001',
         nombreCliente: 'Carlos Mendoza Ríos', dniCe: '46123789',
-        pasoActual: 'esperando_confirmacion', ranking: 'caliente',
+        pasoActual: 'cotizado', ranking: 'caliente',
         marcaAuto: 'Toyota', modeloAuto: 'Corolla', anioAuto: 2019,
         medidaDetectada: '195/65R15', marcaLlanta: 'Michelin', modeloLlanta: 'Energy Saver',
         cantidadLlantas: 4, precioLlanta: 380.00,
