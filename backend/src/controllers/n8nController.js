@@ -150,6 +150,17 @@ const listarPrecios = async (req, res, next) => {
         Ficha_Tecnica: p.fichaTecnica || '',
         Garantia: p.garantia || '',
         Descuento_Maximo: p.descuentoMaximo ? parseFloat(p.descuentoMaximo) : 0,
+        // Ficha técnica ampliada (datos estructurados) — para la respuesta de "información técnica"
+        Indice_Carga: p.indice_carga || '',
+        Velocidad_Max: p.velocidad_max || '',
+        Carga_Max_Neumatico: p.cargaMaxNeumatico ?? null,
+        Velocidad_Max_Kmh: p.velocidadMaxKmh ?? null,
+        Eficiencia_Combustible: p.eficienciaCombustible || '',
+        Eficiencia_Frenado: p.eficienciaFrenado || '',
+        Nivel_Ruido: p.nivelRuido ?? null,
+        Pais_Fabricacion: p.paisFabricacion || '',
+        Origen_Marca: p.origenMarca || '',
+        Campos_Extra: p.camposExtra || null,
         ...stockPorLocal,
       };
     });

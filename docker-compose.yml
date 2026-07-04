@@ -31,7 +31,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://llantaland:${DB_PASSWORD:-llantaland2024}@postgres:5432/llantaland_crm
+      DATABASE_URL: postgresql://llantaland:${DB_PASSWORD:-llantaland2024}@postgres:5432/llantaland_crm?connection_limit=25&pool_timeout=20
       JWT_SECRET: ${JWT_SECRET:-cambiar_en_produccion_por_secreto_seguro}
       JWT_EXPIRES_IN: 8h
       PORT: 3001
