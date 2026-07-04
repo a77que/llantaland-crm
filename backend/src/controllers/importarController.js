@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const XLSXStyle = require('xlsx-js-style');
 const { normalizarMedida, dimensionesMedida } = require('../utils/medida');
+const { invalidarCachePrecios } = require('./n8nController');
 
 const prisma = require('../lib/prisma');
 
@@ -280,6 +281,8 @@ const ejecutar = async (req, res, next) => {
         }
       }));
     }
+
+    invalidarCachePrecios(); // el bot no debe servir catálogo viejo tras esta importación
 
     // Reporte Excel con filas sombreadas según resultado
     let reporteBase64 = null;
@@ -823,6 +826,7 @@ const aplicarUpdate = async (req, res, next) => {
           }
         }));
       }
+      invalidarCachePrecios(); // el bot no debe servir catálogo viejo tras esta actualización
     }
 
     // Reporte Excel con filas sombreadas según resultado (verde=ok, naranja=no encontrado, rojo=error)

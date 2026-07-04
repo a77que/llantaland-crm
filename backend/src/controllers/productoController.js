@@ -3,6 +3,7 @@ const { paginar } = require('../utils/helpers');
 const XLSXStyle = require('xlsx-js-style');
 const { normalizarMedida, pareceMedida } = require('../utils/medida');
 const { llamarIA } = require('../services/iaService');
+const { invalidarCachePrecios } = require('./n8nController');
 
 const prisma = require('../lib/prisma');
 
@@ -107,6 +108,7 @@ const crear = async (req, res, next) => {
     const data = { ...req.body };
     if (data.medida) data.medidaNorm = normalizarMedida(data.medida);
     const producto = await prisma.producto.create({ data });
+    invalidarCachePrecios();
     res.status(201).json(producto);
   } catch (err) {
     next(err);
@@ -140,6 +142,7 @@ const actualizar = async (req, res, next) => {
       where: { id: req.params.id },
       data,
     });
+    invalidarCachePrecios();
     res.json(producto);
   } catch (err) {
     next(err);
@@ -152,6 +155,7 @@ const eliminar = async (req, res, next) => {
     const producto = await prisma.producto.findUnique({ where: { id: req.params.id } });
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
     await prisma.producto.update({ where: { id: req.params.id }, data: { activo: false } });
+    invalidarCachePrecios();
     res.json({ ok: true, mensaje: `Producto ${producto.sku} eliminado del catálogo` });
   } catch (err) {
     next(err);
@@ -168,6 +172,7 @@ const eliminarMasivo = async (req, res, next) => {
       where: { id: { in: ids }, activo: true },
       data: { activo: false },
     });
+    invalidarCachePrecios();
     res.json({ ok: true, eliminados: result.count });
   } catch (err) {
     next(err);
@@ -194,6 +199,7 @@ const eliminarPorSku = async (req, res, next) => {
     const activos = encontrados.filter(p => p.activo);
     if (activos.length) {
       await prisma.producto.updateMany({ where: { id: { in: activos.map(p => p.id) } }, data: { activo: false } });
+      invalidarCachePrecios();
     }
     const eliminados   = activos.map(p => p.sku);
     const yaInactivos  = encontrados.filter(p => !p.activo).map(p => p.sku);

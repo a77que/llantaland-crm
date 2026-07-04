@@ -5,6 +5,47 @@
 const { normalizarMedida } = require('../utils/medida');
 const prisma = require('../lib/prisma');
 
+// ─── CACHE de catálogo con stock ──────────────────────────────────────────────
+// El bot de WhatsApp consulta /api/n8n/precios en varios pasos de cada
+// conversación. Sin caché, esta consulta compite por conexiones/recursos con
+// la importación masiva de catálogo (que escribe en las mismas tablas en
+// lotes de 20 concurrentes) y puede quedar esperando minutos. Con esta caché
+// de 45s, como máximo una consulta por ventana toca la base de datos — el
+// resto se sirve desde memoria, sin importar cuántas conversaciones ocurran
+// a la vez ni si coincide con una importación.
+const PRECIOS_CACHE_TTL_MS = 45 * 1000;
+let preciosCache = { data: null, timestamp: 0 };
+let preciosCacheInflight = null; // evita que varias consultas simultáneas disparen cada una su propio refresh
+
+async function obtenerProductosConStock() {
+  const ahora = Date.now();
+  if (preciosCache.data && (ahora - preciosCache.timestamp) < PRECIOS_CACHE_TTL_MS) {
+    return preciosCache.data;
+  }
+  if (preciosCacheInflight) return preciosCacheInflight;
+
+  preciosCacheInflight = (async () => {
+    try {
+      const productos = await prisma.producto.findMany({
+        where: { activo: true, stocks: { some: { cantidad: { gt: 0 } } } },
+        include: { stocks: { include: { sede: true } } },
+        orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
+      });
+      preciosCache = { data: productos, timestamp: Date.now() };
+      return productos;
+    } finally {
+      preciosCacheInflight = null;
+    }
+  })();
+  return preciosCacheInflight;
+}
+
+/** Invalida la caché de catálogo. Llamar después de escribir Producto/Stock
+ * (importación masiva, edición manual) para que el bot no sirva datos viejos. */
+function invalidarCachePrecios() {
+  preciosCache = { data: null, timestamp: 0 };
+}
+
 // ─── CRM SHEET ───────────────────────────────────────────────────────────────
 
 /** LECTURA CRM | Base* — lee el registro del cliente por teléfono */
@@ -98,24 +139,15 @@ const resetearCRM = async (req, res, next) => {
 const listarPrecios = async (req, res, next) => {
   try {
     const { medida } = req.query;
-    // Solo mostrar al cliente productos con stock disponible
-    const where = { activo: true, stocks: { some: { cantidad: { gt: 0 } } } };
     // Clave canónica: "145 / 65 r 16", "165R13C", "35X12,5R20", "650R16", "195/50ZR15" → forma única.
     // Coincidencia INCLUSIVA por medidaNorm (la Z/RF/C/LT se descartan en la clave).
     const medidaNorm = medida ? normalizarMedida(medida) : null;
-    if (medidaNorm) where.medidaNorm = { equals: medidaNorm, mode: 'insensitive' };
 
-    let productos = await prisma.producto.findMany({
-      where,
-      include: { stocks: { include: { sede: true } } },
-      orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
-    });
-
-    // Fallback robusto: si no hubo match (p.ej. producto aún sin medidaNorm backfilleado),
-    // comparar normalizando en memoria los valores guardados.
-    if (medidaNorm && productos.length === 0) {
-      const todos = await prisma.producto.findMany({ where: { activo: true, stocks: { some: { cantidad: { gt: 0 } } } }, include: { stocks: { include: { sede: true } } } });
-      productos = todos.filter(p => normalizarMedida(p.medida) === medidaNorm);
+    // Todo el catálogo con stock viene de la caché (ver arriba) — el filtro por
+    // medida se hace en memoria, así que nunca hace falta una segunda consulta.
+    let productos = await obtenerProductosConStock();
+    if (medidaNorm) {
+      productos = productos.filter(p => normalizarMedida(p.medida) === medidaNorm);
     }
 
     // Nombres exactos que usa el flujo n8n en MOD | Cruzar Distrito y Stock
@@ -811,4 +843,5 @@ module.exports = {
   guardarColaReintento,
   listarRecordatorios, marcarRecordatorio,
   patronLead, patronListarPersonajes, patronCostoDistrito, patronCita,
+  invalidarCachePrecios,
 };

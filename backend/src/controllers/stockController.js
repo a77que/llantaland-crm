@@ -1,4 +1,5 @@
 const { paginar } = require('../utils/helpers');
+const { invalidarCachePrecios } = require('./n8nController');
 
 const prisma = require('../lib/prisma');
 
@@ -54,6 +55,7 @@ const actualizar = async (req, res, next) => {
       include: { producto: true, sede: true },
     });
 
+    invalidarCachePrecios();
     res.json(stock);
   } catch (err) {
     next(err);
@@ -106,6 +108,7 @@ const registrarMovimiento = async (req, res, next) => {
       }
     });
 
+    invalidarCachePrecios();
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -8,11 +8,12 @@ services:
     environment:
       POSTGRES_DB: llantaland_crm
       POSTGRES_USER: llantaland
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-llantaland2024}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Debes definir DB_PASSWORD (sin valor por defecto por seguridad)}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - '5432:5432'
+    # Sin mapeo de puerto al host: solo el backend necesita alcanzar a Postgres,
+    # y lo hace por la red interna de Docker (host "postgres", puerto 5432).
+    # Exponerlo al host/internet no aporta nada y es un riesgo innecesario.
     networks:
       - llantaland_net
     healthcheck:
@@ -31,8 +32,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://llantaland:${DB_PASSWORD:-llantaland2024}@postgres:5432/llantaland_crm?connection_limit=25&pool_timeout=20
-      JWT_SECRET: ${JWT_SECRET:-cambiar_en_produccion_por_secreto_seguro}
+      DATABASE_URL: postgresql://llantaland:${DB_PASSWORD:?Debes definir DB_PASSWORD (sin valor por defecto por seguridad)}@postgres:5432/llantaland_crm?connection_limit=25&pool_timeout=20
+      JWT_SECRET: ${JWT_SECRET:?Debes definir JWT_SECRET (sin valor por defecto por seguridad)}
       JWT_EXPIRES_IN: 8h
       PORT: 3001
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
