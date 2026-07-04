@@ -40,6 +40,7 @@ const LEAD_SELECT_VENDEDOR = {
   nombreCliente: true,           // necesario para llamar al cliente
   marcaAuto: true, modeloAuto: true, anioAuto: true,
   intentosMedida: true, emailSeguimientoEnviado: true,
+  descartadoEn: true,            // para mostrar el badge "no desea" en la lista
   // EXCLUIDOS para vendedor: dniCe, estadoFlujo, stockMap, ofertaPrecios, hashMensaje
 };
 

@@ -327,8 +327,15 @@ function LeadCard({ lead, onClick, isNuevo }) {
         boxShadow: isNuevo ? '0 0 12px rgba(245,196,0,.35)' : undefined,
       }}
     >
-      {/* Estado de cotización */}
+      {/* Estado de cotización / descartado */}
       {(() => {
+        if (lead.descartadoEn) {
+          return (
+            <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 999, marginBottom: 8, background: '#e5e7eb', color: '#4b5563' }}>
+              ❌ No desea nada
+            </div>
+          );
+        }
         const tc = (lead._count?.cotizaciones || lead.cotizaciones?.length || 0) > 0;
         return (
           <div style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 999, marginBottom: 8, background: tc ? '#dcfce7' : '#fef3c7', color: tc ? '#15803d' : '#b45309' }}>
@@ -697,9 +704,9 @@ export default function Leads() {
                     onClick={() => { setSelectedId(lead.id); marcarVisto(lead.id); }}
                     onMouseEnter={e => { if (!isNuevo) e.currentTarget.style.background = 'var(--color-bg)'; }}
                     onMouseLeave={e => { if (!isNuevo) e.currentTarget.style.background = ''; }}>
-                    <td style={{ padding: '11px 14px', background: tieneCot ? '#dcfce7' : '#fef3c7', borderLeft: `4px solid ${tieneCot ? '#16a34a' : '#f59e0b'}` }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: tieneCot ? '#15803d' : '#b45309', whiteSpace: 'nowrap' }}>
-                        {tieneCot ? '✅ Con cotización' : '⏳ Sin cotización'}
+                    <td style={{ padding: '11px 14px', background: lead.descartadoEn ? '#e5e7eb' : (tieneCot ? '#dcfce7' : '#fef3c7'), borderLeft: `4px solid ${lead.descartadoEn ? '#9ca3af' : (tieneCot ? '#16a34a' : '#f59e0b')}` }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: lead.descartadoEn ? '#4b5563' : (tieneCot ? '#15803d' : '#b45309'), whiteSpace: 'nowrap' }}>
+                        {lead.descartadoEn ? '❌ No desea nada' : (tieneCot ? '✅ Con cotización' : '⏳ Sin cotización')}
                       </span>
                     </td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>
