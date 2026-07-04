@@ -17,7 +17,60 @@ const PRECIOS_CACHE_TTL_MS = 45 * 1000;
 let preciosCache = { data: null, timestamp: 0 };
 let preciosCacheInflight = null; // evita que varias consultas simultáneas disparen cada una su propio refresh
 
-async function obtenerProductosConStock() {
+// Nombres exactos que usa el flujo n8n en MOD | Cruzar Distrito y Stock
+const STOCK_KEY_MAP = {
+  'L0': 'Stock_L0_Almacen',
+  'L1': 'Stock_L1_SantaAnita',
+  'L2': 'Stock_L2_Surco',
+  'L3': 'Stock_L3_Surquillo',
+  'L4': 'Stock_L4_Miraflores',
+  'L5': 'Stock_L5_PuebloLibre',
+};
+
+function productoAFila(p) {
+  const stockPorLocal = {};
+  p.stocks.forEach(s => {
+    const codigo = s.sede?.codigoLocal || '';
+    const keyN8n = STOCK_KEY_MAP[codigo];
+    if (keyN8n) stockPorLocal[keyN8n] = s.cantidad;
+    // Clave corta por si acaso: Stock_L0, Stock_L1, etc.
+    stockPorLocal[`Stock_${codigo}`] = s.cantidad;
+  });
+  return {
+    SKU: p.sku,
+    Medida: p.medida,
+    Marca: p.marca,
+    Nombre_Comercial: p.nombreComercial || '',
+    Grupo: p.grupo || '',
+    Precio_Regular: parseFloat(p.precioRegular),
+    Precio_Oferta: p.precioOferta ? parseFloat(p.precioOferta) : null,
+    Stock: p.stocks.reduce((sum, s) => sum + s.cantidad, 0),
+    Imagen: p.imagenUrl || '',
+    Ficha_Tecnica: p.fichaTecnica || '',
+    Garantia: p.garantia || '',
+    Descuento_Maximo: p.descuentoMaximo ? parseFloat(p.descuentoMaximo) : 0,
+    // Ficha técnica ampliada (datos estructurados) — para la respuesta de "información técnica"
+    Indice_Carga: p.indice_carga || '',
+    Velocidad_Max: p.velocidad_max || '',
+    Carga_Max_Neumatico: p.cargaMaxNeumatico ?? null,
+    Velocidad_Max_Kmh: p.velocidadMaxKmh ?? null,
+    Eficiencia_Combustible: p.eficienciaCombustible || '',
+    Eficiencia_Frenado: p.eficienciaFrenado || '',
+    Nivel_Ruido: p.nivelRuido ?? null,
+    Pais_Fabricacion: p.paisFabricacion || '',
+    Origen_Marca: p.origenMarca || '',
+    Campos_Extra: p.camposExtra || null,
+    ...stockPorLocal,
+  };
+}
+
+// Cachea el catálogo YA MAPEADO a filas (no solo la consulta a Prisma): bajo
+// concurrencia, rearmar ~3200 objetos + serializar el JSON en cada request es
+// trabajo de CPU que bloquea el event loop de Node y también generaba demoras
+// (confirmado con prueba de carga: 25 llamadas simultáneas con la caché de
+// Prisma tibia igual tardaban ~17s por repetir el mapeo). Cachear el resultado
+// final reduce eso a un solo mapeo por ventana de 45s.
+async function obtenerFilasCatalogo() {
   const ahora = Date.now();
   if (preciosCache.data && (ahora - preciosCache.timestamp) < PRECIOS_CACHE_TTL_MS) {
     return preciosCache.data;
@@ -31,8 +84,9 @@ async function obtenerProductosConStock() {
         include: { stocks: { include: { sede: true } } },
         orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
       });
-      preciosCache = { data: productos, timestamp: Date.now() };
-      return productos;
+      const filas = productos.map(productoAFila);
+      preciosCache = { data: filas, timestamp: Date.now() };
+      return filas;
     } finally {
       preciosCacheInflight = null;
     }
@@ -143,59 +197,12 @@ const listarPrecios = async (req, res, next) => {
     // Coincidencia INCLUSIVA por medidaNorm (la Z/RF/C/LT se descartan en la clave).
     const medidaNorm = medida ? normalizarMedida(medida) : null;
 
-    // Todo el catálogo con stock viene de la caché (ver arriba) — el filtro por
-    // medida se hace en memoria, así que nunca hace falta una segunda consulta.
-    let productos = await obtenerProductosConStock();
+    // Las filas ya vienen mapeadas y cacheadas — filtrar por medida es solo
+    // comparar strings sobre objetos ya construidos, no reconstruye nada.
+    let filas = await obtenerFilasCatalogo();
     if (medidaNorm) {
-      productos = productos.filter(p => normalizarMedida(p.medida) === medidaNorm);
+      filas = filas.filter(f => normalizarMedida(f.Medida) === medidaNorm);
     }
-
-    // Nombres exactos que usa el flujo n8n en MOD | Cruzar Distrito y Stock
-    const STOCK_KEY_MAP = {
-      'L0': 'Stock_L0_Almacen',
-      'L1': 'Stock_L1_SantaAnita',
-      'L2': 'Stock_L2_Surco',
-      'L3': 'Stock_L3_Surquillo',
-      'L4': 'Stock_L4_Miraflores',
-      'L5': 'Stock_L5_PuebloLibre',
-    };
-
-    const filas = productos.map(p => {
-      const stockPorLocal = {};
-      p.stocks.forEach(s => {
-        const codigo = s.sede?.codigoLocal || '';
-        const keyN8n = STOCK_KEY_MAP[codigo];
-        if (keyN8n) stockPorLocal[keyN8n] = s.cantidad;
-        // Clave corta por si acaso: Stock_L0, Stock_L1, etc.
-        stockPorLocal[`Stock_${codigo}`] = s.cantidad;
-      });
-      return {
-        SKU: p.sku,
-        Medida: p.medida,
-        Marca: p.marca,
-        Nombre_Comercial: p.nombreComercial || '',
-        Grupo: p.grupo || '',
-        Precio_Regular: parseFloat(p.precioRegular),
-        Precio_Oferta: p.precioOferta ? parseFloat(p.precioOferta) : null,
-        Stock: p.stocks.reduce((sum, s) => sum + s.cantidad, 0),
-        Imagen: p.imagenUrl || '',
-        Ficha_Tecnica: p.fichaTecnica || '',
-        Garantia: p.garantia || '',
-        Descuento_Maximo: p.descuentoMaximo ? parseFloat(p.descuentoMaximo) : 0,
-        // Ficha técnica ampliada (datos estructurados) — para la respuesta de "información técnica"
-        Indice_Carga: p.indice_carga || '',
-        Velocidad_Max: p.velocidad_max || '',
-        Carga_Max_Neumatico: p.cargaMaxNeumatico ?? null,
-        Velocidad_Max_Kmh: p.velocidadMaxKmh ?? null,
-        Eficiencia_Combustible: p.eficienciaCombustible || '',
-        Eficiencia_Frenado: p.eficienciaFrenado || '',
-        Nivel_Ruido: p.nivelRuido ?? null,
-        Pais_Fabricacion: p.paisFabricacion || '',
-        Origen_Marca: p.origenMarca || '',
-        Campos_Extra: p.camposExtra || null,
-        ...stockPorLocal,
-      };
-    });
 
     res.json(filas);
   } catch (err) {
