@@ -193,42 +193,60 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <Field label="Logística" value={lead.estadoLogistica} />
           </div>
 
-          {/* Botones acción — arriba del flujo para acceso inmediato en móvil */}
+          {/* Botones acción — arriba del flujo para acceso inmediato en móvil.
+              En móvil se separan en 2 filas (primaria: cotizar+WhatsApp /
+              secundaria: ver cotizaciones + no-desea) para que no queden 4
+              botones apretados en una sola fila angosta. */}
           {(() => {
             const cots = [...(lead.cotizaciones || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
             const tieneCot = cots.length > 0;
             const verCotizacion = () => { onClose(); navigate(`/cotizaciones/${cots[0].id}`); };
+
+            const noDeseaBtn = lead.descartadoEn ? (
+              <button
+                onClick={() => deshacerNoDeseaMutation.mutate()}
+                disabled={deshacerNoDeseaMutation.isPending}
+                style={{ flex: isMobile ? 1 : undefined, padding:'13px 16px', background:'var(--color-bg)', color:'#6b7280', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}
+              >
+                ↩️ Deshacer "no desea"
+              </button>
+            ) : (
+              <button
+                onClick={confirmarNoDesea}
+                disabled={noDeseaMutation.isPending}
+                style={{ flex: isMobile ? 1 : undefined, padding:'13px 16px', background:'#fee2e2', color:'#b91c1c', border:'1.5px solid #fecaca', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}
+              >
+                ❌ Cliente no desea nada
+              </button>
+            );
+
+            const verCotizacionesBtn = (
+              <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ flex: isMobile ? 1 : undefined, padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                Ver cotizaciones →
+              </button>
+            );
+
             return (
-              <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-                {tieneCot ? (
-                  <button onClick={verCotizacion} style={{ flex:1, padding:'13px 16px', background:'#16a34a', color:'#fff', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
-                    👁️ Ver Cotización
-                  </button>
-                ) : (
-                  <button onClick={crearCotizacion} style={{ flex:1, padding:'13px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
-                    📋 Crear Cotización
-                  </button>
-                )}
-                <BotonWhatsApp telefono={lead.telefono} label="WhatsApp" size="lg" />
-                <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
-                  Ver cotizaciones →
-                </button>
-                {lead.descartadoEn ? (
-                  <button
-                    onClick={() => deshacerNoDeseaMutation.mutate()}
-                    disabled={deshacerNoDeseaMutation.isPending}
-                    style={{ padding:'13px 16px', background:'var(--color-bg)', color:'#6b7280', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}
-                  >
-                    ↩️ Deshacer "no desea"
-                  </button>
-                ) : (
-                  <button
-                    onClick={confirmarNoDesea}
-                    disabled={noDeseaMutation.isPending}
-                    style={{ padding:'13px 16px', background:'#fee2e2', color:'#b91c1c', border:'1.5px solid #fecaca', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}
-                  >
-                    ❌ Cliente no desea nada
-                  </button>
+              <div style={{ display:'flex', flexDirection: isMobile ? 'column' : 'row', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+                <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                  {tieneCot ? (
+                    <button onClick={verCotizacion} style={{ flex:1, padding:'13px 16px', background:'#16a34a', color:'#fff', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
+                      👁️ Ver Cotización
+                    </button>
+                  ) : (
+                    <button onClick={crearCotizacion} style={{ flex:1, padding:'13px 16px', background:'#f5c400', color:'#000', border:'none', borderRadius:10, fontSize:15, fontWeight:900, cursor:'pointer' }}>
+                      📋 Crear Cotización
+                    </button>
+                  )}
+                  <BotonWhatsApp telefono={lead.telefono} label="WhatsApp" size="lg" />
+                  {!isMobile && verCotizacionesBtn}
+                  {!isMobile && noDeseaBtn}
+                </div>
+                {isMobile && (
+                  <div style={{ display:'flex', gap:10 }}>
+                    {verCotizacionesBtn}
+                    {noDeseaBtn}
+                  </div>
                 )}
               </div>
             );
@@ -508,7 +526,8 @@ export default function Leads() {
             key={t.key}
             onClick={() => cambiarVista(t.key)}
             style={{
-              padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              flex: isMobile ? 1 : undefined,
+              padding: isMobile ? '10px 8px' : '10px 16px', fontSize: isMobile ? 12.5 : 13, fontWeight: 700, cursor: 'pointer',
               background: 'none', border: 'none',
               borderBottom: vista === t.key ? '2.5px solid #f5c400' : '2.5px solid transparent',
               color: vista === t.key ? 'var(--color-text)' : 'var(--color-text-muted)',
