@@ -53,6 +53,8 @@ export const leadsApi = {
   obtenerPorTelefono:(tel)      => api.get(`/leads/tel/${tel}`),
   actualizar:        (id, data) => api.put(`/leads/${id}`, data),
   eliminar:          (id)       => api.delete(`/leads/${id}`),
+  noDesea:           (id)       => api.post(`/leads/${id}/no-desea`),
+  deshacerNoDesea:   (id)       => api.post(`/leads/${id}/no-desea/deshacer`),
 };
 
 // Campos técnicos que la IA pudo haber dejado con basura ("null", "[object Object]"…).

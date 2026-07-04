@@ -331,6 +331,12 @@ model LeadCRM {
   horaInstalacion        String?     // hora de instalación (ej: "15:30")
   origenCita             String?     @default("whatsapp") // whatsapp | crm (cotización walk-in)
 
+  // Marcado manual desde el CRM: el vendedor confirmó que el cliente no desea
+  // nada. No null = descartado (se excluye de "pendientes por atender"); al
+  // marcarlo también se resetea pasoActual a "nuevo" para que, si el cliente
+  // vuelve a escribir por WhatsApp, el bot empiece el flujo desde cero.
+  descartadoEn           DateTime?
+
   // Conversación
   mensajeCliente         String?     @db.Text
   respuestaBot           String?     @db.Text

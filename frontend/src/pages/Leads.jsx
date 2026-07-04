@@ -54,6 +54,36 @@ const pill  = (color) => ({ display: 'inline-block', padding: '3px 10px', border
 /* ─── Modal / Drawer detalle ──────────────────────────────────── */
 function LeadDetalle({ lead, onClose, isMobile }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const noDeseaMutation = useMutation({
+    mutationFn: () => leadsApi.noDesea(lead.id),
+    onSuccess: () => {
+      toast.success('Marcado: el cliente no desea nada');
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-resumen'] });
+      onClose();
+    },
+    onError: () => toast.error('No se pudo marcar el lead'),
+  });
+
+  const deshacerNoDeseaMutation = useMutation({
+    mutationFn: () => leadsApi.deshacerNoDesea(lead.id),
+    onSuccess: () => {
+      toast.success('Se deshizo la marca de "no desea"');
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-resumen'] });
+      queryClient.invalidateQueries({ queryKey: ['lead', lead.id] });
+    },
+    onError: () => toast.error('No se pudo deshacer la marca'),
+  });
+
+  const confirmarNoDesea = () => {
+    if (window.confirm(`¿Confirmas que ${lead.nombreCliente || lead.telefono} no desea nada?\n\nSe marcará como descartado y su paso se reiniciará al inicio (si vuelve a escribir por WhatsApp, el bot empezará de cero).`)) {
+      noDeseaMutation.mutate();
+    }
+  };
+
   if (!lead) return null;
 
   // Abrir el flujo completo de cotización con los datos del lead precargados (desde cualquier paso)
@@ -142,6 +172,11 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <span style={badge(PASO_COLOR[lead.pasoActual] || '#64748b')}>{PASO_LABEL[lead.pasoActual] || lead.pasoActual}</span>
             {lead.ranking && <span style={pill(RANKING_COLOR[lead.ranking])}>{RANKING_ICON[lead.ranking]} {lead.ranking}</span>}
             {lead.humanTakeover?.agenteActivo && <span style={badge('#8b5cf6')}>👤 Agente humano</span>}
+            {lead.descartadoEn && (
+              <span style={badge('#6b7280')} title={`Marcado el ${new Date(lead.descartadoEn).toLocaleString('es-PE')}`}>
+                ❌ No desea nada
+              </span>
+            )}
           </div>
 
           {/* Datos en grid — 1 col en móvil, 2 col en desktop */}
@@ -176,6 +211,23 @@ function LeadDetalle({ lead, onClose, isMobile }) {
                 <button onClick={() => { navigate('/cotizaciones'); onClose(); }} style={{ padding:'13px 16px', background:'var(--color-bg)', color:'var(--color-text)', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer' }}>
                   Ver cotizaciones →
                 </button>
+                {lead.descartadoEn ? (
+                  <button
+                    onClick={() => deshacerNoDeseaMutation.mutate()}
+                    disabled={deshacerNoDeseaMutation.isPending}
+                    style={{ padding:'13px 16px', background:'var(--color-bg)', color:'#6b7280', border:'1.5px solid var(--color-border)', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}
+                  >
+                    ↩️ Deshacer "no desea"
+                  </button>
+                ) : (
+                  <button
+                    onClick={confirmarNoDesea}
+                    disabled={noDeseaMutation.isPending}
+                    style={{ padding:'13px 16px', background:'#fee2e2', color:'#b91c1c', border:'1.5px solid #fecaca', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}
+                  >
+                    ❌ Cliente no desea nada
+                  </button>
+                )}
               </div>
             );
           })()}
@@ -335,6 +387,9 @@ export default function Leads() {
   const page    = parseInt(searchParams.get('page')    || '1');
   const sortBy  = searchParams.get('sortBy')  || 'updatedAt';
   const sortDir = searchParams.get('sortDir') || 'desc';
+  // 'pendientes' (default) = oculta cotizados y marcados "no desea" — solo lo que falta atender.
+  // 'todos' = pestaña nueva sin ese filtro, con las mismas herramientas de búsqueda/filtro.
+  const vista   = searchParams.get('vista')   || 'pendientes';
 
   const [selectedId, setSelectedId] = useState(null);
 
@@ -392,9 +447,16 @@ export default function Leads() {
     return next;
   }, { replace: true });
 
+  const cambiarVista = (nuevaVista) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    next.set('vista', nuevaVista);
+    next.set('page', '1');
+    return next;
+  }, { replace: true });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['leads', businessType, { q, paso, ranking, hoy, cards: cardsParam, page, sortBy, sortDir }],
-    queryFn: () => leadsApi.listar({ q, paso, ranking, hoy: hoy ? '1' : undefined, cards: cardsParam || undefined, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
+    queryKey: ['leads', businessType, { q, paso, ranking, hoy, cards: cardsParam, page, sortBy, sortDir, vista }],
+    queryFn: () => leadsApi.listar({ q, paso, ranking, hoy: hoy ? '1' : undefined, cards: cardsParam || undefined, pendientes: vista === 'pendientes' ? '1' : undefined, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     placeholderData: (prev) => prev,
     refetchInterval: 20_000,  // re-consultar cada 20s para detectar nuevos leads
   });
@@ -420,8 +482,30 @@ export default function Leads() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700 }}>Leads WhatsApp</div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{total} leads registrados</div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{total} leads {vista === 'pendientes' ? 'por atender' : 'registrados'}</div>
         </div>
+      </div>
+
+      {/* Pestañas: "Por atender" (limpia cotizados y "no desea") vs "Todos los leads" */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--color-border)' }}>
+        {[
+          { key: 'pendientes', label: '🧹 Por atender' },
+          { key: 'todos',      label: '📁 Todos los leads' },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => cambiarVista(t.key)}
+            style={{
+              padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              background: 'none', border: 'none',
+              borderBottom: vista === t.key ? '2.5px solid #f5c400' : '2.5px solid transparent',
+              color: vista === t.key ? 'var(--color-text)' : 'var(--color-text-muted)',
+              marginBottom: -1,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Stats — scroll horizontal en móvil. Click filtra la lista por esa categoría */}

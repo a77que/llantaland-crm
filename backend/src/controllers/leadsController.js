@@ -45,7 +45,7 @@ const LEAD_SELECT_VENDEDOR = {
 
 const listar = async (req, res, next) => {
   try {
-    const { paso, ranking, q, hoy, cards, tipoNegocio, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { paso, ranking, q, hoy, cards, tipoNegocio, pendientes, page = 1, limit = 50, orderBy, orderDir } = req.query;
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const take = Math.min(parseInt(limit) || 50, 100);
@@ -62,6 +62,13 @@ const listar = async (req, res, next) => {
     if (ranking) where.ranking = ranking;
     if (hoy === '1' || hoy === 'true') {
       where.timestamp = { gte: inicioHoy() };
+    }
+    // "Solo pendientes": oculta lo ya cotizado (el vendedor lo cierra aparte) y
+    // lo marcado manualmente como "cliente no desea nada" — deja solo lo que
+    // realmente falta atender.
+    if (pendientes === '1' || pendientes === 'true') {
+      condicionesAnd.push({ pasoActual: { not: 'cotizado' } });
+      condicionesAnd.push({ descartadoEn: null });
     }
     // Tarjetas de contador seleccionadas (selección múltiple, combinadas con OR)
     if (cards) {
@@ -224,6 +231,34 @@ const actualizar = async (req, res, next) => {
   }
 };
 
+// El vendedor confirma que el cliente no desea nada: se marca como descartado
+// (sale de "pendientes por atender") y se resetea el paso al inicio — si el
+// cliente vuelve a escribir por WhatsApp más adelante, el bot empieza fresco.
+const marcarNoDesea = async (req, res, next) => {
+  try {
+    const lead = await prisma.leadCRM.update({
+      where: { id: req.params.id },
+      data: { descartadoEn: new Date(), pasoActual: 'nuevo' },
+    });
+    res.json(lead);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Deshace la marca anterior (por si fue un error del vendedor)
+const desmarcarNoDesea = async (req, res, next) => {
+  try {
+    const lead = await prisma.leadCRM.update({
+      where: { id: req.params.id },
+      data: { descartadoEn: null },
+    });
+    res.json(lead);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const resumen = async (req, res, next) => {
   try {
     const { tipoNegocio } = req.query;
@@ -270,4 +305,4 @@ const eliminar = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen };
+module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen, marcarNoDesea, desmarcarNoDesea };
