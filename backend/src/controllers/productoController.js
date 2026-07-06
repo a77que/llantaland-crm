@@ -115,6 +115,21 @@ const crear = async (req, res, next) => {
   }
 };
 
+// precioOferta = precioProveedor + suma de costos activos (IGV, Instalación,
+// Ganancia, y cualquier costo adicional configurado en Precios y Margen).
+// Espejo de calcCostos() en frontend/src/pages/Precios.jsx.
+async function calcularPrecioOfertaDesdeProveedor(precioProveedor) {
+  if (precioProveedor === null || precioProveedor === undefined || isNaN(precioProveedor)) return null;
+  const costos = await prisma.costoVenta.findMany({ where: { activo: true } });
+  const base = Number(precioProveedor) || 0;
+  let total = 0;
+  for (const c of costos) {
+    const val = Number(c.valor) || 0;
+    total += c.tipo === 'porcentaje' ? base * val / 100 : val;
+  }
+  return Math.round((base + total) * 100) / 100;
+}
+
 const actualizar = async (req, res, next) => {
   try {
     const data = { ...req.body };
@@ -134,6 +149,14 @@ const actualizar = async (req, res, next) => {
         data[f] = parseFloat(v);
       }
     }
+
+    // precioOferta ya no se acepta manual: se recalcula automáticamente cada
+    // vez que esta misma edición toca precioProveedor (precioProveedor + IGV +
+    // Instalación + Ganancia + costos activos).
+    if ('precioProveedor' in data) {
+      data.precioOferta = await calcularPrecioOfertaDesdeProveedor(data.precioProveedor);
+    }
+
     // Auto-calcular precio regular = precio oferta + 5%
     if ('precioOferta' in data && data.precioOferta !== null) {
       data.precioRegular = Math.round(data.precioOferta * 1.05 * 100) / 100;
@@ -722,4 +745,40 @@ const sincronizarPrecioRegular = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular };
+// Recalcula precioOferta (= precioProveedor + costos activos) para todo el
+// catálogo. Se llama automáticamente después de guardar cambios en los costos
+// globales (IGV/Instalación/Ganancia/etc. en Precios y Margen), ya que un
+// cambio ahí afecta a todos los productos a la vez.
+const recalcularPrecioOferta = async (req, res, next) => {
+  try {
+    const costos = await prisma.costoVenta.findMany({ where: { activo: true } });
+    const productos = await prisma.producto.findMany({
+      where: { activo: true, precioProveedor: { not: null } },
+      select: { id: true, precioProveedor: true },
+    });
+    let actualizados = 0;
+    const BATCH = 100;
+    for (let i = 0; i < productos.length; i += BATCH) {
+      const lote = productos.slice(i, i + BATCH);
+      await prisma.$transaction(
+        lote.map(p => {
+          const base = Number(p.precioProveedor) || 0;
+          let total = 0;
+          for (const c of costos) {
+            const val = Number(c.valor) || 0;
+            total += c.tipo === 'porcentaje' ? base * val / 100 : val;
+          }
+          const precioOferta = Math.round((base + total) * 100) / 100;
+          return prisma.producto.update({ where: { id: p.id }, data: { precioOferta } });
+        })
+      );
+      actualizados += lote.length;
+    }
+    invalidarCachePrecios();
+    res.json({ ok: true, actualizados });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular, recalcularPrecioOferta };

@@ -115,6 +115,8 @@ export const productosApi = {
   incompletos: () => api.get('/productos/incompletos', { timeout: 60000 }),
   enriquecerMasivo: (ids) => api.post('/productos/enriquecer-masivo', { ids }, { timeout: 240000 }),
   sincronizarPrecioRegular: () => api.post('/productos/sync-precios-regulares'),
+  recalcularPrecioOferta: () => api.post('/productos/recalcular-precio-oferta'),
+  costosVenta: () => api.get('/productos/costos-venta'), // lectura para cualquier usuario (vendedor incluido)
   subirImagen: (id, formData) => api.post(`/productos/${id}/imagenes`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),

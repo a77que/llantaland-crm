@@ -19,6 +19,22 @@ const S = {
 
 const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
 
+// Espejo de calcCostos() en Precios.jsx — mismo cálculo que usa esa pantalla
+// para armar precioOferta, así la ganancia mostrada acá es consistente.
+function calcCostoTotal(precioProveedor, costos) {
+  const base = Number(precioProveedor) || 0;
+  let total = 0;
+  for (const c of costos) {
+    if (c.activo === false) continue;
+    const val = Number(c.valor) || 0;
+    total += c.tipo === 'porcentaje' ? base * val / 100 : val;
+  }
+  return total;
+}
+
+const MONTO_TRASLADO = 30;
+const PCT_TARJETA = 0.04;
+
 function StockCell({ value }) {
   const c = value > 10 ? '#16a34a' : value > 3 ? '#ca8a04' : value > 0 ? '#f97316' : '#dc2626';
   return <span style={{ fontWeight: 700, color: c }}>{value}</span>;
@@ -56,6 +72,12 @@ export default function CotizacionNueva() {
   const [comparar, setComparar] = useState([]);
   const [verComparador, setVerComparador] = useState(false);
 
+  // ── Costos adicionales de la venta (decisión del vendedor antes de confirmar) ──
+  const [pagoTarjeta, setPagoTarjeta] = useState(false);
+  const [tarjetaAsume, setTarjetaAsume] = useState('cliente'); // 'cliente' | 'tienda'
+  const [trasladoTiendas, setTrasladoTiendas] = useState(false);
+  const [trasladoAsume, setTrasladoAsume] = useState('cliente');
+
   // ── Cita ──
   const [generarCita, setGenerarCita] = useState(false);
   const [sedeCita, setSedeCita] = useState('');
@@ -63,6 +85,22 @@ export default function CotizacionNueva() {
   const [horaCita, setHoraCita] = useState('');
 
   const { data: sedes = [] } = useQuery({ queryKey: ['sedes'], queryFn: sedesApi.listar, staleTime: Infinity });
+
+  // Costos globales (IGV, Instalación, Ganancia, etc.) — lectura, el vendedor no los edita aquí.
+  const { data: costosVentaData } = useQuery({ queryKey: ['costos-venta-lectura'], queryFn: productosApi.costosVenta, staleTime: 60_000 });
+  const costosVenta = useMemo(() => {
+    const raw = costosVentaData?.items?.length ? costosVentaData.items : (costosVentaData?.sugeridos || []);
+    return raw.filter(c => c.activo !== false);
+  }, [costosVentaData]);
+
+  // Ganancia estimada de una llanta agregada: lo que se le cobra al cliente
+  // (precioRegular) menos lo que cuesta (precioProveedor + IGV/Instalación/Ganancia/etc.).
+  const gananciaDeItem = (it) => {
+    const prov = Number(it.producto.precioProveedor) || 0;
+    const ventaUnit = Number(it.producto.precioRegular) || 0;
+    const costoTotal = calcCostoTotal(prov, costosVenta);
+    return (ventaUnit - prov - costoTotal) * it.cantidad;
+  };
 
   // Catálogo: por búsqueda libre, o por medida cuando se activa "Buscar en catálogo"
   const { data: productos } = useQuery({
@@ -152,10 +190,41 @@ export default function CotizacionNueva() {
     onError: (e) => toast.error(e?.error || 'Error al buscar versiones'),
   });
 
+  const stockDeSede = (prod, sedeId) => prod?.stocks?.find(s => s.sedeId === sedeId || s.sede?.id === sedeId)?.cantidad ?? 0;
+  const subtotal = items.reduce((a, i) => a + parseFloat(i.producto.precioRegular) * i.cantidad, 0);
+  const gananciaBase = items.reduce((a, it) => a + gananciaDeItem(it), 0);
+
+  const montoTarjeta = subtotal * PCT_TARJETA;
+  const costoTarjeta = pagoTarjeta ? montoTarjeta : 0;
+  const costoTraslado = trasladoTiendas ? MONTO_TRASLADO : 0;
+
+  // Lo que se le suma al total que paga el cliente (solo la parte que decidió "asume cliente")
+  const cargoCliente = (pagoTarjeta && tarjetaAsume === 'cliente' ? costoTarjeta : 0)
+                      + (trasladoTiendas && trasladoAsume === 'cliente' ? costoTraslado : 0);
+  // Lo que resta de la ganancia (la parte que decidió "asume tienda")
+  const cargoTienda = (pagoTarjeta && tarjetaAsume === 'tienda' ? costoTarjeta : 0)
+                     + (trasladoTiendas && trasladoAsume === 'tienda' ? costoTraslado : 0);
+
+  const gananciaFinal = gananciaBase - cargoTienda;
+  const totalCalc = Math.max(0, subtotal - parseFloat(descuento || 0) + cargoCliente);
+
+  // Semáforo de ganancia: roja (sin ganancia), amarilla (mínima, <10% del subtotal), verde (saludable)
+  const umbralMinima = subtotal * 0.10;
+  const estadoGanancia = gananciaFinal <= 0 ? 'roja' : gananciaFinal < umbralMinima ? 'amarilla' : 'verde';
+  const gananciaColor = { roja: '#dc2626', amarilla: '#d97706', verde: '#16a34a' }[estadoGanancia];
+  const gananciaTexto = { roja: '🔴 Sin ganancia — no procede la venta así', amarilla: '🟡 Ganancia mínima', verde: '🟢 Ganancia saludable' }[estadoGanancia];
+
+  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita));
+
   const crearMut = useMutation({
     mutationFn: () => {
       const sede = sedes.find(s => s.id === sedeCita);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
+      const notasExtra = [
+        pagoTarjeta ? `Pago con tarjeta: recargo 4% (${fmt(costoTarjeta)}) asumido por ${tarjetaAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
+        trasladoTiendas ? `Traslado entre tiendas: ${fmt(MONTO_TRASLADO)} asumido por ${trasladoAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
+      ].filter(Boolean);
+      const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
       return cotizacionesApi.crear({
         leadId: leadId || undefined,
         nombreCliente: cliente.nombre, telefonoCliente: cliente.telefono, dniCe: cliente.dniCe,
@@ -164,7 +233,9 @@ export default function CotizacionNueva() {
           sku: i.producto.sku, medida: i.producto.medida, marca: i.producto.marca,
           modelo: i.producto.nombreComercial, cantidad: i.cantidad, precioUnit: parseFloat(i.producto.precioRegular),
         })),
-        descuento: descuento || undefined, notas: notas || undefined,
+        descuento: descuento || undefined,
+        cargoAdicional: cargoCliente > 0 ? cargoCliente : undefined,
+        notas: notasFinal || undefined,
         generarCita,
         ...(generarCita ? { fechaInstalacion: fechaCita || undefined, horaInstalacion: horaCita || undefined, localInstalacion: local } : {}),
       });
@@ -172,11 +243,6 @@ export default function CotizacionNueva() {
     onSuccess: (data) => { toast.success(`Cotización ${data.numero} creada`); navigate(`/cotizaciones/${data.id}`); },
     onError: (e) => toast.error(e?.error || 'Error al crear cotización'),
   });
-
-  const stockDeSede = (prod, sedeId) => prod?.stocks?.find(s => s.sedeId === sedeId || s.sede?.id === sedeId)?.cantidad ?? 0;
-  const subtotal = items.reduce((a, i) => a + parseFloat(i.producto.precioRegular) * i.cantidad, 0);
-  const totalCalc = Math.max(0, subtotal - parseFloat(descuento || 0));
-  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita));
 
   return (
     <div>
@@ -305,18 +371,24 @@ export default function CotizacionNueva() {
           {items.length > 0 && (
             <div style={S.card}>
               <div style={S.cardTitle}>4. Llantas en la cotización ({items.length})</div>
-              {items.map((it, idx) => (
-                <div key={it.producto.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, marginBottom: 8 }}>
-                  <div style={{ flex: 1 }}>
+              {items.map((it, idx) => {
+                const g = gananciaDeItem(it);
+                const gLineaTotal = parseFloat(it.producto.precioRegular) * it.cantidad;
+                const gCol = g <= 0 ? '#dc2626' : g < gLineaTotal * 0.10 ? '#d97706' : '#16a34a';
+                return (
+                <div key={it.producto.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{it.producto.marca} {it.producto.medida}</div>
                     <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{it.producto.nombreComercial || ''} · {fmt(it.producto.precioRegular)} c/u</div>
                   </div>
                   <input type="number" min={1} value={it.cantidad} onChange={e => { const c = parseInt(e.target.value) || 1; setItems(prev => prev.map((x, i) => i === idx ? { ...x, cantidad: c } : x)); }}
                     style={{ width: 56, padding: '5px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, fontSize: 13, textAlign: 'center' }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{fmt(parseFloat(it.producto.precioRegular) * it.cantidad)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{fmt(gLineaTotal)}</span>
+                  <span title="Ganancia estimada de esta llanta — no editable" style={{ fontSize: 11.5, fontWeight: 800, minWidth: 84, textAlign: 'right', color: gCol }}>🔒 {fmt(g)}</span>
                   <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 16, cursor: 'pointer' }}>✕</button>
                 </div>
-              ))}
+                );
+              })}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
                 <div style={S.group}><label style={S.label}>Descuento S/</label><input style={S.input} type="number" min={0} value={descuento} onChange={e => setDescuento(e.target.value)} placeholder="0" /></div>
               </div>
@@ -324,7 +396,61 @@ export default function CotizacionNueva() {
             </div>
           )}
 
-          {/* 5. Generar cita */}
+          {items.length > 0 && (
+            <div style={S.card}>
+              <div style={S.cardTitle}>5. Costos adicionales de la venta</div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
+                <input type="checkbox" checked={pagoTarjeta} onChange={e => setPagoTarjeta(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>💳 Cliente paga con tarjeta (crédito/débito) — recargo 4%</span>
+              </label>
+              {pagoTarjeta && (
+                <div style={{ display: 'flex', gap: 16, paddingLeft: 28, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="radio" name="tarjetaAsume" checked={tarjetaAsume === 'cliente'} onChange={() => setTarjetaAsume('cliente')} />
+                    Asumido por el cliente (suma al precio total)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="radio" name="tarjetaAsume" checked={tarjetaAsume === 'tienda'} onChange={() => setTarjetaAsume('tienda')} />
+                    Asumido por la tienda (no afecta el precio)
+                  </label>
+                </div>
+              )}
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
+                <input type="checkbox" checked={trasladoTiendas} onChange={e => setTrasladoTiendas(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>🚚 Traslado entre tiendas — S/ {MONTO_TRASLADO.toFixed(2)}</span>
+              </label>
+              {trasladoTiendas && (
+                <div style={{ display: 'flex', gap: 16, paddingLeft: 28, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="radio" name="trasladoAsume" checked={trasladoAsume === 'cliente'} onChange={() => setTrasladoAsume('cliente')} />
+                    Asumido por el cliente (suma al precio total)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="radio" name="trasladoAsume" checked={trasladoAsume === 'tienda'} onChange={() => setTrasladoAsume('tienda')} />
+                    Asumido por la tienda (no afecta el precio)
+                  </label>
+                </div>
+              )}
+
+              <div style={{
+                marginTop: 12, padding: '12px 14px', borderRadius: 8,
+                background: gananciaColor === '#dc2626' ? '#fef2f2' : gananciaColor === '#d97706' ? '#fffbeb' : '#f0fdf4',
+                border: `1.5px solid ${gananciaColor}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: gananciaColor }}>{gananciaTexto}</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: gananciaColor }}>🔒 {fmt(gananciaFinal)}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                  Ganancia estimada de la venta con los costos adicionales considerados.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Generar cita */}
           <div style={S.card}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: generarCita ? 16 : 0 }}>
               <input type="checkbox" checked={generarCita} onChange={e => setGenerarCita(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
@@ -369,10 +495,16 @@ export default function CotizacionNueva() {
               </div>
             ))}
             {parseFloat(descuento || 0) > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(descuento)}</span></div>}
+            {cargoCliente > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>Recargo (tarjeta/traslado)</span><span>+ {fmt(cargoCliente)}</span></div>}
             {generarCita && fechaCita && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>🗓️ Cita: {fechaCita}{horaCita ? ` ${horaCita}` : ''}</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '2px solid var(--color-border)', fontWeight: 800, fontSize: 16 }}>
               <span>TOTAL</span><span style={{ color: 'var(--color-primary)' }}>{fmt(totalCalc)}</span>
             </div>
+            {items.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 12.5, fontWeight: 700, color: gananciaColor }}>
+                <span>{gananciaTexto}</span><span>🔒 {fmt(gananciaFinal)}</span>
+              </div>
+            )}
             <button onClick={() => crearMut.mutate()} disabled={!puedeGuardar || crearMut.isPending}
               style={{ width: '100%', marginTop: 16, padding: 12, background: puedeGuardar ? '#16a34a' : 'var(--color-surface2)', color: puedeGuardar ? '#fff' : 'var(--color-text-muted)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: puedeGuardar ? 'pointer' : 'default' }}>
               {crearMut.isPending ? 'Guardando...' : generarCita ? '✓ Crear cotización + cita' : '✓ Crear cotización'}

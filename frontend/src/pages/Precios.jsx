@@ -62,18 +62,32 @@ export default function Precios() {
   useEffect(() => {
     if (!costosData) return;
     setCostos((costosData.items && costosData.items.length ? costosData.items : (costosData.sugeridos || []))
-      .map(c => ({ nombre: c.nombre, tipo: c.tipo || 'fijo', valor: c.valor ?? 0, activo: c.activo !== false })));
+      .map(c => ({ nombre: c.nombre, tipo: c.tipo || 'fijo', valor: c.valor ?? 0, activo: c.activo !== false, obligatorio: c.obligatorio === true })));
   }, [costosData]);
 
+  // Al guardar costos se recalcula precioOferta de TODO el catálogo — un cambio
+  // en IGV/Instalación/Ganancia/etc. afecta a todos los productos a la vez.
   const guardarCostos = useMutation({
-    mutationFn: () => adminApi.saveCostos(costos),
-    onSuccess: () => { toast.success('Costos guardados'); setCostosDirty(false); qc.invalidateQueries({ queryKey: ['costos-venta'] }); },
+    mutationFn: async () => {
+      await adminApi.saveCostos(costos);
+      return productosApi.recalcularPrecioOferta();
+    },
+    onSuccess: (data) => {
+      toast.success(`Costos guardados — precio oferta recalculado en ${data?.actualizados ?? 0} productos`);
+      setCostosDirty(false);
+      qc.invalidateQueries({ queryKey: ['costos-venta'] });
+      qc.invalidateQueries({ queryKey: ['precios-productos'] });
+    },
     onError: () => toast.error('No se pudieron guardar los costos'),
   });
 
   const setCosto = (i, patch) => { setCostos(cs => cs.map((c, j) => j === i ? { ...c, ...patch } : c)); setCostosDirty(true); };
-  const addCosto = () => { setCostos(cs => [...cs, { nombre: '', tipo: 'fijo', valor: 0, activo: true }]); setCostosDirty(true); };
-  const delCosto = (i) => { setCostos(cs => cs.filter((_, j) => j !== i)); setCostosDirty(true); };
+  const addCosto = () => { setCostos(cs => [...cs, { nombre: '', tipo: 'fijo', valor: 0, activo: true, obligatorio: false }]); setCostosDirty(true); };
+  const delCosto = (i) => {
+    if (costos[i]?.obligatorio) return; // IGV/Instalación/Ganancia no se pueden eliminar
+    setCostos(cs => cs.filter((_, j) => j !== i));
+    setCostosDirty(true);
+  };
 
   // ── Sync precio regular (admin, una sola vez para productos existentes) ──
   const syncMutation = useMutation({
@@ -123,12 +137,16 @@ export default function Precios() {
     guardarPrecio.mutate({ id: prod.id, campo, valor: nuevo === '' ? '' : Number(nuevo) });
   };
 
-  // filaCalculo usa valorActual (incluye edits no guardados) para mostrar en pantalla
+  // filaCalculo usa valorActual (incluye edits no guardados) para mostrar en pantalla.
+  // precioOferta YA NO es un campo editable: se calcula en vivo = precioProveedor +
+  // costos activos (IGV, Instalación, Ganancia, etc.), igual que lo hará el backend
+  // al guardar precioProveedor.
   const filaCalculo = (prod) => {
     const prov   = valorActual(prod, 'precioProveedor');
-    const oferta = valorActual(prod, 'precioOferta');
     const ref    = valorActual(prod, 'precioReferencialVenta');
     const { total: costoTotal, detalle } = calcCostos(prov, costos);
+    const provNum = Number(prov) || 0;
+    const oferta = provNum > 0 ? String(Math.round((provNum + costoTotal) * 100) / 100) : '';
     const tieneOferta = oferta !== '' && !isNaN(Number(oferta)) && Number(oferta) > 0;
     const tieneRef    = ref !== '' && !isNaN(Number(ref));
     const dif  = (tieneOferta && tieneRef) ? Number(ref) - Number(oferta) : null;
@@ -201,7 +219,7 @@ export default function Precios() {
         <div>
           <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 700 }}>🧮 Precios y Margen</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            Configura el precio oferta de cada producto. El precio regular (+5%) se genera automáticamente en Inventario.
+            El precio oferta se calcula solo (precio proveedor + costos activos). El precio regular (+5%) se genera al hacer clic en "Sincronizar precio regular".
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -236,7 +254,9 @@ export default function Precios() {
             {costos.map((c, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input value={c.nombre} onChange={e => setCosto(i, { nombre: e.target.value })} placeholder="Nombre (ej. IGV)"
-                  style={{ flex: 1, minWidth: 130, padding: '6px 10px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13 }} />
+                  disabled={c.obligatorio} title={c.obligatorio ? 'Este concepto es obligatorio para el cálculo del precio y no se puede renombrar' : undefined}
+                  style={{ flex: 1, minWidth: 130, padding: '6px 10px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: c.obligatorio ? 'var(--color-bg)' : 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13, fontWeight: c.obligatorio ? 700 : 400 }} />
+                {c.obligatorio && <span title="Obligatorio para el cálculo del precio" style={{ fontSize: 14 }}>🔒</span>}
                 <select value={c.tipo} onChange={e => setCosto(i, { tipo: e.target.value })}
                   style={{ padding: '6px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13 }}>
                   <option value="fijo">Monto S/</option>
@@ -245,15 +265,24 @@ export default function Precios() {
                 <input type="number" step="0.01" value={c.valor} onChange={e => setCosto(i, { valor: e.target.value })}
                   style={{ width: 90, padding: '6px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13, textAlign: 'right' }} />
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', width: 18 }}>{c.tipo === 'porcentaje' ? '%' : 'S/'}</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={c.activo !== false} onChange={e => setCosto(i, { activo: e.target.checked })} /> activo
-                </label>
-                <button onClick={() => delCosto(i)} title="Eliminar" style={{ background: 'transparent', border: 'none', color: '#dc2626', fontSize: 16, cursor: 'pointer' }}>🗑️</button>
+                {c.obligatorio ? (
+                  <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }} title="Los conceptos obligatorios siempre están activos">siempre activo</span>
+                ) : (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={c.activo !== false} onChange={e => setCosto(i, { activo: e.target.checked })} /> activo
+                  </label>
+                )}
+                {!c.obligatorio && (
+                  <button onClick={() => delCosto(i)} title="Eliminar" style={{ background: 'transparent', border: 'none', color: '#dc2626', fontSize: 16, cursor: 'pointer' }}>🗑️</button>
+                )}
               </div>
             ))}
           </div>
         )}
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>Los porcentajes se calculan sobre el precio proveedor. Estos costos aplican a todas las llantas.</div>
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>
+          Los porcentajes se calculan sobre el precio proveedor. Estos costos aplican a todas las llantas.{' '}
+          🔒 <strong>IGV, Instalación y Ganancia</strong> son obligatorios para calcular el precio oferta — puedes cambiar su monto/%, pero no renombrarlos ni eliminarlos. El resto de costos que agregues sí son libres de editar o quitar.
+        </div>
       </div>
 
       {/* Búsqueda */}
@@ -279,8 +308,8 @@ export default function Precios() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio proveedor<br />
                     <input type="number" step="0.01" value={valorActual(prod, 'precioProveedor')} onChange={e => onEdit(prod.id, 'precioProveedor', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioProveedor')} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} /></label>
-                  <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio oferta<br />
-                    <input type="number" step="0.01" value={valorActual(prod, 'precioOferta')} onChange={e => onEdit(prod.id, 'precioOferta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioOferta')} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} /></label>
+                  <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio oferta 🔒<br />
+                    <div title="Se calcula solo: precio proveedor + IGV + Instalación + Ganancia + otros costos activos" style={{ ...inp, width: '100%', boxSizing: 'border-box', background: 'var(--color-bg)', color: f.tieneOferta ? '#1d4ed8' : 'var(--color-text-muted)', fontWeight: 700 }}>{f.tieneOferta ? soles(f.oferta) : '—'}</div></label>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Costos: <strong>{soles(f.costoTotal)}</strong></div>
@@ -303,7 +332,7 @@ export default function Precios() {
                 <ThSort col="marca"                  label="Producto"            align="left" />
                 <ThSort col="precioProveedor"        label="Precio proveedor"                 />
                 <ThSort col="costoTotal"             label="Costos"                           />
-                <ThSort col="precioOferta"           label="Precio oferta"                    />
+                <ThSort col="precioOferta"           label="Precio oferta 🔒"                 />
                 <ThSort col="precioReferencialVenta" label="Precio referencial"               />
                 <ThSort col="diferencia"             label="Diferencia"                       />
                 <ThSort col="pct"                    label="%"                                />
@@ -322,8 +351,8 @@ export default function Precios() {
                       <input type="number" step="0.01" value={valorActual(prod, 'precioProveedor')} onChange={e => onEdit(prod.id, 'precioProveedor', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioProveedor')} placeholder="0.00" style={inp} />
                     </td>
                     <td style={{ ...td, textAlign: 'right', color: 'var(--color-text-muted)' }} title={f.detalle.join('\n') || 'Sin costos'}>{soles(f.costoTotal)}</td>
-                    <td style={{ ...td, textAlign: 'right' }}>
-                      <input type="number" step="0.01" value={valorActual(prod, 'precioOferta')} onChange={e => onEdit(prod.id, 'precioOferta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioOferta')} placeholder="0.00" style={{ ...inp, color: f.tieneOferta ? '#1d4ed8' : undefined }} />
+                    <td style={{ ...td, textAlign: 'right' }} title="Se calcula solo: precio proveedor + IGV + Instalación + Ganancia + otros costos activos">
+                      <span style={{ fontWeight: 700, color: f.tieneOferta ? '#1d4ed8' : 'var(--color-text-muted)' }}>{f.tieneOferta ? soles(f.oferta) : '—'}</span> <span style={{ fontSize: 11 }}>🔒</span>
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>
                       <input type="number" step="0.01" value={valorActual(prod, 'precioReferencialVenta')} onChange={e => onEdit(prod.id, 'precioReferencialVenta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioReferencialVenta')} placeholder="mercado" style={inp} />
@@ -369,7 +398,8 @@ export default function Precios() {
       )}
 
       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 14 }}>
-        <strong>Precio oferta</strong> = precio real al cliente (se replica en Inventario y genera el precio regular +5% automáticamente).{' '}
+        <strong>Precio oferta 🔒</strong> = precio proveedor + IGV + Instalación + Ganancia + otros costos activos — se calcula solo, no se edita a mano. Al editar el precio proveedor se recalcula al instante; al guardar costos globales se recalcula para todo el catálogo.{' '}
+        <strong>Sincronizar precio regular</strong> lleva ese precio oferta (+5%) a Inventario para todos los productos.{' '}
         <strong>Precio referencial</strong> = precio de mercado / competencia.{' '}
         <strong>Diferencia</strong> = precio referencial − precio oferta. En <span style={{ color: '#16a34a', fontWeight: 700 }}>verde</span> cuando el referencial supera tu precio oferta (estás por debajo del mercado); en <span style={{ color: '#dc2626', fontWeight: 700 }}>rojo</span> cuando tu precio oferta supera al referencial.
         Haz clic en cualquier columna para ordenar.

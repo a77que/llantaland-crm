@@ -2,7 +2,8 @@ const router = require('express').Router();
 const multer = require('multer');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular } = require('../controllers/productoController');
+const { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular, recalcularPrecioOferta } = require('../controllers/productoController');
+const { listar: listarCostos } = require('../controllers/costosController');
 const { auth, requireAdmin } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
@@ -32,8 +33,14 @@ router.get('/compatibles',compatibles);
 router.get('/grupos-imagen',      gruposImagen);
 router.get('/imagenes/faltantes-export', exportFaltantesImagen);
 router.get('/incompletos',        incompletos);
+// Lectura de los conceptos de costo (IGV/Instalación/Ganancia/etc.) para
+// cualquier usuario logueado — el vendedor la necesita en Nueva Cotización
+// para calcular la ganancia en vivo. Guardar/editar sigue siendo solo admin
+// (ver routes/admin.js -> POST /admin/costos).
+router.get('/costos-venta',       listarCostos);
 router.post('/enriquecer-masivo', requireAdmin, enriquecerMasivo);
 router.post('/sync-precios-regulares', requireAdmin, sincronizarPrecioRegular);
+router.post('/recalcular-precio-oferta', requireAdmin, recalcularPrecioOferta);
 router.post('/aplicar-imagen',    requireAdmin, aplicarImagen);
 router.post('/imagen-multiple',   requireAdmin, upload.single('imagen'), subirImagenMultiple);
 router.get('/:id/hermanas',       hermanasImagen);

@@ -49,7 +49,7 @@ const crear = async (req, res, next) => {
   try {
     const {
       leadId, medidaLlanta, marcaLlanta, modeloLlanta,
-      cantidad, precioUnit, descuento, notas, tipoNegocio,
+      cantidad, precioUnit, descuento, cargoAdicional, notas, tipoNegocio,
       nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
       // Datos de cita ingresados en el CRM
       generarCita, fechaInstalacion, horaInstalacion, localInstalacion: localInstalacionBody,
@@ -73,6 +73,9 @@ const crear = async (req, res, next) => {
     const qty   = primero ? primero.cantidad : parseInt(cantidad || 1);
     const pUnit = primero ? primero.precioUnit : parseFloat(precioUnit || 0);
     const desc  = descuento ? parseFloat(descuento) : 0;
+    // Recargo asumido por el cliente (pago con tarjeta 4% y/o traslado entre
+    // tiendas S/30) — el detalle de cuál se aplicó va en notas.
+    const cargo = cargoAdicional ? parseFloat(cargoAdicional) : 0;
     const quiereCita = generarCita === true || generarCita === 'true';
 
     // Validaciones de integridad
@@ -82,6 +85,7 @@ const crear = async (req, res, next) => {
       return res.status(400).json({ error: 'Precio requerido para cotización confirmada' });
     }
     if (desc < 0)   return res.status(400).json({ error: 'Descuento no puede ser negativo' });
+    if (cargo < 0)  return res.status(400).json({ error: 'El cargo adicional no puede ser negativo' });
 
     // Subtotal: suma de todos los ítems si hay varios, o el único ítem
     const subtotal = items
@@ -89,7 +93,7 @@ const crear = async (req, res, next) => {
       : pUnit * qty;
     if (desc > subtotal) return res.status(400).json({ error: 'Descuento no puede superar el total' });
 
-    const total = Math.max(0, subtotal - desc);
+    const total = Math.max(0, subtotal - desc + cargo);
 
     const count  = await prisma.cotizacion.count();
     const numero = `COT-${String(count + 1).padStart(5, '0')}`;
@@ -154,6 +158,7 @@ const crear = async (req, res, next) => {
           cantidad: qty, precioUnit: pUnit,
           items:            items || undefined,
           descuento: desc > 0 ? desc : null,
+          cargoAdicional: cargo > 0 ? cargo : null,
           precioTotal: total,
           fechaCita:        finalFechaCita,
           fechaInstalacion: finalFechaInst,

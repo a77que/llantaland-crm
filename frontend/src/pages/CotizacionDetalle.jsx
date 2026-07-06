@@ -250,6 +250,9 @@ export default function CotizacionDetalle() {
               {!editando && cot.descuento && parseFloat(cot.descuento) > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(cot.descuento)}</span></div>
               )}
+              {!editando && cot.cargoAdicional && parseFloat(cot.cargoAdicional) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>Recargo (tarjeta/traslado)</span><span>+ {fmt(cot.cargoAdicional)}</span></div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 17, borderTop: '2px solid var(--color-border)', paddingTop: 8 }}>
                 <span>TOTAL</span><span style={{ color: 'var(--color-primary)' }}>{fmt(editando ? totalEdit : cot.precioTotal)}</span>
               </div>

@@ -451,6 +451,10 @@ model Cotizacion {
   cantidad        Int              @default(1)
   precioUnit      Decimal          @db.Decimal(10, 2) @default(0)
   descuento       Decimal?         @db.Decimal(10, 2)
+  // Recargo que el vendedor decidió cobrarle al cliente (pago con tarjeta 4%
+  // y/o traslado entre tiendas S/30) — solo la parte "asumida por el cliente".
+  // El detalle de cuál se aplicó y quién la asumió queda en notas.
+  cargoAdicional  Decimal?         @db.Decimal(10, 2)
   precioTotal     Decimal          @db.Decimal(10, 2) @default(0)
   // Ítems múltiples: [{ sku, medida, marca, modelo, cantidad, precioUnit }]
   items           Json?
