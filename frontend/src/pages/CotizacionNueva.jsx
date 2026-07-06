@@ -19,17 +19,19 @@ const S = {
 
 const fmt = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
 
-// Espejo de calcCostos() en Precios.jsx — mismo cálculo que usa esa pantalla
-// para armar precioOferta, así la ganancia mostrada acá es consistente.
-function calcCostoTotal(precioProveedor, costos) {
+const normalizarNombre = (s) => String(s || '').trim().toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// La ganancia real de la tienda es solo el costo "Ganancia" configurado en
+// Precios y Margen (hoy 10% del precio proveedor, pero puede cambiar ahí).
+// IGV e Instalación son costos fijos que se cobran igual pero no son
+// utilidad — se ignoran para este cálculo.
+function calcGananciaCosto(precioProveedor, costos) {
   const base = Number(precioProveedor) || 0;
-  let total = 0;
-  for (const c of costos) {
-    if (c.activo === false) continue;
-    const val = Number(c.valor) || 0;
-    total += c.tipo === 'porcentaje' ? base * val / 100 : val;
-  }
-  return total;
+  const c = costos.find(c => normalizarNombre(c.nombre) === 'ganancia');
+  if (!c) return 0;
+  const val = Number(c.valor) || 0;
+  return c.tipo === 'porcentaje' ? base * val / 100 : val;
 }
 
 const MONTO_TRASLADO = 30;
@@ -93,13 +95,11 @@ export default function CotizacionNueva() {
     return raw.filter(c => c.activo !== false);
   }, [costosVentaData]);
 
-  // Ganancia estimada de una llanta agregada: lo que se le cobra al cliente
-  // (precioRegular) menos lo que cuesta (precioProveedor + IGV/Instalación/Ganancia/etc.).
+  // Ganancia estimada de una llanta agregada: solo el costo "Ganancia" de
+  // Precios y Margen aplicado al precio proveedor, multiplicado por cantidad.
   const gananciaDeItem = (it) => {
     const prov = Number(it.producto.precioProveedor) || 0;
-    const ventaUnit = Number(it.producto.precioRegular) || 0;
-    const costoTotal = calcCostoTotal(prov, costosVenta);
-    return (ventaUnit - prov - costoTotal) * it.cantidad;
+    return calcGananciaCosto(prov, costosVenta) * it.cantidad;
   };
 
   // Catálogo: por búsqueda libre, o por medida cuando se activa "Buscar en catálogo"
@@ -208,9 +208,10 @@ export default function CotizacionNueva() {
   const gananciaFinal = gananciaBase - cargoTienda;
   const totalCalc = Math.max(0, subtotal - parseFloat(descuento || 0) + cargoCliente);
 
-  // Semáforo de ganancia: roja (sin ganancia), amarilla (mínima, <10% del subtotal), verde (saludable)
-  const umbralMinima = subtotal * 0.10;
-  const estadoGanancia = gananciaFinal <= 0 ? 'roja' : gananciaFinal < umbralMinima ? 'amarilla' : 'verde';
+  // Semáforo de ganancia: roja (sin ganancia), amarilla (la tienda está
+  // absorbiendo parte del recargo y eso reduce la ganancia real, pero sigue
+  // siendo positiva), verde (ganancia intacta, sin recargos a cargo de la tienda)
+  const estadoGanancia = gananciaFinal <= 0 ? 'roja' : gananciaFinal < gananciaBase ? 'amarilla' : 'verde';
   const gananciaColor = { roja: '#dc2626', amarilla: '#d97706', verde: '#16a34a' }[estadoGanancia];
   const gananciaTexto = { roja: '🔴 Sin ganancia — no procede la venta así', amarilla: '🟡 Ganancia mínima', verde: '🟢 Ganancia saludable' }[estadoGanancia];
 
@@ -374,7 +375,7 @@ export default function CotizacionNueva() {
               {items.map((it, idx) => {
                 const g = gananciaDeItem(it);
                 const gLineaTotal = parseFloat(it.producto.precioRegular) * it.cantidad;
-                const gCol = g <= 0 ? '#dc2626' : g < gLineaTotal * 0.10 ? '#d97706' : '#16a34a';
+                const gCol = g <= 0 ? '#dc2626' : '#16a34a';
                 return (
                 <div key={it.producto.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 140 }}>
