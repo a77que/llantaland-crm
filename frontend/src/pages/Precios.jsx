@@ -99,6 +99,18 @@ export default function Precios() {
     onError: () => toast.error('Error al generar precios regulares'),
   });
 
+  // ── Corrección de datos: proveedor/referencial cruzados en el catálogo ──
+  // Es un swap (auto-invertible: correrlo dos veces revierte el cambio), así
+  // que si algo sale mal se puede volver a ejecutar para deshacerlo.
+  const intercambiarMutation = useMutation({
+    mutationFn: () => productosApi.intercambiarProveedorReferencial(),
+    onSuccess: (data) => {
+      toast.success(`Corregido: ${data.filasIntercambiadas} productos, precio oferta recalculado en ${data.recalculados}`);
+      qc.invalidateQueries({ queryKey: ['precios-productos'] });
+    },
+    onError: () => toast.error('No se pudo corregir el cruce de columnas'),
+  });
+
   // ── Productos ──
   const { data, isLoading, isError } = useQuery({
     queryKey: ['precios-productos', q, isClientSort ? 'all' : page, sortBy, sortDir],
@@ -230,6 +242,19 @@ export default function Precios() {
               title="Recalcula el precio regular (precio oferta +5%) para todos los productos del catálogo"
               style={{ padding: '7px 11px', borderRadius: 7, border: '1px solid #6366f130', background: 'rgba(99,102,241,.08)', color: '#818cf8', fontSize: 11.5, fontWeight: 700, cursor: syncMutation.isPending ? 'default' : 'pointer', opacity: syncMutation.isPending ? .6 : 1 }}>
               {syncMutation.isPending ? '⏳…' : '🔄 Sincronizar precio regular'}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                if (window.confirm('Esto intercambia Precio proveedor ↔ Precio referencial en TODO el catálogo y recalcula precio oferta/regular. Úsalo una sola vez para corregir el cruce. Si se ejecuta dos veces, revierte el cambio. ¿Continuar?')) {
+                  intercambiarMutation.mutate();
+                }
+              }}
+              disabled={intercambiarMutation.isPending}
+              title="Corrige el cruce de columnas Proveedor/Referencial en todo el catálogo (una sola vez)"
+              style={{ padding: '7px 11px', borderRadius: 7, border: '1px solid #dc262630', background: 'rgba(220,38,38,.08)', color: '#dc2626', fontSize: 11.5, fontWeight: 700, cursor: intercambiarMutation.isPending ? 'default' : 'pointer', opacity: intercambiarMutation.isPending ? .6 : 1 }}>
+              {intercambiarMutation.isPending ? '⏳…' : '🔀 Corregir Proveedor ↔ Referencial'}
             </button>
           )}
           <Link to="/inventario" style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Inventario</Link>
