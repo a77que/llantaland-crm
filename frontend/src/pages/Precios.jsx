@@ -159,12 +159,15 @@ export default function Precios() {
     return { prov, oferta, ref, costoTotal, detalle, dif, pct, col, tieneOferta, tieneRef };
   };
 
-  // sortFila usa valores brutos de BD (no edits) para que el orden sea estable
+  // sortFila usa valores brutos de BD (no edits) para que el orden sea estable.
+  // La oferta se recalcula en vivo (proveedor + costos), igual que filaCalculo,
+  // en vez de leer prod.precioOferta: ese campo guardado puede estar desactualizado
+  // en productos importados que nunca pasaron por un guardado/recálculo manual.
   const sortFila = (prod) => {
     const prov   = Number(prod.precioProveedor) || 0;
-    const oferta = Number(prod.precioOferta) || 0;
     const ref    = Number(prod.precioReferencialVenta) || 0;
     const { total: costoTotal } = calcCostos(prov, costos);
+    const oferta = prov > 0 ? Math.round((prov + costoTotal) * 100) / 100 : 0;
     const diferencia = (oferta > 0 && ref > 0) ? ref - oferta : null;
     const pct        = (diferencia !== null && oferta > 0) ? (diferencia / oferta) * 100 : null;
     return { costoTotal, diferencia, pct };
