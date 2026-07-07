@@ -44,8 +44,12 @@ export default function Precios() {
   const [costos, setCostos] = useState([]);
   const [costosDirty, setCostosDirty] = useState(false);
   const [edits, setEdits] = useState({});
+  const [filtroDif, setFiltroDif] = useState('todos'); // 'todos' | 'verde'
 
   const isClientSort = CLIENT_SORT.has(sortBy);
+  // El filtro "solo diferencia positiva" es calculado en frontend, igual que
+  // ordenar por columnas calculadas: necesita cargar todo el catálogo.
+  const forzarTodos = isClientSort || filtroDif === 'verde';
 
   const handleSort = (col) => {
     if (sortBy === col) {
@@ -99,27 +103,15 @@ export default function Precios() {
     onError: () => toast.error('Error al generar precios regulares'),
   });
 
-  // ── Corrección de datos: proveedor/referencial cruzados en el catálogo ──
-  // Es un swap (auto-invertible: correrlo dos veces revierte el cambio), así
-  // que si algo sale mal se puede volver a ejecutar para deshacerlo.
-  const intercambiarMutation = useMutation({
-    mutationFn: () => productosApi.intercambiarProveedorReferencial(),
-    onSuccess: (data) => {
-      toast.success(`Corregido: ${data.filasIntercambiadas} productos, precio oferta recalculado en ${data.recalculados}`);
-      qc.invalidateQueries({ queryKey: ['precios-productos'] });
-    },
-    onError: () => toast.error('No se pudo corregir el cruce de columnas'),
-  });
-
   // ── Productos ──
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['precios-productos', q, isClientSort ? 'all' : page, sortBy, sortDir],
+    queryKey: ['precios-productos', q, forzarTodos ? 'all' : page, sortBy, sortDir, filtroDif],
     queryFn: () => productosApi.listar({
       q: q || undefined,
-      page: isClientSort ? 1 : page,
-      all: isClientSort ? 'true' : undefined,
-      noStocks: isClientSort ? 'true' : undefined,  // evita JOIN costoso al cargar todos para ordenar
-      limit: isClientSort ? undefined : 50,
+      page: forzarTodos ? 1 : page,
+      all: forzarTodos ? 'true' : undefined,
+      noStocks: forzarTodos ? 'true' : undefined,  // evita JOIN costoso al cargar todos para ordenar/filtrar
+      limit: forzarTodos ? undefined : 50,
       orderBy: isClientSort ? 'marca' : (BACKEND_SORT[sortBy] || 'marca'),
       orderDir: isClientSort ? 'asc' : sortDir,
     }),
@@ -191,6 +183,15 @@ export default function Precios() {
     });
   }, [productos, sortBy, sortDir, costos, isClientSort]); // eslint-disable-line
 
+  // Filtro "solo diferencia positiva (verde)": referencial >= precio oferta.
+  const productosMostrados = useMemo(() => {
+    if (filtroDif !== 'verde') return productosSorted;
+    return productosSorted.filter(p => {
+      const { diferencia } = sortFila(p);
+      return diferencia !== null && diferencia >= 0;
+    });
+  }, [productosSorted, filtroDif, costos]); // eslint-disable-line
+
   if (isLoading && !data) return <LoadingSpinner fullPage />;
   if (isError && !data) return <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>Error al cargar los productos. Recarga la página.</div>;
 
@@ -242,19 +243,6 @@ export default function Precios() {
               title="Recalcula el precio regular (precio oferta +5%) para todos los productos del catálogo"
               style={{ padding: '7px 11px', borderRadius: 7, border: '1px solid #6366f130', background: 'rgba(99,102,241,.08)', color: '#818cf8', fontSize: 11.5, fontWeight: 700, cursor: syncMutation.isPending ? 'default' : 'pointer', opacity: syncMutation.isPending ? .6 : 1 }}>
               {syncMutation.isPending ? '⏳…' : '🔄 Sincronizar precio regular'}
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              onClick={() => {
-                if (window.confirm('Esto intercambia Precio proveedor ↔ Precio referencial en TODO el catálogo y recalcula precio oferta/regular. Úsalo una sola vez para corregir el cruce. Si se ejecuta dos veces, revierte el cambio. ¿Continuar?')) {
-                  intercambiarMutation.mutate();
-                }
-              }}
-              disabled={intercambiarMutation.isPending}
-              title="Corrige el cruce de columnas Proveedor/Referencial en todo el catálogo (una sola vez)"
-              style={{ padding: '7px 11px', borderRadius: 7, border: '1px solid #dc262630', background: 'rgba(220,38,38,.08)', color: '#dc2626', fontSize: 11.5, fontWeight: 700, cursor: intercambiarMutation.isPending ? 'default' : 'pointer', opacity: intercambiarMutation.isPending ? .6 : 1 }}>
-              {intercambiarMutation.isPending ? '⏳…' : '🔀 Corregir Proveedor ↔ Referencial'}
             </button>
           )}
           <Link to="/inventario" style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Inventario</Link>
@@ -314,17 +302,33 @@ export default function Precios() {
       <input value={q} onChange={e => { setQ(e.target.value); setPage(1); }} placeholder="Buscar marca, modelo, medida o SKU…"
         style={{ width: '100%', padding: '9px 14px', fontSize: 14, border: '1.5px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)', color: 'var(--color-text)', marginBottom: 12, boxSizing: 'border-box' }} />
 
-      {/* Aviso cuando se carga todo para ordenar columnas calculadas */}
-      {isClientSort && (
+      {/* Filtro por diferencia */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button onClick={() => { setFiltroDif('todos'); setPage(1); }}
+          style={{ padding: '7px 14px', borderRadius: 8, border: `1.5px solid ${filtroDif === 'todos' ? 'var(--color-primary)' : 'var(--color-border)'}`, background: filtroDif === 'todos' ? 'var(--color-primary)' : 'var(--color-surface)', color: filtroDif === 'todos' ? '#000' : 'var(--color-text-muted)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+          📋 Mostrar todos
+        </button>
+        <button onClick={() => { setFiltroDif('verde'); setPage(1); }}
+          style={{ padding: '7px 14px', borderRadius: 8, border: `1.5px solid ${filtroDif === 'verde' ? '#16a34a' : 'var(--color-border)'}`, background: filtroDif === 'verde' ? '#16a34a' : 'var(--color-surface)', color: filtroDif === 'verde' ? '#fff' : 'var(--color-text-muted)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+          🟢 Solo diferencia positiva
+        </button>
+      </div>
+
+      {/* Aviso cuando se carga todo para ordenar/filtrar columnas calculadas */}
+      {forzarTodos && (
         <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: 6, padding: '6px 12px', marginBottom: 10 }}>
-          ⚡ Ordenando por <strong>{sortBy === 'diferencia' ? 'Diferencia S/' : sortBy === 'pct' ? '% Margen' : 'Costos'}</strong> — cargando todos los productos para orden global ({total} productos).
+          ⚡ {isClientSort && (
+            <>Ordenando por <strong>{sortBy === 'diferencia' ? 'Diferencia S/' : sortBy === 'pct' ? '% Margen' : 'Costos'}</strong> — </>
+          )}
+          {filtroDif === 'verde' && <>Filtrando solo diferencia positiva ({productosMostrados.length} de {total}) — </>}
+          cargando todos los productos del catálogo ({total} productos).
         </div>
       )}
 
       {/* Tabla / cards */}
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {productosSorted.map(prod => {
+          {productosMostrados.map(prod => {
             const f = filaCalculo(prod);
             return (
               <div key={prod.id} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: 12 }}>
@@ -364,7 +368,7 @@ export default function Precios() {
               </tr>
             </thead>
             <tbody>
-              {productosSorted.map(prod => {
+              {productosMostrados.map(prod => {
                 const f = filaCalculo(prod);
                 return (
                   <tr key={prod.id}>
@@ -398,12 +402,12 @@ export default function Precios() {
         </div>
       )}
 
-      {productosSorted.length === 0 && !isLoading && (
+      {productosMostrados.length === 0 && !isLoading && (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-text-muted)' }}>No hay productos con ese filtro.</div>
       )}
 
-      {/* Paginación — solo cuando NO hay sort por columna calculada */}
-      {!isClientSort && totalPages > 1 && (
+      {/* Paginación — solo cuando NO hay sort/filtro por columna calculada */}
+      {!forzarTodos && totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 18 }}>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
             style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: page === 1 ? 'var(--color-text-muted)' : 'var(--color-text)', cursor: page === 1 ? 'default' : 'pointer' }}>
@@ -416,9 +420,9 @@ export default function Precios() {
           </button>
         </div>
       )}
-      {isClientSort && total > 0 && (
+      {forzarTodos && total > 0 && (
         <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--color-text-muted)', marginTop: 14 }}>
-          Mostrando {productosSorted.length} de {total} producto{total !== 1 ? 's' : ''} (orden global)
+          Mostrando {productosMostrados.length} de {total} producto{total !== 1 ? 's' : ''} {filtroDif === 'verde' ? '(diferencia positiva)' : '(orden global)'}
         </div>
       )}
 
