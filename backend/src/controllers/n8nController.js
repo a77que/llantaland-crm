@@ -80,8 +80,12 @@ async function obtenerFilasCatalogo() {
 
   preciosCacheInflight = (async () => {
     try {
+      // Sin filtro de stock: el bot debe poder mostrar todas las marcas/modelos
+      // del catálogo para una medida, aunque algún producto tenga 0 unidades
+      // en este momento — la disponibilidad real por tienda se resuelve
+      // después, en el cruce de distrito y stock (Caso A/B/C/D).
       const productos = await prisma.producto.findMany({
-        where: { activo: true, stocks: { some: { cantidad: { gt: 0 } } } },
+        where: { activo: true },
         include: { stocks: { include: { sede: true } } },
         orderBy: [{ medida: 'asc' }, { marca: 'asc' }],
       });
