@@ -79,8 +79,10 @@ export default function CotizacionNueva() {
   const [medida, setMedida] = useState(pre.medida || '');
 
   // ── Catálogo / llantas elegidas (múltiples) ──
-  const [buscarQuery, setBuscarQuery] = useState('');
-  const [buscarActivo, setBuscarActivo] = useState(false);
+  // Si el lead ya eligió marca/modelo por WhatsApp, se precarga la búsqueda
+  // y se activa de una vez para que el vendedor la vea sin un clic extra.
+  const [buscarQuery, setBuscarQuery] = useState(pre.llanta?.marca || '');
+  const [buscarActivo, setBuscarActivo] = useState(!!(pre.medida && pre.llanta?.marca));
   const [items, setItems] = useState([]); // [{ producto, cantidad }]
   const [descuento, setDescuento] = useState('');
   const [notas, setNotas] = useState('');
@@ -101,6 +103,14 @@ export default function CotizacionNueva() {
   const [horaCita, setHoraCita] = useState('');
 
   const { data: sedes = [] } = useQuery({ queryKey: ['sedes'], queryFn: sedesApi.listar, staleTime: Infinity });
+
+  // Precargar la tienda que el cliente eligió por WhatsApp (llega por código de
+  // local; las sedes cargan async, así que se hace una vez que ya están).
+  useEffect(() => {
+    if (!pre.sede?.codigoLocal || sedeCita || sedes.length === 0) return;
+    const match = sedes.find(s => s.codigoLocal === pre.sede.codigoLocal);
+    if (match) setSedeCita(match.id);
+  }, [sedes]); // eslint-disable-line
 
   // Costos globales (IGV, Instalación, Ganancia, etc.) — lectura, el vendedor no los edita aquí.
   const { data: costosVentaData } = useQuery({ queryKey: ['costos-venta-lectura'], queryFn: productosApi.costosVenta, staleTime: 60_000 });
@@ -266,6 +276,15 @@ export default function CotizacionNueva() {
         <button onClick={() => navigate(-1)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', cursor: 'pointer', fontSize: 13 }}>← Volver</button>
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>Nueva Cotización</h1>
       </div>
+
+      {(pre.llanta?.marca || pre.sede) && (
+        <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>💬 Elegido por WhatsApp:</span>
+          {pre.llanta?.marca && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>🛞 {pre.llanta.marca} {pre.llanta.modelo || ''}</span>}
+          {pre.medida && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>📏 {pre.medida}</span>}
+          {pre.sede?.nombre && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>🏪 {pre.sede.nombre}</span>}
+        </div>
+      )}
 
       <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'start' }}>
         <div>

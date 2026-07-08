@@ -807,6 +807,7 @@ function mapSheetToLead(body) {
   if (body.DNI_CE !== undefined) data.dniCe = body.DNI_CE;
   if (body.Marca_Llanta !== undefined) data.marcaLlanta = body.Marca_Llanta || null;
   if (body.Modelo_Llanta !== undefined) data.modeloLlanta = body.Modelo_Llanta || null;
+  if (body.Cantidad_Llantas !== undefined) data.cantidadLlantas = parseInt(body.Cantidad_Llantas) || 1;
   if (body.Marca_Auto !== undefined) data.marcaAuto = body.Marca_Auto;
   if (body.Modelo_Auto !== undefined) data.modeloAuto = body.Modelo_Auto;
   if (body.Anio_Auto !== undefined) data.anioAuto = body.Anio_Auto ? parseInt(body.Anio_Auto) : null;
@@ -832,6 +833,7 @@ function mapLeadToSheet(lead) {
     Anio_Auto:                  lead.anioAuto || '',
     Medida_Detectada:           lead.medidaDetectada || '',
     Precio:                     lead.precioLlanta || '',
+    Cantidad_Llantas:           lead.cantidadLlantas || 1,
     Ranking:                    lead.ranking || '',
     Tipo_Servicio:              lead.tipoServicio || '',
     Distrito_Cliente:           lead.distritoCliente || '',

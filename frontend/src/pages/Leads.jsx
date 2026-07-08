@@ -89,6 +89,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
   if (!lead) return null;
 
   // Abrir el flujo completo de cotización con los datos del lead precargados (desde cualquier paso)
+  const local = lead.localInstalacion || lead.localAsignado;
   const crearCotizacion = () => {
     onClose();
     navigate('/cotizaciones/nueva', { state: {
@@ -96,9 +97,10 @@ function LeadDetalle({ lead, onClose, isMobile }) {
       cliente: { nombre: lead.nombreCliente, telefono: lead.telefono, dniCe: lead.dniCe },
       vehiculo: { marca: lead.marcaAuto, modelo: lead.modeloAuto, anio: lead.anioAuto },
       medida: lead.medidaDetectada || '',
+      llanta: { marca: lead.marcaLlanta || '', modelo: lead.modeloLlanta || '' },
+      sede: local ? { codigoLocal: local.ID || local.codigoLocal, nombre: local.Nombre || local.nombre } : null,
     } });
   };
-  const local = lead.localInstalacion || lead.localAsignado;
   const localNombre = local?.Nombre || local?.nombre || '—';
 
   const overlayStyle = {
