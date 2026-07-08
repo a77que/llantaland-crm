@@ -3,6 +3,7 @@
  * Cada endpoint corresponde a una operación de hoja del flujo.
  */
 const { normalizarMedida } = require('../utils/medida');
+const { normalizarNombre: normalizarNombreCosto } = require('./costosController');
 const prisma = require('../lib/prisma');
 
 // ─── CACHE de catálogo con stock ──────────────────────────────────────────────
@@ -205,6 +206,23 @@ const listarPrecios = async (req, res, next) => {
     }
 
     res.json(filas);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Costo fijo de traslado entre tiendas, configurado en Precios y Margen
+ * (concepto "Traslado", excluido del cálculo de precioOferta — ver
+ * productoController.NOMBRES_EXCLUIDOS_OFERTA). El bot lo usa para cobrarlo
+ * una sola vez por cotización cuando la tienda elegida no tiene stock, o
+ * para mostrar el "descuento por tienda" cuando sí tiene. 0 si no está
+ * configurado (la función queda inactiva sin romper el flujo). */
+const obtenerCostoTraslado = async (req, res, next) => {
+  try {
+    // La lista de costos es chica (unas pocas filas) — se filtra en memoria.
+    const todos = await prisma.costoVenta.findMany({ where: { activo: true } });
+    const traslado = todos.find(c => normalizarNombreCosto(c.nombre) === 'traslado');
+    res.json({ costoTraslado: traslado ? Number(traslado.valor) || 0 : 0 });
   } catch (err) {
     next(err);
   }
@@ -841,6 +859,7 @@ function mapLeadToSheet(lead) {
 module.exports = {
   leerCRM, crearCRM, actualizarCRM, resetearCRM,
   listarPrecios,
+  obtenerCostoTraslado,
   listarLocales,
   guardarHistorial, leerHistorial,
   activarHumanTakeover, leerHumanTakeover,

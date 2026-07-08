@@ -20,7 +20,7 @@ const listar = async (req, res, next) => {
       return res.json({ items: [], sugeridos: [
         { nombre: 'IGV', tipo: 'porcentaje', valor: 18, activo: true, obligatorio: true },
         { nombre: 'Instalación', tipo: 'fijo', valor: 0, activo: true, obligatorio: true },
-        { nombre: 'Ganancia', tipo: 'porcentaje', valor: 10, activo: true, obligatorio: true },
+        { nombre: 'Ganancia', tipo: 'porcentaje', valor: 10, montoMinimo: 50, activo: true, obligatorio: true },
       ] });
     }
     res.json({ items: items.map(c => ({ ...c, obligatorio: esObligatorio(c.nombre) })) });
@@ -39,6 +39,10 @@ const guardar = async (req, res, next) => {
         nombre: String(c.nombre).trim().substring(0, 60),
         tipo: TIPOS.includes(c.tipo) ? c.tipo : 'fijo',
         valor: isNaN(parseFloat(c.valor)) ? 0 : parseFloat(c.valor),
+        // Piso en S/ (hoy solo tiene sentido en "Ganancia"): si el % calculado
+        // da menos que esto, se cobra este monto en su lugar. Vacío = sin piso.
+        montoMinimo: (c.montoMinimo === '' || c.montoMinimo === null || c.montoMinimo === undefined || isNaN(parseFloat(c.montoMinimo)))
+          ? null : parseFloat(c.montoMinimo),
         orden: i,
         // Los obligatorios no se pueden desactivar: siempre entran al cálculo.
         activo: esObligatorio(c.nombre) ? true : c.activo !== false,
@@ -61,4 +65,4 @@ const guardar = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { listar, guardar, esObligatorio, NOMBRES_OBLIGATORIOS };
+module.exports = { listar, guardar, esObligatorio, normalizarNombre, NOMBRES_OBLIGATORIOS };

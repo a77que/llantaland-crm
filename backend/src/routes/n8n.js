@@ -7,6 +7,7 @@ const { n8nAuth } = require('../middleware/n8nAuth');
 const {
   leerCRM, crearCRM, actualizarCRM, resetearCRM,
   listarPrecios,
+  obtenerCostoTraslado,
   listarLocales,
   guardarHistorial, leerHistorial,
   activarHumanTakeover, leerHumanTakeover,
@@ -28,6 +29,7 @@ router.post('/crm/:telefono/reset', resetearCRM);      // CRM | Resetear Paso_Ac
 
 // ── Catálogo (hoja PRECIOS) ───────────────────────────────────
 router.get('/precios',              listarPrecios);    // Consultar Catalogo Completo
+router.get('/costo-traslado',       obtenerCostoTraslado); // Costo fijo de traslado entre tiendas (Precios y Margen)
 
 // ── Locales (hoja LOCALES) ────────────────────────────────────
 router.get('/locales',              listarLocales);    // MOD | Consultar Locales

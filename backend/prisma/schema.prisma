@@ -222,14 +222,15 @@ model Producto {
 // Conceptos de costo GLOBALES que se suman al precio proveedor para llegar al
 // precio de venta (IGV, instalación, traslado, etc.). Configurables por el admin.
 model CostoVenta {
-  id        String   @id @default(cuid())
-  nombre    String
-  tipo      String   @default("fijo")            // 'fijo' = monto S/ ; 'porcentaje' = % sobre el precio proveedor
-  valor     Decimal  @default(0) @db.Decimal(10, 2)
-  orden     Int      @default(0)
-  activo    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  nombre      String
+  tipo        String   @default("fijo")            // 'fijo' = monto S/ ; 'porcentaje' = % sobre el precio proveedor
+  valor       Decimal  @default(0) @db.Decimal(10, 2)
+  montoMinimo Decimal? @db.Decimal(10, 2)           // piso en S/: si el % calculado da menos que esto, se usa este monto (hoy solo aplica al concepto "Ganancia")
+  orden       Int      @default(0)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@map("costos_venta")
 }

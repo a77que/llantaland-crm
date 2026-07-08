@@ -4,8 +4,30 @@ const XLSXStyle = require('xlsx-js-style');
 const { normalizarMedida, pareceMedida } = require('../utils/medida');
 const { llamarIA } = require('../services/iaService');
 const { invalidarCachePrecios } = require('./n8nController');
+const { normalizarNombre } = require('./costosController');
 
 const prisma = require('../lib/prisma');
+
+// "Traslado" no es un costo por unidad — es un cargo condicional a nivel de
+// pedido (según stock en la tienda elegida, ver n8nController.obtenerCostoTraslado
+// y CotizacionNueva.jsx), así que se excluye de la suma que arma precioOferta.
+const NOMBRES_EXCLUIDOS_OFERTA = ['traslado'];
+
+// Monto que aporta un concepto de costo sobre una base (precio proveedor),
+// para la suma que arma precioOferta. El concepto "Ganancia" tiene un piso en
+// soles configurable (montoMinimo): si el % calculado da menos que eso, se
+// cobra el piso en su lugar.
+function montoDeCosto(costo, base) {
+  const nombre = normalizarNombre(costo.nombre);
+  if (NOMBRES_EXCLUIDOS_OFERTA.includes(nombre)) return 0;
+  const val = Number(costo.valor) || 0;
+  let monto = costo.tipo === 'porcentaje' ? base * val / 100 : val;
+  if (nombre === 'ganancia' && costo.montoMinimo !== null && costo.montoMinimo !== undefined) {
+    const min = Number(costo.montoMinimo) || 0;
+    if (monto < min) monto = min;
+  }
+  return monto;
+}
 
 // Campos permitidos para ordenar (evita injection)
 const SORT_FIELDS = {
@@ -123,10 +145,7 @@ async function calcularPrecioOfertaDesdeProveedor(precioProveedor) {
   const costos = await prisma.costoVenta.findMany({ where: { activo: true } });
   const base = Number(precioProveedor) || 0;
   let total = 0;
-  for (const c of costos) {
-    const val = Number(c.valor) || 0;
-    total += c.tipo === 'porcentaje' ? base * val / 100 : val;
-  }
+  for (const c of costos) total += montoDeCosto(c, base);
   return Math.round((base + total) * 100) / 100;
 }
 
@@ -735,7 +754,8 @@ const sincronizarPrecioRegular = async (req, res, next) => {
         lote.map(p => prisma.producto.update({
           where: { id: p.id },
           data: { precioRegular: Math.round(p.precioOferta * 1.05 * 100) / 100 },
-        }))
+        })),
+        { timeout: 30000 } // default 5s se queda corto con lotes de 100 updates
       );
       actualizados += lote.length;
     }
@@ -764,13 +784,11 @@ const recalcularPrecioOferta = async (req, res, next) => {
         lote.map(p => {
           const base = Number(p.precioProveedor) || 0;
           let total = 0;
-          for (const c of costos) {
-            const val = Number(c.valor) || 0;
-            total += c.tipo === 'porcentaje' ? base * val / 100 : val;
-          }
+          for (const c of costos) total += montoDeCosto(c, base);
           const precioOferta = Math.round((base + total) * 100) / 100;
           return prisma.producto.update({ where: { id: p.id }, data: { precioOferta } });
-        })
+        }),
+        { timeout: 30000 } // default 5s se queda corto con lotes de 100 updates
       );
       actualizados += lote.length;
     }

@@ -31,10 +31,24 @@ function calcGananciaCosto(precioProveedor, costos) {
   const c = costos.find(c => normalizarNombre(c.nombre) === 'ganancia');
   if (!c) return 0;
   const val = Number(c.valor) || 0;
-  return c.tipo === 'porcentaje' ? base * val / 100 : val;
+  let monto = c.tipo === 'porcentaje' ? base * val / 100 : val;
+  // Piso en S/: si el % da menos que el mínimo configurado, se usa el mínimo.
+  if (c.montoMinimo !== null && c.montoMinimo !== undefined && c.montoMinimo !== '') {
+    const min = Number(c.montoMinimo) || 0;
+    if (monto < min) monto = min;
+  }
+  return monto;
 }
 
-const MONTO_TRASLADO = 30;
+// Costo de traslado entre tiendas: se lee del concepto "Traslado" en Precios y
+// Margen (tipo Monto S/). Si no está configurado, se usa 30 como valor por
+// defecto para no dejar la función sin efecto.
+function calcCostoTraslado(costos) {
+  const c = costos.find(c => normalizarNombre(c.nombre) === 'traslado');
+  if (!c) return 30;
+  return Number(c.valor) || 0;
+}
+
 const PCT_TARJETA = 0.04;
 
 function StockCell({ value }) {
@@ -194,9 +208,10 @@ export default function CotizacionNueva() {
   const subtotal = items.reduce((a, i) => a + parseFloat(i.producto.precioRegular) * i.cantidad, 0);
   const gananciaBase = items.reduce((a, it) => a + gananciaDeItem(it), 0);
 
+  const montoTraslado = calcCostoTraslado(costosVenta);
   const montoTarjeta = subtotal * PCT_TARJETA;
   const costoTarjeta = pagoTarjeta ? montoTarjeta : 0;
-  const costoTraslado = trasladoTiendas ? MONTO_TRASLADO : 0;
+  const costoTraslado = trasladoTiendas ? montoTraslado : 0;
 
   // Lo que se le suma al total que paga el cliente (solo la parte que decidió "asume cliente")
   const cargoCliente = (pagoTarjeta && tarjetaAsume === 'cliente' ? costoTarjeta : 0)
@@ -223,7 +238,7 @@ export default function CotizacionNueva() {
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
       const notasExtra = [
         pagoTarjeta ? `Pago con tarjeta: recargo 4% (${fmt(costoTarjeta)}) asumido por ${tarjetaAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
-        trasladoTiendas ? `Traslado entre tiendas: ${fmt(MONTO_TRASLADO)} asumido por ${trasladoAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
+        trasladoTiendas ? `Traslado entre tiendas: ${fmt(montoTraslado)} asumido por ${trasladoAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
       return cotizacionesApi.crear({
@@ -420,7 +435,7 @@ export default function CotizacionNueva() {
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
                 <input type="checkbox" checked={trasladoTiendas} onChange={e => setTrasladoTiendas(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>🚚 Traslado entre tiendas — S/ {MONTO_TRASLADO.toFixed(2)}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>🚚 Traslado entre tiendas — S/ {montoTraslado.toFixed(2)}</span>
               </label>
               {trasladoTiendas && (
                 <div style={{ display: 'flex', gap: 16, paddingLeft: 28, marginBottom: 8, flexWrap: 'wrap' }}>

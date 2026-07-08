@@ -9,14 +9,28 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const soles = (v) => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? '—' : `S/ ${Number(v).toFixed(2)}`;
 
+const normalizarNombre = (s) => String(s || '').trim().toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// "Traslado" no es un costo por unidad — es un cargo condicional a nivel de
+// pedido (según stock en la tienda elegida), así que no entra en precioOferta.
+const NOMBRES_EXCLUIDOS_OFERTA = ['traslado'];
+
 function calcCostos(prov, costos) {
   const base = Number(prov) || 0;
   let total = 0;
   const detalle = [];
   for (const c of costos) {
     if (c.activo === false) continue;
+    const nombre = normalizarNombre(c.nombre);
+    if (NOMBRES_EXCLUIDOS_OFERTA.includes(nombre)) continue;
     const val = Number(c.valor) || 0;
-    const monto = c.tipo === 'porcentaje' ? base * val / 100 : val;
+    let monto = c.tipo === 'porcentaje' ? base * val / 100 : val;
+    // "Ganancia" tiene un piso en S/: si el % calculado da menos, se usa el piso.
+    if (nombre === 'ganancia' && c.montoMinimo !== null && c.montoMinimo !== undefined && c.montoMinimo !== '') {
+      const min = Number(c.montoMinimo) || 0;
+      if (monto < min) monto = min;
+    }
     if (monto) { total += monto; detalle.push(`${c.nombre}: S/ ${monto.toFixed(2)}`); }
   }
   return { total, detalle };
@@ -66,7 +80,7 @@ export default function Precios() {
   useEffect(() => {
     if (!costosData) return;
     setCostos((costosData.items && costosData.items.length ? costosData.items : (costosData.sugeridos || []))
-      .map(c => ({ nombre: c.nombre, tipo: c.tipo || 'fijo', valor: c.valor ?? 0, activo: c.activo !== false, obligatorio: c.obligatorio === true })));
+      .map(c => ({ nombre: c.nombre, tipo: c.tipo || 'fijo', valor: c.valor ?? 0, montoMinimo: c.montoMinimo ?? '', activo: c.activo !== false, obligatorio: c.obligatorio === true })));
   }, [costosData]);
 
   // Al guardar costos se recalcula precioOferta de TODO el catálogo — un cambio
@@ -82,7 +96,7 @@ export default function Precios() {
       qc.invalidateQueries({ queryKey: ['costos-venta'] });
       qc.invalidateQueries({ queryKey: ['precios-productos'] });
     },
-    onError: () => toast.error('No se pudieron guardar los costos'),
+    onError: (e) => toast.error(e?.error || 'No se pudieron guardar los costos'),
   });
 
   const setCosto = (i, patch) => { setCostos(cs => cs.map((c, j) => j === i ? { ...c, ...patch } : c)); setCostosDirty(true); };
@@ -281,6 +295,14 @@ export default function Precios() {
                 <input type="number" step="0.01" value={c.valor} onChange={e => setCosto(i, { valor: e.target.value })}
                   style={{ width: 90, padding: '6px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13, textAlign: 'right' }} />
                 <span style={{ fontSize: 12, color: 'var(--color-text-muted)', width: 18 }}>{c.tipo === 'porcentaje' ? '%' : 'S/'}</span>
+                {normalizarNombre(c.nombre) === 'ganancia' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-text-muted)' }} title="Si el % calculado da menos que este monto, se cobra este monto en su lugar (piso de ganancia por llanta)">
+                    mínimo
+                    <input type="number" step="0.01" min="0" value={c.montoMinimo} onChange={e => setCosto(i, { montoMinimo: e.target.value })} placeholder="0.00"
+                      style={{ width: 80, padding: '6px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13, textAlign: 'right' }} />
+                    S/
+                  </label>
+                )}
                 {c.obligatorio ? (
                   <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }} title="Los conceptos obligatorios siempre están activos">siempre activo</span>
                 ) : (
@@ -297,7 +319,9 @@ export default function Precios() {
         )}
         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8 }}>
           Los porcentajes se calculan sobre el precio proveedor. Estos costos aplican a todas las llantas.{' '}
-          🔒 <strong>IGV, Instalación y Ganancia</strong> son obligatorios para calcular el precio oferta — puedes cambiar su monto/%, pero no renombrarlos ni eliminarlos. El resto de costos que agregues sí son libres de editar o quitar.
+          🔒 <strong>IGV, Instalación y Ganancia</strong> son obligatorios para calcular el precio oferta — puedes cambiar su monto/%, pero no renombrarlos ni eliminarlos. El resto de costos que agregues sí son libres de editar o quitar.{' '}
+          El <strong>mínimo S/</strong> de Ganancia es un piso: si el % da menos que ese monto (ej. en llantas baratas), se cobra el mínimo en su lugar — así nunca ganas menos de eso por llanta.{' '}
+          Si agregas un costo llamado <strong>"Traslado"</strong> (tipo Monto S/), no se suma al precio oferta — el bot de WhatsApp y Nueva Cotización lo usan aparte para cobrarlo una sola vez por venta cuando la tienda elegida no tiene stock, o mostrarlo como descuento cuando sí tiene.
         </div>
       </div>
 
