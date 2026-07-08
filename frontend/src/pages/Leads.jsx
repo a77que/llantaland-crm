@@ -97,7 +97,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
       cliente: { nombre: lead.nombreCliente, telefono: lead.telefono, dniCe: lead.dniCe },
       vehiculo: { marca: lead.marcaAuto, modelo: lead.modeloAuto, anio: lead.anioAuto },
       medida: lead.medidaDetectada || '',
-      llanta: { marca: lead.marcaLlanta || '', modelo: lead.modeloLlanta || '' },
+      llanta: { marca: lead.marcaLlanta || '', modelo: lead.modeloLlanta || '', cantidad: lead.cantidadLlantas || 4 },
       sede: local ? { codigoLocal: local.ID || local.codigoLocal, nombre: local.Nombre || local.nombre } : null,
     } });
   };

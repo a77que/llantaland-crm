@@ -97,7 +97,7 @@ export default function CotizacionNueva() {
   const [trasladoAsume, setTrasladoAsume] = useState('cliente');
 
   // ── Cita ──
-  const [generarCita, setGenerarCita] = useState(false);
+  const [generarCita, setGenerarCita] = useState(!!pre.sede);
   const [sedeCita, setSedeCita] = useState('');
   const [fechaCita, setFechaCita] = useState('');
   const [horaCita, setHoraCita] = useState('');
@@ -153,11 +153,11 @@ export default function CotizacionNueva() {
     staleTime: 60_000,
   });
 
-  const addLlanta = (prod) => {
+  const addLlanta = (prod, cantidadInicial = 4) => {
     setItems(prev => {
       const i = prev.findIndex(it => it.producto.id === prod.id);
       if (i >= 0) return prev.map((it, idx) => idx === i ? { ...it, cantidad: it.cantidad + 1 } : it);
-      return [...prev, { producto: prod, cantidad: 4 }];
+      return [...prev, { producto: prod, cantidad: cantidadInicial }];
     });
     toast.success(`${prod.marca} ${prod.medida} agregada`);
   };
@@ -170,6 +170,20 @@ export default function CotizacionNueva() {
       if (prod) { addLlanta(prod); setMedida(prod.medida || ''); setBuscarActivo(true); }
     }).catch(() => {});
     navigate(location.pathname, { replace: true, state: {} }); // limpiar el state
+  }, []); // eslint-disable-line
+
+  // Precargar la llanta exacta que el cliente eligió por WhatsApp (medida +
+  // marca + modelo) directo en "3. Llantas en la cotización", sin que el
+  // vendedor tenga que buscarla de nuevo.
+  useEffect(() => {
+    if (!pre.medida || !pre.llanta?.marca) return;
+    productosApi.listar({ medida: pre.medida, q: pre.llanta.marca, limit: 20 }).then(r => {
+      const lista = r?.data || [];
+      const match = pre.llanta.modelo
+        ? lista.find(p => (p.nombreComercial || '').trim().toLowerCase() === pre.llanta.modelo.trim().toLowerCase()) || lista[0]
+        : lista[0];
+      if (match) addLlanta(match, pre.llanta.cantidad || 4);
+    }).catch(() => {});
   }, []); // eslint-disable-line
 
   const lookupMut = useMutation({
@@ -495,6 +509,11 @@ export default function CotizacionNueva() {
               <>
                 <div style={S.group}>
                   <label style={S.label}>Tienda de instalación (con stock)</label>
+                  {pre.sede?.nombre && (
+                    <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600, marginBottom: 6 }}>
+                      🏪 Ya elegida por WhatsApp — solo falta poner fecha y hora
+                    </div>
+                  )}
                   <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
                     <option value="">— Elegir tienda —</option>
                     {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
