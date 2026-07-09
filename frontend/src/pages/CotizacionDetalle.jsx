@@ -66,9 +66,21 @@ export default function CotizacionDetalle() {
 
   const pdfMutation = useMutation({
     mutationFn: () => cotizacionesApi.generarPdf(id),
-    onSuccess: (data) => { window.open(data.pdfUrl, '_blank'); },
     onError: (e) => toast.error(e?.error || 'Error al generar PDF'),
   });
+  // Abre la pestaña ANTES de esperar el PDF (dentro del gesto del usuario) para
+  // que el navegador no la bloquee como pop-up; se redirige cuando está listo.
+  const verPdf = () => {
+    const win = window.open('', '_blank');
+    pdfMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        if (!data?.pdfUrl) { if (win && !win.closed) win.close(); return; }
+        if (win && !win.closed) win.location.href = data.pdfUrl;
+        else window.location.href = data.pdfUrl;
+      },
+      onError: () => { if (win && !win.closed) win.close(); },
+    });
+  };
 
   const convertirMutation = useMutation({
     mutationFn: () => cotizacionesApi.convertirAVenta(id),
@@ -134,7 +146,7 @@ export default function CotizacionDetalle() {
 
       {/* Barra de acciones */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button style={S.btn('#64748b')} onClick={() => pdfMutation.mutate()} disabled={pdfMutation.isPending}>📄 PDF</button>
+        <button style={S.btn('#64748b')} onClick={verPdf} disabled={pdfMutation.isPending}>📄 PDF</button>
         {cot.telefonoCliente && <BotonWhatsApp telefono={cot.telefonoCliente} label="WhatsApp" size="lg" />}
         {cot.telefonoCliente && <BotonEnviarPdfWhatsApp telefono={cot.telefonoCliente} tipo="cotización" pdfFn={() => cotizacionesApi.generarPdf(id)} size="lg" />}
         {editable && !editando && <button style={S.btn('#2563eb')} onClick={empezarEdicion}>✏️ Editar</button>}

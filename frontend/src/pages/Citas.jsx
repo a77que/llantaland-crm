@@ -6,15 +6,12 @@ import { citasApi, cotizacionesApi, sedesApi } from '../services/api';
 import { useCitasNotification } from '../context/CitasNotificationContext';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../hooks/useAuth';
-import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
+import { BotonWhatsApp, BotonEnviarPdfWhatsApp, abrirAsync } from '../components/WhatsAppButtons';
 import CalendarioCitas from '../components/CalendarioCitas';
 
 // Genera y abre el PDF de la cita (usa la cotización si existe, si no lo arma desde los datos del cliente)
-async function abrirPdfCita(citaId) {
-  try {
-    const r = await citasApi.generarPdf(citaId);
-    if (r?.pdfUrl) window.open(r.pdfUrl, '_blank');
-  } catch (e) { toast.error(e?.error || 'No se pudo generar el PDF'); }
+function abrirPdfCita(citaId) {
+  return abrirAsync(() => citasApi.generarPdf(citaId));
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

@@ -44,6 +44,28 @@ export function BotonWhatsApp({ telefono, texto, label = 'WhatsApp', size = 'sm'
 }
 
 /**
+ * Abre en una pestaña nueva la URL que devuelve una función async (ej. generar
+ * un PDF). La pestaña se abre en blanco DENTRO del gesto del usuario (clic),
+ * antes de esperar la respuesta — así el navegador nunca la bloquea como
+ * pop-up, aunque el backend tarde un momento en responder. Recién se redirige
+ * cuando la URL está lista.
+ */
+export async function abrirAsync(fn, { onError } = {}) {
+  const win = window.open('', '_blank');
+  try {
+    const r = await fn();
+    const url = r?.pdfUrl;
+    if (!url) throw new Error('No se generó el archivo');
+    if (win && !win.closed) win.location.href = url;
+    else window.location.href = url; // fallback si la pestaña fue bloqueada igual
+  } catch (err) {
+    if (win && !win.closed) win.close();
+    if (onError) onError(err);
+    else toast.error(err?.error || err?.message || 'No se pudo generar el archivo');
+  }
+}
+
+/**
  * Genera un PDF (vía la función pdfFn que devuelve { pdfUrl }) y abre WhatsApp
  * con un mensaje que incluye el enlace público al PDF.
  */

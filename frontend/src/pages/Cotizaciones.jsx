@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { cotizacionesApi } from '../services/api';
-import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
+import { BotonWhatsApp, BotonEnviarPdfWhatsApp, abrirAsync } from '../components/WhatsAppButtons';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useIsMobileOrTablet } from '../hooks/useIsMobile';
 import { useAuth } from '../hooks/useAuth';
@@ -132,12 +132,6 @@ export default function Cotizaciones() {
     keepPreviousData: true,
   });
 
-  const pdfMut = useMutation({
-    mutationFn: (id) => cotizacionesApi.generarPdf(id),
-    onSuccess: (d) => { if (d?.pdfUrl) window.open(d.pdfUrl, '_blank'); },
-    onError: (e) => toast.error(e?.error || 'Error PDF'),
-  });
-
   const convertirMut = useMutation({
     mutationFn: (id) => cotizacionesApi.convertirAVenta(id),
     onSuccess: (d) => { toast.success(`✅ Venta ${d.numero} creada`); qc.invalidateQueries(['cotizaciones']); navigate(`/ventas/${d.ventaId}`); },
@@ -203,7 +197,7 @@ export default function Cotizaciones() {
                 <span style={{ fontWeight:800, fontSize:16, color:'#16a34a' }}>{fmt(c.precioTotal)}</span>
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                   <button onClick={() => navigate(`/cotizaciones/${c.id}`)} style={{ padding:'10px 14px', fontSize:13, border:'none', borderRadius:8, background:'var(--color-primary)', color:'#000', fontWeight:700, cursor:'pointer' }}>👁️ Ver</button>
-                  <button onClick={() => pdfMut.mutate(c.id)} style={{ padding:'10px 14px', fontSize:13, border:'1px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', cursor:'pointer' }}>📄 PDF</button>
+                  <button onClick={() => abrirAsync(() => cotizacionesApi.generarPdf(c.id))} style={{ padding:'10px 14px', fontSize:13, border:'1px solid var(--color-border)', borderRadius:8, background:'var(--color-surface)', cursor:'pointer' }}>📄 PDF</button>
                   {c.telefonoCliente && <BotonWhatsApp telefono={c.telefonoCliente} label="WhatsApp" style={{ padding:'10px 14px', fontSize:13 }} />}
                   {c.telefonoCliente && <BotonEnviarPdfWhatsApp telefono={c.telefonoCliente} tipo="cotización" pdfFn={() => cotizacionesApi.generarPdf(c.id)} style={{ padding:'10px 14px', fontSize:13 }} />}
                   {!c.venta && !['RECHAZADA','CONVERTIDA'].includes(c.estado) && (
@@ -247,7 +241,7 @@ export default function Cotizaciones() {
                   <td style={{ padding:'10px 12px', fontSize:12, color:'var(--color-text-muted)' }}>{new Date(c.createdAt).toLocaleDateString('es-PE')}</td>
                   <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>
                     <button onClick={()=>navigate(`/cotizaciones/${c.id}`)} style={{ padding:'4px 10px', fontSize:11, border:'1px solid var(--color-primary)', borderRadius:6, background:'var(--color-primary)', color:'#000', cursor:'pointer', fontWeight:700, marginRight:4 }}>👁️ Ver</button>
-                    <button onClick={()=>pdfMut.mutate(c.id)} style={{ padding:'4px 10px', fontSize:11, border:'1px solid var(--color-border)', borderRadius:6, background:'var(--color-surface)', cursor:'pointer', marginRight:4 }}>📄 PDF</button>
+                    <button onClick={()=>abrirAsync(() => cotizacionesApi.generarPdf(c.id))} style={{ padding:'4px 10px', fontSize:11, border:'1px solid var(--color-border)', borderRadius:6, background:'var(--color-surface)', cursor:'pointer', marginRight:4 }}>📄 PDF</button>
                     {c.telefonoCliente && <span style={{ marginRight:4, display:'inline-flex' }}><BotonWhatsApp telefono={c.telefonoCliente} label="" /></span>}
                     {c.telefonoCliente && <span style={{ marginRight:4, display:'inline-flex' }}><BotonEnviarPdfWhatsApp telefono={c.telefonoCliente} tipo="cotización" pdfFn={() => cotizacionesApi.generarPdf(c.id)} /></span>}
                     {!c.venta && !['RECHAZADA','CONVERTIDA'].includes(c.estado) && (

@@ -45,12 +45,22 @@ export default function VentaDetalle() {
 
   const pdfMut = useMutation({
     mutationFn: () => ventasApi.generarPdf(id),
-    onSuccess: (data) => {
-      toast.success('PDF generado');
-      if (data?.pdfUrl) window.open(data.pdfUrl, '_blank');
-    },
     onError: (e) => toast.error(e?.error || 'Error al generar PDF'),
   });
+  // Abre la pestaña ANTES de esperar el PDF (dentro del gesto del usuario) para
+  // que el navegador no la bloquee como pop-up; se redirige cuando está listo.
+  const verPdf = () => {
+    const win = window.open('', '_blank');
+    pdfMut.mutate(undefined, {
+      onSuccess: (data) => {
+        if (!data?.pdfUrl) { if (win && !win.closed) win.close(); return; }
+        toast.success('PDF generado');
+        if (win && !win.closed) win.location.href = data.pdfUrl;
+        else window.location.href = data.pdfUrl;
+      },
+      onError: () => { if (win && !win.closed) win.close(); },
+    });
+  };
 
   if (isLoading) return <LoadingSpinner fullPage />;
   if (!venta) return <div style={{ padding: 24 }}>Venta no encontrada</div>;
@@ -73,7 +83,7 @@ export default function VentaDetalle() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
-            onClick={() => pdfMut.mutate()}
+            onClick={verPdf}
             disabled={pdfMut.isPending}
             style={{ padding: '8px 16px', background: '#f5c400', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
           >

@@ -5,13 +5,7 @@ import toast from 'react-hot-toast';
 import { leadsApi, cotizacionesApi, ventasApi } from '../services/api';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useAuth } from '../hooks/useAuth';
-import { BotonWhatsApp, BotonEnviarPdfWhatsApp } from '../components/WhatsAppButtons';
-
-// Abre el PDF (de cotización o venta) en una pestaña
-async function abrirPdf(fn) {
-  try { const r = await fn(); if (r?.pdfUrl) window.open(r.pdfUrl, '_blank'); }
-  catch (e) { toast.error(e?.error || 'No se pudo generar el PDF'); }
-}
+import { BotonWhatsApp, BotonEnviarPdfWhatsApp, abrirAsync as abrirPdf } from '../components/WhatsAppButtons';
 
 const PASO_OPCIONES = [
   'nuevo','esperando_medida','esperando_version_auto','info_tecnica',
