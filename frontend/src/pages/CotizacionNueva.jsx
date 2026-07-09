@@ -101,8 +101,15 @@ export default function CotizacionNueva() {
   const eliminarCargoExtra = (id) => setCargosExtra(prev => prev.filter(c => c.id !== id));
 
   // ── Seguimiento interno del traslado (no se le muestra al cliente) ──
-  const [trasladoOrigen, setTrasladoOrigen] = useState('');
-  const [trasladoNotasInternas, setTrasladoNotasInternas] = useState('');
+  // Por cada llanta (productoId) se puede repartir el traslado entre varias
+  // tiendas/almacenes de origen: { [productoId]: { [sedeId]: cantidad } }
+  const [origenesPorItem, setOrigenesPorItem] = useState({});
+  const setCantidadOrigen = (productoId, sedeId, cantidad) => {
+    setOrigenesPorItem(prev => ({
+      ...prev,
+      [productoId]: { ...prev[productoId], [sedeId]: cantidad },
+    }));
+  };
 
   // ── Tienda de instalación (se elige temprano: define prioridad del catálogo
   // y el descuento por traslado; la cita reutiliza esta misma tienda) ──
@@ -318,15 +325,24 @@ export default function CotizacionNueva() {
   const crearMut = useMutation({
     mutationFn: () => {
       const sede = sedes.find(s => s.id === sedeCita);
-      const sedeOrigen = sedes.find(s => s.id === trasladoOrigen);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
+      const notasOrigenes = items.map(it => {
+        const asignaciones = origenesPorItem[it.producto.id] || {};
+        const partes = Object.entries(asignaciones)
+          .filter(([, cant]) => (parseInt(cant) || 0) > 0)
+          .map(([sedeId, cant]) => {
+            const s = sedes.find(x => x.id === sedeId);
+            return s ? `${cant} desde ${s.nombre}${s.tipo === 'ALMACEN' ? ' (almacén)' : ''}` : null;
+          }).filter(Boolean);
+        if (partes.length === 0) return null;
+        return `[INTERNO] ${it.producto.marca} ${it.producto.medida}: traer ${partes.join(', ')} hacia ${sede?.nombre || 'la tienda elegida'}.`;
+      }).filter(Boolean);
       const notasExtra = [
         descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
         costoTrasladoRestante > 0 ? `Traslado restante asumido por la tienda: ${fmt(costoTrasladoRestante)} — resta ganancia.` : null,
         pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}), no afecta ganancia.` : null,
         ...cargosExtra.filter(c => (parseFloat(c.monto) || 0) > 0).map(c => `Cargo adicional al cliente: ${fmt(c.monto)} — ${c.descripcion || 'sin motivo especificado'}.`),
-        sedeOrigen ? `[INTERNO] Seguimiento traslado: se enviarán las llantas desde ${sedeOrigen.nombre}${sedeOrigen.tipo === 'ALMACEN' ? ' (almacén)' : ''} hacia ${sede?.nombre || 'la tienda elegida'}.` : null,
-        trasladoNotasInternas.trim() ? `[INTERNO] Notas de seguimiento: ${trasladoNotasInternas.trim()}` : null,
+        ...notasOrigenes,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
       return cotizacionesApi.crear({
@@ -519,17 +535,68 @@ export default function CotizacionNueva() {
                 const g = gananciaDeItem(it);
                 const gLineaTotal = parseFloat(it.producto.precioOferta) * it.cantidad;
                 const gCol = g <= 0 ? '#dc2626' : '#16a34a';
+                const stockDestino = sedeCita ? stockDeSede(it.producto, sedeCita) : 0;
+                const faltante = sedeCita ? Math.max(0, it.cantidad - stockDestino) : 0;
+                const origenesDisponibles = sedeCita ? sedes
+                  .filter(s => s.id !== sedeCita)
+                  .map(s => ({ sede: s, stock: stockDeSede(it.producto, s.id) }))
+                  .filter(o => o.stock > 0)
+                  .sort((a, b) => b.stock - a.stock) : [];
+                const asignaciones = origenesPorItem[it.producto.id] || {};
+                const asignado = Object.values(asignaciones).reduce((a, b) => a + (parseInt(b) || 0), 0);
                 return (
-                <div key={it.producto.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 140 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{it.producto.marca} {it.producto.medida}</div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{it.producto.nombreComercial || ''} · {fmt(it.producto.precioOferta)} c/u</div>
+                <div key={it.producto.id} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{it.producto.marca} {it.producto.medida}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{it.producto.nombreComercial || ''} · {fmt(it.producto.precioOferta)} c/u</div>
+                    </div>
+                    <input type="number" min={1} value={it.cantidad} onChange={e => { const c = parseInt(e.target.value) || 1; setItems(prev => prev.map((x, i) => i === idx ? { ...x, cantidad: c } : x)); }}
+                      style={{ width: 56, padding: '5px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, fontSize: 13, textAlign: 'center' }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{fmt(gLineaTotal)}</span>
+                    <span title="Ganancia estimada de esta llanta — no editable" style={{ fontSize: 11.5, fontWeight: 800, minWidth: 84, textAlign: 'right', color: gCol }}>🔒 {fmt(g)}</span>
+                    <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 16, cursor: 'pointer' }}>✕</button>
                   </div>
-                  <input type="number" min={1} value={it.cantidad} onChange={e => { const c = parseInt(e.target.value) || 1; setItems(prev => prev.map((x, i) => i === idx ? { ...x, cantidad: c } : x)); }}
-                    style={{ width: 56, padding: '5px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, fontSize: 13, textAlign: 'center' }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{fmt(gLineaTotal)}</span>
-                  <span title="Ganancia estimada de esta llanta — no editable" style={{ fontSize: 11.5, fontWeight: 800, minWidth: 84, textAlign: 'right', color: gCol }}>🔒 {fmt(g)}</span>
-                  <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 16, cursor: 'pointer' }}>✕</button>
+
+                  {faltante > 0 && (
+                    <div style={{ marginTop: 6, padding: '10px 12px', borderRadius: 8, background: 'var(--color-surface)', border: '1px dashed var(--color-border)' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+                        🔒 Uso interno — de dónde traer las {faltante} que faltan
+                      </div>
+                      {origenesDisponibles.length === 0 ? (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No hay stock de esta llanta en otras tiendas/almacenes.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {origenesDisponibles.map(({ sede: s, stock }) => {
+                            const val = parseInt(asignaciones[s.id]) || 0;
+                            return (
+                              <div key={s.id}
+                                onClick={() => setCantidadOrigen(it.producto.id, s.id, String(Math.min(stock, val + 1)))}
+                                style={{
+                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                                  padding: '7px 10px', borderRadius: 7, cursor: 'pointer',
+                                  border: `1.5px solid ${val > 0 ? '#16a34a' : 'var(--color-border)'}`,
+                                  background: val > 0 ? '#f0fdf4' : 'var(--color-bg)',
+                                }}>
+                                <span style={{ fontSize: 12.5, fontWeight: 600 }}>
+                                  {s.nombre}{s.tipo === 'ALMACEN' ? ' (Almacén)' : ''} — {stock} en stock
+                                </span>
+                                <input
+                                  type="number" min={0} max={stock} value={val}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => setCantidadOrigen(it.producto.id, s.id, String(Math.max(0, Math.min(stock, parseInt(e.target.value) || 0))))}
+                                  style={{ width: 50, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--color-border)', fontSize: 12, textAlign: 'center' }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, fontWeight: 700, marginTop: 6, color: asignado >= faltante ? '#16a34a' : '#d97706' }}>
+                        {asignado} de {faltante} unidades asignadas{asignado >= faltante ? ' ✓' : ' — falta asignar'}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 );
               })}
@@ -573,25 +640,6 @@ export default function CotizacionNueva() {
                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>🏪 Traslado lo paga la tienda — descuenta {fmt(trasladoRestanteBase)} más (el viaje que aún falta), del precio y de la ganancia</span>
                     </label>
                   )}
-                </div>
-              )}
-
-              {trasladoRestanteBase > 0 && (
-                <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--color-bg)', border: '1px dashed var(--color-border)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
-                    🔒 Solo uso interno — seguimiento del traslado
-                  </div>
-                  <div style={S.group}>
-                    <label style={S.label}>¿Desde qué tienda/almacén se enviarán las llantas?</label>
-                    <select style={S.input} value={trasladoOrigen} onChange={e => setTrasladoOrigen(e.target.value)}>
-                      <option value="">— Elegir origen —</option>
-                      {sedes.filter(s => s.id !== sedeCita).map(s => <option key={s.id} value={s.id}>{s.nombre}{s.tipo === 'ALMACEN' ? ' (Almacén)' : ''}</option>)}
-                    </select>
-                  </div>
-                  <div style={S.group}>
-                    <label style={S.label}>Notas de seguimiento (opcional)</label>
-                    <input style={S.input} value={trasladoNotasInternas} onChange={e => setTrasladoNotasInternas(e.target.value)} placeholder="Ej: coordinar con transportista, fecha estimada..." />
-                  </div>
                 </div>
               )}
 
