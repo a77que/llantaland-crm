@@ -66,46 +66,64 @@ export async function abrirAsync(fn, { onError } = {}) {
 }
 
 /**
- * Genera un PDF (vía la función pdfFn que devuelve { pdfUrl }) y abre WhatsApp
- * con un mensaje que incluye el enlace público al PDF.
+ * Genera un PDF (vía la función pdfFn que devuelve { pdfUrl }) y ofrece
+ * abrirlo por WhatsApp con un mensaje que incluye el enlace público al PDF.
+ *
+ * Flujo en 2 pasos a propósito: "Enviar" genera el PDF, y una vez listo el
+ * botón se convierte en un link real "Abrir WhatsApp" que el usuario hace
+ * clic él mismo. Se probó el patrón de abrir una pestaña en blanco y
+ * redirigirla luego (como hace abrirAsync) y en varios casos WhatsApp se
+ * queda pegado en su pantalla de "Open app" sin completar la apertura,
+ * porque esa navegación ya no ocurre dentro de un clic directo y confiable
+ * del usuario. Un segundo clic real sobre un <a> es lo único que funciona
+ * de forma consistente en PC y celular.
  */
 export function BotonEnviarPdfWhatsApp({ telefono, pdfFn, tipo = 'documento', mensajeBase, size = 'sm', style = {} }) {
-  const [cargando, setCargando] = useState(false);
+  const [estado, setEstado] = useState('idle'); // idle | cargando | listo
+  const [link, setLink] = useState(null);
   const tel = normalizarTelefono(telefono);
   if (!tel) return null;
 
-  const enviar = async (e) => {
+  const generar = async (e) => {
     e.stopPropagation();
-    if (cargando) return;
-    // Abrir la pestaña AHORA (gesto del usuario) para que el navegador/el celular
-    // no la bloquee. Luego se redirige a WhatsApp cuando el PDF está listo.
-    const win = window.open('', '_blank');
-    setCargando(true);
+    if (estado === 'cargando') return;
+    setEstado('cargando');
     try {
       const r = await pdfFn();
       if (!r?.pdfUrl) throw new Error('No se generó el PDF');
       const url = r.pdfUrl.startsWith('http') ? r.pdfUrl : `${window.location.origin}${r.pdfUrl}`;
       const texto = `${mensajeBase || `Hola, te comparto tu ${tipo} de Llantaland`}:\n${url}`;
-      const link = waLink(tel, texto);
-      if (win && !win.closed) win.location.href = link;
-      else window.location.href = link; // fallback si la pestaña fue bloqueada
+      setLink(waLink(tel, texto));
+      setEstado('listo');
     } catch (err) {
-      if (win && !win.closed) win.close();
       toast.error(err?.error || err?.message || 'No se pudo generar el PDF');
-    } finally {
-      setCargando(false);
+      setEstado('idle');
     }
   };
 
   const pad = size === 'lg' ? '11px 16px' : '5px 10px';
   const fs = size === 'lg' ? 14 : 11.5;
+
+  if (estado === 'listo' && link) {
+    return (
+      <a
+        href={link} target="_blank" rel="noopener noreferrer"
+        onClick={(e) => { e.stopPropagation(); setTimeout(() => setEstado('idle'), 400); }}
+        title={`Abrir WhatsApp con ${tel}`}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: pad, fontSize: fs, fontWeight: 700, background: '#25D366', color: '#fff', borderRadius: 8, textDecoration: 'none', whiteSpace: 'nowrap', border: 'none', cursor: 'pointer', ...style }}
+      >
+        <span style={{ fontSize: fs + 2 }}>✅</span> Abrir WhatsApp
+      </a>
+    );
+  }
+
   return (
     <button
-      onClick={enviar} disabled={cargando}
+      onClick={generar} disabled={estado === 'cargando'}
       title={`Enviar ${tipo} por WhatsApp`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: pad, fontSize: fs, fontWeight: 700, background: cargando ? '#94a3b8' : '#128C7E', color: '#fff', borderRadius: 8, border: 'none', cursor: cargando ? 'wait' : 'pointer', whiteSpace: 'nowrap', ...style }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: pad, fontSize: fs, fontWeight: 700, background: estado === 'cargando' ? '#94a3b8' : '#128C7E', color: '#fff', borderRadius: 8, border: 'none', cursor: estado === 'cargando' ? 'wait' : 'pointer', whiteSpace: 'nowrap', ...style }}
     >
-      <span style={{ fontSize: fs + 2 }}>📤</span> {cargando ? 'Generando...' : `Enviar ${tipo}`}
+      <span style={{ fontSize: fs + 2 }}>📤</span> {estado === 'cargando' ? 'Generando...' : `Enviar ${tipo}`}
     </button>
   );
 }
