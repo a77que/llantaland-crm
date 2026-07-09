@@ -104,14 +104,16 @@ export default function CotizacionNueva() {
   const [horaCita, setHoraCita] = useState('');
 
   const { data: sedes = [] } = useQuery({ queryKey: ['sedes'], queryFn: sedesApi.listar, staleTime: Infinity });
+  // El cliente solo puede instalar en una tienda, nunca en un almacén.
+  const tiendas = useMemo(() => sedes.filter(s => s.tipo === 'TIENDA'), [sedes]);
 
   // Precargar la tienda que el cliente eligió por WhatsApp (llega por código de
   // local; las sedes cargan async, así que se hace una vez que ya están).
   useEffect(() => {
-    if (!pre.sede?.codigoLocal || sedeCita || sedes.length === 0) return;
-    const match = sedes.find(s => s.codigoLocal === pre.sede.codigoLocal);
+    if (!pre.sede?.codigoLocal || sedeCita || tiendas.length === 0) return;
+    const match = tiendas.find(s => s.codigoLocal === pre.sede.codigoLocal);
     if (match) setSedeCita(match.id);
-  }, [sedes]); // eslint-disable-line
+  }, [tiendas]); // eslint-disable-line
 
   // Costos globales (IGV, Instalación, Ganancia, etc.) — lectura, el vendedor no los edita aquí.
   const { data: costosVentaData } = useQuery({ queryKey: ['costos-venta-lectura'], queryFn: productosApi.costosVenta, staleTime: 60_000 });
@@ -256,22 +258,36 @@ export default function CotizacionNueva() {
     return sum + desc;
   }, 0) : 0;
 
-  const subtotalConTraslado = Math.max(0, subtotal - descuentoTraslado);
+  // Traslado restante: el descuento automático de arriba deja SIEMPRE un
+  // viaje sin descontar por cada modelo que de verdad hay que traer (por
+  // eso es "cantidad - 1" y no "cantidad"). Ese último viaje lo sigue
+  // pagando el cliente dentro del precio, salvo que el vendedor active
+  // "Traslado lo paga la tienda" — ahí sí sale del bolsillo de la tienda,
+  // así que se descuenta también del precio final y de la ganancia.
+  const trasladoRestanteBase = sedeCita ? items.reduce((sum, it) => {
+    if (it.cantidad <= 0) return sum;
+    const hayStock = stockDeSede(it.producto, sedeCita) > 0;
+    return hayStock ? sum : sum + montoTraslado;
+  }, 0) : 0;
+  const costoTrasladoRestante = trasladoAsumeTienda ? trasladoRestanteBase : 0;
+
+  const subtotalConTraslado = Math.max(0, subtotal - descuentoTraslado - costoTrasladoRestante);
   const descuentoTransferencia = pagoTransferencia ? subtotalConTraslado * PCT_TRANSFERENCIA : 0;
 
   const descuentoManual = parseFloat(descuento || 0);
-  const descuentoTotal = descuentoManual + descuentoTraslado + descuentoTransferencia;
+  const descuentoTotal = descuentoManual + descuentoTraslado + costoTrasladoRestante + descuentoTransferencia;
 
   // La ganancia (utilidad real de la tienda) solo se ve afectada por lo que
   // realmente sale del bolsillo de la tienda:
-  // - Descuento por traslado: solo resta ganancia si el vendedor activa
-  //   "Traslado lo paga la tienda"; si no, es un ajuste de precio (el
-  //   traslado que no se hizo, no le cuesta nada a la tienda).
+  // - Descuento por traslado (automático): nunca resta ganancia, es un
+  //   ajuste de precio (el viaje que no se hizo no le cuesta nada a la tienda).
+  // - Traslado restante (si la tienda lo asume): sí resta ganancia, porque
+  //   ahora la tienda paga de su bolsillo el viaje que faltaba.
   // - Descuento por transferencia: nunca resta ganancia, es un beneficio al
   //   precio del cliente por elegir ese medio de pago.
   // - Descuento manual (S/): siempre resta ganancia, es dinero que el
   //   vendedor decide regalar directamente.
-  const gananciaFinal = gananciaBase - descuentoManual - (trasladoAsumeTienda ? descuentoTraslado : 0);
+  const gananciaFinal = gananciaBase - descuentoManual - costoTrasladoRestante;
   const totalCalc = Math.max(0, subtotal - descuentoTotal);
 
   // Semáforo de ganancia: roja (sin ganancia), amarilla (hay descuentos que sí
@@ -287,7 +303,8 @@ export default function CotizacionNueva() {
       const sede = sedes.find(s => s.id === sedeCita);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
       const notasExtra = [
-        descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)}${trasladoAsumeTienda ? ' — lo asume la tienda (resta ganancia)' : ' — ajuste de precio, no afecta ganancia'}.` : null,
+        descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
+        costoTrasladoRestante > 0 ? `Traslado restante asumido por la tienda: ${fmt(costoTrasladoRestante)} — resta ganancia.` : null,
         pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}), no afecta ganancia.` : null,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
@@ -359,7 +376,7 @@ export default function CotizacionNueva() {
               )}
               <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
                 <option value="">— Elegir tienda —</option>
-                {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                {tiendas.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
             </div>
             {sedeSel && (
@@ -517,13 +534,12 @@ export default function CotizacionNueva() {
                     🚚 Descuento por traslado{descuentoTraslado > 0 ? `: ${fmt(descuentoTraslado)}` : ': S/ 0.00'}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    Se calcula solo según el stock de cada llanta en {sedeSel?.nombre}: si hay stock, se descuenta el traslado completo; si hay que traer, se descuenta desde la 2da unidad.
-                    {' '}Este descuento reduce el precio del cliente pero no la ganancia, salvo que actives la opción de abajo.
+                    El precio de cada llanta ya trae el traslado incluido. Si el cliente lleva varias, solo hace falta un viaje: se descuenta el traslado de todas menos una unidad (por cada modelo que no hay en {sedeSel?.nombre}). Este descuento no afecta la ganancia, es un ajuste de precio.
                   </div>
-                  {descuentoTraslado > 0 && (
+                  {trasladoRestanteBase > 0 && (
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer' }}>
                       <input type="checkbox" checked={trasladoAsumeTienda} onChange={e => setTrasladoAsumeTienda(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#16a34a' }} />
-                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>🏪 Traslado lo paga la tienda (sí descuenta de la ganancia)</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>🏪 Traslado lo paga la tienda — descuenta {fmt(trasladoRestanteBase)} más (el viaje que aún falta), del precio y de la ganancia</span>
                     </label>
                   )}
                 </div>
@@ -604,6 +620,7 @@ export default function CotizacionNueva() {
               </div>
             ))}
             {descuentoTraslado > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento traslado</span><span>- {fmt(descuentoTraslado)}</span></div>}
+            {costoTrasladoRestante > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Traslado asumido por la tienda</span><span>- {fmt(costoTrasladoRestante)}</span></div>}
             {descuentoTransferencia > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento transferencia (5%)</span><span>- {fmt(descuentoTransferencia)}</span></div>}
             {descuentoManual > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(descuentoManual)}</span></div>}
             {generarCita && fechaCita && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>🗓️ Cita: {fechaCita}{horaCita ? ` ${horaCita}` : ''}</div>}
