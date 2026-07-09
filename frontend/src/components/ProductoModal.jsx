@@ -795,8 +795,8 @@ export default function ProductoModal({ prodId, onClose, comparar = [], setCompa
                 {/* Precios */}
                 <div style={{ background:'var(--color-bg)', borderRadius:12, padding:'14px 16px', border:'1px solid var(--color-border)' }}>
                   <div style={{ fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:1, color:'var(--color-primary)', marginBottom:10 }}>💰 Precio</div>
-                  <div style={{ fontSize:20, fontWeight:900, color:'var(--color-primary)' }}>{fmt(prod.precioRegular) || '—'}</div>
-                  {prod.precioOferta && <div style={{ marginTop:4, padding:'2px 8px', background:'#f0fdf4', borderRadius:6, border:'1px solid #bbf7d0', fontSize:12, fontWeight:700, color:'#16a34a', display:'inline-block' }}>Oferta {fmt(prod.precioOferta)}</div>}
+                  <div style={{ fontSize:20, fontWeight:900, color:'#16a34a' }}>{fmt(prod.precioOferta) || '—'}</div>
+                  {prod.precioRegular && <div style={{ marginTop:4, fontSize:12, color:'var(--color-text-muted)', textDecoration:'line-through' }}>Regular {fmt(prod.precioRegular)}</div>}
                   {prod.descuentoMaximo && <div style={{ marginTop:6, fontSize:11, color:'var(--color-text-muted)' }}>Dcto. máx. {parseFloat(prod.descuentoMaximo).toFixed(0)}%</div>}
                   {prod.sku && <div style={{ marginTop:8, fontSize:9, color:'var(--color-text-muted)', fontFamily:'monospace' }}>SKU: {prod.sku}</div>}
                 </div>

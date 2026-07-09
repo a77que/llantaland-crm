@@ -250,7 +250,7 @@ export default function CotizacionNueva() {
     onError: (e) => toast.error(e?.error || 'Error al buscar versiones'),
   });
 
-  const subtotal = items.reduce((a, i) => a + parseFloat(i.producto.precioRegular) * i.cantidad, 0);
+  const subtotal = items.reduce((a, i) => a + parseFloat(i.producto.precioOferta) * i.cantidad, 0);
   const gananciaBase = items.reduce((a, it) => a + gananciaDeItem(it), 0);
 
   const sedeSel = sedes.find(s => s.id === sedeCita);
@@ -335,7 +335,7 @@ export default function CotizacionNueva() {
         marcaAuto: veh.marca, modeloAuto: veh.modelo, anioAuto: veh.anio,
         items: items.map(i => ({
           sku: i.producto.sku, medida: i.producto.medida, marca: i.producto.marca,
-          modelo: i.producto.nombreComercial, cantidad: i.cantidad, precioUnit: parseFloat(i.producto.precioRegular),
+          modelo: i.producto.nombreComercial, cantidad: i.cantidad, precioUnit: parseFloat(i.producto.precioOferta),
         })),
         descuento: descuentoTotal > 0 ? descuentoTotal : undefined,
         cargoAdicional: cargoManual > 0 ? cargoManual : undefined,
@@ -497,7 +497,7 @@ export default function CotizacionNueva() {
                           <td style={{ padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }} onClick={() => setModalProdId(p.id)}>{p.medida}</td>
                           <td style={{ padding: '6px 10px' }}>{p.marca}</td>
                           <td style={{ padding: '6px 10px', color: 'var(--color-text-muted)' }}>{p.nombreComercial || '—'}</td>
-                          <td style={{ padding: '6px 10px', fontWeight: 700 }}>{fmt(p.precioRegular)}</td>
+                          <td style={{ padding: '6px 10px', fontWeight: 700 }}>{fmt(p.precioOferta)}</td>
                           <td style={{ padding: '6px 10px' }}><StockCell value={stockTotal} /></td>
                           <td style={{ padding: '6px 10px' }}><button onClick={() => setModalProdId(p.id)} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, cursor: 'pointer' }}>Ver</button></td>
                           <td style={{ padding: '6px 10px' }}><button onClick={() => addLlanta(p)} style={{ fontSize: 11, padding: '3px 10px', background: yaEsta ? 'var(--color-bg)' : '#16a34a', color: yaEsta ? 'var(--color-text)' : '#fff', border: yaEsta ? '1px solid var(--color-border)' : 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>{yaEsta ? '+1' : '+ Agregar'}</button></td>
@@ -517,13 +517,13 @@ export default function CotizacionNueva() {
               <div style={S.cardTitle}>5. Llantas en la cotización ({items.length})</div>
               {items.map((it, idx) => {
                 const g = gananciaDeItem(it);
-                const gLineaTotal = parseFloat(it.producto.precioRegular) * it.cantidad;
+                const gLineaTotal = parseFloat(it.producto.precioOferta) * it.cantidad;
                 const gCol = g <= 0 ? '#dc2626' : '#16a34a';
                 return (
                 <div key={it.producto.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>{it.producto.marca} {it.producto.medida}</div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{it.producto.nombreComercial || ''} · {fmt(it.producto.precioRegular)} c/u</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{it.producto.nombreComercial || ''} · {fmt(it.producto.precioOferta)} c/u</div>
                   </div>
                   <input type="number" min={1} value={it.cantidad} onChange={e => { const c = parseInt(e.target.value) || 1; setItems(prev => prev.map((x, i) => i === idx ? { ...x, cantidad: c } : x)); }}
                     style={{ width: 56, padding: '5px 8px', border: '1.5px solid var(--color-border)', borderRadius: 6, fontSize: 13, textAlign: 'center' }} />
@@ -675,7 +675,7 @@ export default function CotizacionNueva() {
             {items.map(it => (
               <div key={it.producto.id} style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span>{it.cantidad}× {it.producto.marca} {it.producto.medida}</span>
-                <span>{fmt(parseFloat(it.producto.precioRegular) * it.cantidad)}</span>
+                <span>{fmt(parseFloat(it.producto.precioOferta) * it.cantidad)}</span>
               </div>
             ))}
             {descuentoTraslado > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento traslado</span><span>- {fmt(descuentoTraslado)}</span></div>}

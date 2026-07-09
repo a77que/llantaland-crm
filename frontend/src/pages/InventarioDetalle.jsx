@@ -152,10 +152,10 @@ export default function InventarioDetalle() {
             </div>
             <div style={{ padding: '12px 16px' }}>
               <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>SKU: {prod.sku}</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--color-primary)' }}>{fmt(prod.precioRegular)}</div>
-              {prod.precioOferta && (
-                <div style={{ display: 'inline-block', marginTop: 4, padding: '2px 10px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 13, fontWeight: 700, color: '#16a34a' }}>
-                  Oferta: {fmt(prod.precioOferta)}
+              <div style={{ fontSize: 22, fontWeight: 900, color: '#16a34a' }}>{fmt(prod.precioOferta)}</div>
+              {prod.precioRegular && (
+                <div style={{ marginTop: 4, fontSize: 13, color: 'var(--color-text-muted)', textDecoration: 'line-through' }}>
+                  Regular: {fmt(prod.precioRegular)}
                 </div>
               )}
               {/* Subir imagen */}
