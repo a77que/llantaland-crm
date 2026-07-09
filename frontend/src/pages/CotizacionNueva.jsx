@@ -49,7 +49,7 @@ function calcCostoTraslado(costos) {
   return Number(c.valor) || 0;
 }
 
-const PCT_TARJETA = 0.04;
+const PCT_TRANSFERENCIA = 0.05;
 
 function StockCell({ value }) {
   const c = value > 10 ? '#16a34a' : value > 3 ? '#ca8a04' : value > 0 ? '#f97316' : '#dc2626';
@@ -91,14 +91,14 @@ export default function CotizacionNueva() {
   const [verComparador, setVerComparador] = useState(false);
 
   // ── Costos adicionales de la venta (decisión del vendedor antes de confirmar) ──
-  const [pagoTarjeta, setPagoTarjeta] = useState(false);
-  const [tarjetaAsume, setTarjetaAsume] = useState('cliente'); // 'cliente' | 'tienda'
-  const [trasladoTiendas, setTrasladoTiendas] = useState(false);
-  const [trasladoAsume, setTrasladoAsume] = useState('cliente');
+  const [pagoTransferencia, setPagoTransferencia] = useState(false);
+
+  // ── Tienda de instalación (se elige temprano: define prioridad del catálogo
+  // y el descuento por traslado; la cita reutiliza esta misma tienda) ──
+  const [sedeCita, setSedeCita] = useState('');
 
   // ── Cita ──
   const [generarCita, setGenerarCita] = useState(!!pre.sede);
-  const [sedeCita, setSedeCita] = useState('');
   const [fechaCita, setFechaCita] = useState('');
   const [horaCita, setHoraCita] = useState('');
 
@@ -133,17 +133,26 @@ export default function CotizacionNueva() {
     enabled: buscarActivo,
   });
 
-  // Catálogo ordenado: primero productos con stock, luego sin stock (mayor stock primero)
+  const stockDeSede = (prod, sedeId) => prod?.stocks?.find(s => s.sedeId === sedeId || s.sede?.id === sedeId)?.cantidad ?? 0;
+
+  // Catálogo ordenado: primero lo que hay en la tienda elegida (para instalar
+  // ahí mismo sin traslado), luego el resto con stock en cualquier tienda,
+  // luego sin stock (mayor stock primero como desempate).
   const productosCatalogo = useMemo(() => {
     const list = productos?.data || [];
     return [...list].sort((a, b) => {
+      if (sedeCita) {
+        const la = stockDeSede(a, sedeCita) > 0 ? 1 : 0;
+        const lb = stockDeSede(b, sedeCita) > 0 ? 1 : 0;
+        if (la !== lb) return lb - la;
+      }
       const sa = a.stocks?.reduce((s, x) => s + x.cantidad, 0) ?? 0;
       const sb = b.stocks?.reduce((s, x) => s + x.cantidad, 0) ?? 0;
       if (sa > 0 && sb === 0) return -1;
       if (sa === 0 && sb > 0) return 1;
       return sb - sa;
     });
-  }, [productos]);
+  }, [productos, sedeCita]);
 
   // Sugerencias ajax de medida mientras se tipea
   const { data: medidaSugeridas = [] } = useQuery({
@@ -228,24 +237,32 @@ export default function CotizacionNueva() {
     onError: (e) => toast.error(e?.error || 'Error al buscar versiones'),
   });
 
-  const stockDeSede = (prod, sedeId) => prod?.stocks?.find(s => s.sedeId === sedeId || s.sede?.id === sedeId)?.cantidad ?? 0;
   const subtotal = items.reduce((a, i) => a + parseFloat(i.producto.precioRegular) * i.cantidad, 0);
   const gananciaBase = items.reduce((a, it) => a + gananciaDeItem(it), 0);
 
+  const sedeSel = sedes.find(s => s.id === sedeCita);
+
+  // Descuento por traslado: la misma regla que usa el bot de WhatsApp — el
+  // costo de traslado ya está incluido en el precio de cada llanta, así que
+  // nunca se cobra de más, solo se descuenta. Si la tienda elegida SÍ tiene
+  // stock de esa llanta (no hace falta traer nada), se descuenta el traslado
+  // completo de todas las unidades. Si NO tiene stock (hay que traerla), solo
+  // se descuenta a partir de la 2da unidad porque el mismo viaje trae varias.
   const montoTraslado = calcCostoTraslado(costosVenta);
-  const montoTarjeta = subtotal * PCT_TARJETA;
-  const costoTarjeta = pagoTarjeta ? montoTarjeta : 0;
-  const costoTraslado = trasladoTiendas ? montoTraslado : 0;
+  const descuentoTraslado = sedeCita ? items.reduce((sum, it) => {
+    const hayStock = stockDeSede(it.producto, sedeCita) > 0;
+    const desc = hayStock ? montoTraslado * it.cantidad : montoTraslado * Math.max(0, it.cantidad - 1);
+    return sum + desc;
+  }, 0) : 0;
 
-  // Lo que se le suma al total que paga el cliente (solo la parte que decidió "asume cliente")
-  const cargoCliente = (pagoTarjeta && tarjetaAsume === 'cliente' ? costoTarjeta : 0)
-                      + (trasladoTiendas && trasladoAsume === 'cliente' ? costoTraslado : 0);
-  // Lo que resta de la ganancia (la parte que decidió "asume tienda")
-  const cargoTienda = (pagoTarjeta && tarjetaAsume === 'tienda' ? costoTarjeta : 0)
-                     + (trasladoTiendas && trasladoAsume === 'tienda' ? costoTraslado : 0);
+  const subtotalConTraslado = Math.max(0, subtotal - descuentoTraslado);
+  const descuentoTransferencia = pagoTransferencia ? subtotalConTraslado * PCT_TRANSFERENCIA : 0;
 
-  const gananciaFinal = gananciaBase - cargoTienda;
-  const totalCalc = Math.max(0, subtotal - parseFloat(descuento || 0) + cargoCliente);
+  const descuentoManual = parseFloat(descuento || 0);
+  const descuentoTotal = descuentoManual + descuentoTraslado + descuentoTransferencia;
+
+  const gananciaFinal = gananciaBase - descuentoTraslado - descuentoTransferencia;
+  const totalCalc = Math.max(0, subtotal - descuentoTotal);
 
   // Semáforo de ganancia: roja (sin ganancia), amarilla (la tienda está
   // absorbiendo parte del recargo y eso reduce la ganancia real, pero sigue
@@ -261,8 +278,8 @@ export default function CotizacionNueva() {
       const sede = sedes.find(s => s.id === sedeCita);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
       const notasExtra = [
-        pagoTarjeta ? `Pago con tarjeta: recargo 4% (${fmt(costoTarjeta)}) asumido por ${tarjetaAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
-        trasladoTiendas ? `Traslado entre tiendas: ${fmt(montoTraslado)} asumido por ${trasladoAsume === 'cliente' ? 'el cliente' : 'la tienda'}.` : null,
+        descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)}.` : null,
+        pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}).` : null,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
       return cotizacionesApi.crear({
@@ -273,8 +290,7 @@ export default function CotizacionNueva() {
           sku: i.producto.sku, medida: i.producto.medida, marca: i.producto.marca,
           modelo: i.producto.nombreComercial, cantidad: i.cantidad, precioUnit: parseFloat(i.producto.precioRegular),
         })),
-        descuento: descuento || undefined,
-        cargoAdicional: cargoCliente > 0 ? cargoCliente : undefined,
+        descuento: descuentoTotal > 0 ? descuentoTotal : undefined,
         notas: notasFinal || undefined,
         generarCita,
         ...(generarCita ? { fechaInstalacion: fechaCita || undefined, horaInstalacion: horaCita || undefined, localInstalacion: local } : {}),
@@ -322,9 +338,35 @@ export default function CotizacionNueva() {
             </div>
           </div>
 
-          {/* 2. Medida */}
+          {/* 2. Tienda de instalación */}
           <div style={S.card}>
-            <div style={S.cardTitle}>2. Medida de la llanta</div>
+            <div style={S.cardTitle}>2. Tienda de instalación</div>
+            <div style={S.group}>
+              <label style={S.label}>¿En qué tienda va a instalar el cliente?</label>
+              {pre.sede?.nombre && (
+                <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600, marginBottom: 6 }}>
+                  🏪 Ya elegida por WhatsApp
+                </div>
+              )}
+              <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
+                <option value="">— Elegir tienda —</option>
+                {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </div>
+            {sedeSel && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', fontSize: 12.5 }}>
+                📍 {sedeSel.direccion || 'Sin dirección registrada'}{sedeSel.distrito ? ` · ${sedeSel.distrito}` : ''}
+                {sedeSel.telefono && <div style={{ marginTop: 2 }}>📞 {sedeSel.telefono}</div>}
+              </div>
+            )}
+            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 8 }}>
+              Al elegir la tienda, el catálogo de abajo mostrará primero las llantas que ya hay en stock ahí.
+            </div>
+          </div>
+
+          {/* 3. Medida */}
+          <div style={S.card}>
+            <div style={S.cardTitle}>3. Medida de la llanta</div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
               <div style={S.tab(modoMedida === 'directa')} onClick={() => setModoMedida('directa')}>📏 Medida directa</div>
               <div style={S.tab(modoMedida === 'placa')} onClick={() => setModoMedida('placa')}>🔢 Por placa</div>
@@ -376,10 +418,15 @@ export default function CotizacionNueva() {
             )}
           </div>
 
-          {/* 3. Catálogo */}
+          {/* 4. Catálogo */}
           {buscarActivo && (
             <div style={S.card}>
-              <div style={S.cardTitle}>3. Agregar llantas del catálogo</div>
+              <div style={S.cardTitle}>4. Agregar llantas del catálogo</div>
+              {sedeSel && (
+                <div style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600, marginBottom: 8 }}>
+                  🏪 Primero se muestran las llantas con stock en {sedeSel.nombre}
+                </div>
+              )}
               <input style={{ ...S.input, marginBottom: 12 }} value={buscarQuery} onChange={e => setBuscarQuery(e.target.value)} placeholder="Filtrar por medida, marca, SKU..." />
               {comparar.length >= 1 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -416,10 +463,10 @@ export default function CotizacionNueva() {
             </div>
           )}
 
-          {/* 4. Llantas elegidas */}
+          {/* 5. Llantas elegidas */}
           {items.length > 0 && (
             <div style={S.card}>
-              <div style={S.cardTitle}>4. Llantas en la cotización ({items.length})</div>
+              <div style={S.cardTitle}>5. Llantas en la cotización ({items.length})</div>
               {items.map((it, idx) => {
                 const g = gananciaDeItem(it);
                 const gLineaTotal = parseFloat(it.producto.precioRegular) * it.cantidad;
@@ -447,41 +494,32 @@ export default function CotizacionNueva() {
 
           {items.length > 0 && (
             <div style={S.card}>
-              <div style={S.cardTitle}>5. Costos adicionales de la venta</div>
+              <div style={S.cardTitle}>6. Costos adicionales de la venta</div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
-                <input type="checkbox" checked={pagoTarjeta} onChange={e => setPagoTarjeta(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>💳 Cliente paga con tarjeta (crédito/débito) — recargo 4%</span>
-              </label>
-              {pagoTarjeta && (
-                <div style={{ display: 'flex', gap: 16, paddingLeft: 28, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
-                    <input type="radio" name="tarjetaAsume" checked={tarjetaAsume === 'cliente'} onChange={() => setTarjetaAsume('cliente')} />
-                    Asumido por el cliente (suma al precio total)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
-                    <input type="radio" name="tarjetaAsume" checked={tarjetaAsume === 'tienda'} onChange={() => setTarjetaAsume('tienda')} />
-                    Asumido por la tienda (no afecta el precio)
-                  </label>
+              {!sedeCita && (
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+                  Elige la tienda de instalación arriba (paso 2) para calcular el descuento por traslado.
+                </div>
+              )}
+              {sedeCita && (
+                <div style={{
+                  background: descuentoTraslado > 0 ? '#f0fdf4' : 'var(--color-bg)',
+                  border: `1px solid ${descuentoTraslado > 0 ? '#bbf7d0' : 'var(--color-border)'}`,
+                  borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 13,
+                }}>
+                  <div style={{ fontWeight: 700, color: descuentoTraslado > 0 ? '#16a34a' : 'var(--color-text-muted)' }}>
+                    🚚 Descuento por traslado{descuentoTraslado > 0 ? `: ${fmt(descuentoTraslado)}` : ': S/ 0.00'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                    Se calcula solo según el stock de cada llanta en {sedeSel?.nombre}: si hay stock, se descuenta el traslado completo; si hay que traer, se descuenta desde la 2da unidad.
+                  </div>
                 </div>
               )}
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
-                <input type="checkbox" checked={trasladoTiendas} onChange={e => setTrasladoTiendas(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>🚚 Traslado entre tiendas — S/ {montoTraslado.toFixed(2)}</span>
+                <input type="checkbox" checked={pagoTransferencia} onChange={e => setPagoTransferencia(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>🏦 Cliente paga por transferencia bancaria — descuento 5%</span>
               </label>
-              {trasladoTiendas && (
-                <div style={{ display: 'flex', gap: 16, paddingLeft: 28, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
-                    <input type="radio" name="trasladoAsume" checked={trasladoAsume === 'cliente'} onChange={() => setTrasladoAsume('cliente')} />
-                    Asumido por el cliente (suma al precio total)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
-                    <input type="radio" name="trasladoAsume" checked={trasladoAsume === 'tienda'} onChange={() => setTrasladoAsume('tienda')} />
-                    Asumido por la tienda (no afecta el precio)
-                  </label>
-                </div>
-              )}
 
               <div style={{
                 marginTop: 12, padding: '12px 14px', borderRadius: 8,
@@ -499,7 +537,7 @@ export default function CotizacionNueva() {
             </div>
           )}
 
-          {/* 6. Generar cita */}
+          {/* 7. Generar cita */}
           <div style={S.card}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: generarCita ? 16 : 0 }}>
               <input type="checkbox" checked={generarCita} onChange={e => setGenerarCita(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
@@ -508,16 +546,12 @@ export default function CotizacionNueva() {
             {generarCita && (
               <>
                 <div style={S.group}>
-                  <label style={S.label}>Tienda de instalación (con stock)</label>
-                  {pre.sede?.nombre && (
-                    <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600, marginBottom: 6 }}>
-                      🏪 Ya elegida por WhatsApp — solo falta poner fecha y hora
-                    </div>
+                  <label style={S.label}>Tienda de instalación</label>
+                  {sedeSel ? (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>🏪 {sedeSel.nombre}</div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>⚠️ Elige la tienda en el paso 2 antes de continuar</div>
                   )}
-                  <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
-                    <option value="">— Elegir tienda —</option>
-                    {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select>
                   {sedeCita && items.length > 0 && (
                     <div style={{ marginTop: 8, fontSize: 12 }}>
                       {items.map(it => {
@@ -548,8 +582,9 @@ export default function CotizacionNueva() {
                 <span>{fmt(parseFloat(it.producto.precioRegular) * it.cantidad)}</span>
               </div>
             ))}
-            {parseFloat(descuento || 0) > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(descuento)}</span></div>}
-            {cargoCliente > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>Recargo (tarjeta/traslado)</span><span>+ {fmt(cargoCliente)}</span></div>}
+            {descuentoTraslado > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento traslado</span><span>- {fmt(descuentoTraslado)}</span></div>}
+            {descuentoTransferencia > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento transferencia (5%)</span><span>- {fmt(descuentoTransferencia)}</span></div>}
+            {descuentoManual > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(descuentoManual)}</span></div>}
             {generarCita && fechaCita && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>🗓️ Cita: {fechaCita}{horaCita ? ` ${horaCita}` : ''}</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '2px solid var(--color-border)', fontWeight: 800, fontSize: 16 }}>
               <span>TOTAL</span><span style={{ color: 'var(--color-primary)' }}>{fmt(totalCalc)}</span>
