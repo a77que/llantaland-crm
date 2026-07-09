@@ -93,8 +93,12 @@ export default function CotizacionNueva() {
   // ── Costos adicionales de la venta (decisión del vendedor antes de confirmar) ──
   const [pagoTransferencia, setPagoTransferencia] = useState(false);
   const [trasladoAsumeTienda, setTrasladoAsumeTienda] = useState(false);
-  const [cargoManualMonto, setCargoManualMonto] = useState('');
-  const [cargoManualDesc, setCargoManualDesc] = useState('');
+  // Cargos extra al cliente: se pueden agregar varios, cada uno con su propio
+  // motivo, para que quede claro por qué se cobró cada uno.
+  const [cargosExtra, setCargosExtra] = useState([]); // [{ id, monto, descripcion }]
+  const agregarCargoExtra = () => setCargosExtra(prev => [...prev, { id: crypto.randomUUID(), monto: '', descripcion: '' }]);
+  const actualizarCargoExtra = (id, campo, valor) => setCargosExtra(prev => prev.map(c => c.id === id ? { ...c, [campo]: valor } : c));
+  const eliminarCargoExtra = (id) => setCargosExtra(prev => prev.filter(c => c.id !== id));
 
   // ── Seguimiento interno del traslado (no se le muestra al cliente) ──
   const [trasladoOrigen, setTrasladoOrigen] = useState('');
@@ -295,10 +299,11 @@ export default function CotizacionNueva() {
   //   vendedor decide regalar directamente.
   const gananciaFinal = gananciaBase - descuentoManual - costoTrasladoRestante;
 
-  // Cargo manual: un costo extra que se le cobra al cliente por algo puntual
-  // (ej. válvulas nuevas, servicio a domicilio). Suma al precio total; no es
-  // ganancia de la venta de llantas, así que no se cuenta en gananciaFinal.
-  const cargoManual = parseFloat(cargoManualMonto || 0);
+  // Cargos extra: costos puntuales que se le cobran al cliente (ej. válvulas
+  // nuevas, servicio a domicilio). Se pueden agregar varios, cada uno con su
+  // propio motivo. Suman al precio total; no son ganancia de la venta de
+  // llantas, así que no se cuentan en gananciaFinal.
+  const cargoManual = cargosExtra.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
   const totalCalc = Math.max(0, subtotal - descuentoTotal + cargoManual);
 
   // Semáforo de ganancia: roja (sin ganancia), amarilla (hay descuentos que sí
@@ -307,7 +312,8 @@ export default function CotizacionNueva() {
   const gananciaColor = { roja: '#dc2626', amarilla: '#d97706', verde: '#16a34a' }[estadoGanancia];
   const gananciaTexto = { roja: '🔴 Sin ganancia — no procede la venta así', amarilla: '🟡 Ganancia mínima', verde: '🟢 Ganancia saludable' }[estadoGanancia];
 
-  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita)) && (cargoManual <= 0 || cargoManualDesc.trim());
+  const cargosExtraIncompletos = cargosExtra.some(c => (parseFloat(c.monto) || 0) > 0 && !c.descripcion.trim());
+  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita)) && !cargosExtraIncompletos;
 
   const crearMut = useMutation({
     mutationFn: () => {
@@ -318,7 +324,7 @@ export default function CotizacionNueva() {
         descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
         costoTrasladoRestante > 0 ? `Traslado restante asumido por la tienda: ${fmt(costoTrasladoRestante)} — resta ganancia.` : null,
         pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}), no afecta ganancia.` : null,
-        cargoManual > 0 ? `Cargo adicional al cliente: ${fmt(cargoManual)} — ${cargoManualDesc || 'sin motivo especificado'}.` : null,
+        ...cargosExtra.filter(c => (parseFloat(c.monto) || 0) > 0).map(c => `Cargo adicional al cliente: ${fmt(c.monto)} — ${c.descripcion || 'sin motivo especificado'}.`),
         sedeOrigen ? `[INTERNO] Seguimiento traslado: se enviarán las llantas desde ${sedeOrigen.nombre}${sedeOrigen.tipo === 'ALMACEN' ? ' (almacén)' : ''} hacia ${sede?.nombre || 'la tienda elegida'}.` : null,
         trasladoNotasInternas.trim() ? `[INTERNO] Notas de seguimiento: ${trasladoNotasInternas.trim()}` : null,
       ].filter(Boolean);
@@ -602,18 +608,22 @@ export default function CotizacionNueva() {
                 <input style={S.input} type="number" min={0} value={descuento} onChange={e => setDescuento(e.target.value)} placeholder="0" />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '140px 1fr', gap: 10, marginBottom: 4 }}>
-                <div style={S.group}>
-                  <label style={S.label}>➕ Cargo extra S/</label>
-                  <input style={S.input} type="number" min={0} value={cargoManualMonto} onChange={e => setCargoManualMonto(e.target.value)} placeholder="0" />
+              <div style={S.group}>
+                <label style={S.label}>➕ Cargos extra al cliente</label>
+                {cargosExtra.map(c => {
+                  const montoInvalido = (parseFloat(c.monto) || 0) > 0 && !c.descripcion.trim();
+                  return (
+                    <div key={c.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '90px 1fr auto' : '120px 1fr auto', gap: 8, marginBottom: 8, alignItems: 'start' }}>
+                      <input style={S.input} type="number" min={0} value={c.monto} onChange={e => actualizarCargoExtra(c.id, 'monto', e.target.value)} placeholder="S/ 0" />
+                      <input style={{ ...S.input, borderColor: montoInvalido ? '#dc2626' : undefined }} value={c.descripcion} onChange={e => actualizarCargoExtra(c.id, 'descripcion', e.target.value)} placeholder="Motivo: válvulas nuevas, servicio a domicilio..." />
+                      <button onClick={() => eliminarCargoExtra(c.id)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 18, cursor: 'pointer', padding: '6px 4px' }}>✕</button>
+                    </div>
+                  );
+                })}
+                <button onClick={agregarCargoExtra} style={{ padding: '6px 12px', borderRadius: 7, border: '1.5px dashed var(--color-border)', background: 'transparent', color: 'var(--color-text-muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>+ Agregar cargo extra</button>
+                <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 6 }}>
+                  Cada uno suma al precio total del cliente, con su motivo para que quede registrado por qué se cobró.
                 </div>
-                <div style={S.group}>
-                  <label style={S.label}>Motivo del cargo{cargoManual > 0 ? ' (obligatorio)' : ''}</label>
-                  <input style={S.input} value={cargoManualDesc} onChange={e => setCargoManualDesc(e.target.value)} placeholder="Ej: válvulas nuevas, servicio a domicilio..." />
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: -6, marginBottom: 8 }}>
-                Suma al precio total del cliente, con el motivo para que quede registrado por qué se cobró.
               </div>
 
               <div style={{
@@ -672,7 +682,9 @@ export default function CotizacionNueva() {
             {costoTrasladoRestante > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Traslado asumido por la tienda</span><span>- {fmt(costoTrasladoRestante)}</span></div>}
             {descuentoTransferencia > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento transferencia (5%)</span><span>- {fmt(descuentoTransferencia)}</span></div>}
             {descuentoManual > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(descuentoManual)}</span></div>}
-            {cargoManual > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>{cargoManualDesc || 'Cargo adicional'}</span><span>+ {fmt(cargoManual)}</span></div>}
+            {cargosExtra.filter(c => (parseFloat(c.monto) || 0) > 0).map(c => (
+              <div key={c.id} style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>{c.descripcion || 'Cargo adicional'}</span><span>+ {fmt(c.monto)}</span></div>
+            ))}
             {generarCita && fechaCita && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>🗓️ Cita: {fechaCita}{horaCita ? ` ${horaCita}` : ''}</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '2px solid var(--color-border)', fontWeight: 800, fontSize: 16 }}>
               <span>TOTAL</span><span style={{ color: 'var(--color-primary)' }}>{fmt(totalCalc)}</span>
@@ -686,7 +698,7 @@ export default function CotizacionNueva() {
               style={{ width: '100%', marginTop: 16, padding: 12, background: puedeGuardar ? '#16a34a' : 'var(--color-surface2)', color: puedeGuardar ? '#fff' : 'var(--color-text-muted)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: puedeGuardar ? 'pointer' : 'default' }}>
               {crearMut.isPending ? 'Guardando...' : generarCita ? '✓ Crear cotización + cita' : '✓ Crear cotización'}
             </button>
-            {!puedeGuardar && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>Falta: {!cliente.nombre ? 'cliente, ' : ''}{!items.length ? 'llantas, ' : ''}{generarCita && !fechaCita ? 'fecha, ' : ''}{generarCita && !sedeCita ? 'tienda, ' : ''}{cargoManual > 0 && !cargoManualDesc.trim() ? 'motivo del cargo extra' : ''}</div>}
+            {!puedeGuardar && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>Falta: {!cliente.nombre ? 'cliente, ' : ''}{!items.length ? 'llantas, ' : ''}{generarCita && !fechaCita ? 'fecha, ' : ''}{generarCita && !sedeCita ? 'tienda, ' : ''}{cargosExtraIncompletos ? 'motivo de algún cargo extra' : ''}</div>}
           </div>
         </div>
       </div>
