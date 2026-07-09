@@ -92,6 +92,7 @@ export default function CotizacionNueva() {
 
   // ── Costos adicionales de la venta (decisión del vendedor antes de confirmar) ──
   const [pagoTransferencia, setPagoTransferencia] = useState(false);
+  const [trasladoAsumeTienda, setTrasladoAsumeTienda] = useState(false);
 
   // ── Tienda de instalación (se elige temprano: define prioridad del catálogo
   // y el descuento por traslado; la cita reutiliza esta misma tienda) ──
@@ -261,12 +262,20 @@ export default function CotizacionNueva() {
   const descuentoManual = parseFloat(descuento || 0);
   const descuentoTotal = descuentoManual + descuentoTraslado + descuentoTransferencia;
 
-  const gananciaFinal = gananciaBase - descuentoTraslado - descuentoTransferencia;
+  // La ganancia (utilidad real de la tienda) solo se ve afectada por lo que
+  // realmente sale del bolsillo de la tienda:
+  // - Descuento por traslado: solo resta ganancia si el vendedor activa
+  //   "Traslado lo paga la tienda"; si no, es un ajuste de precio (el
+  //   traslado que no se hizo, no le cuesta nada a la tienda).
+  // - Descuento por transferencia: nunca resta ganancia, es un beneficio al
+  //   precio del cliente por elegir ese medio de pago.
+  // - Descuento manual (S/): siempre resta ganancia, es dinero que el
+  //   vendedor decide regalar directamente.
+  const gananciaFinal = gananciaBase - descuentoManual - (trasladoAsumeTienda ? descuentoTraslado : 0);
   const totalCalc = Math.max(0, subtotal - descuentoTotal);
 
-  // Semáforo de ganancia: roja (sin ganancia), amarilla (la tienda está
-  // absorbiendo parte del recargo y eso reduce la ganancia real, pero sigue
-  // siendo positiva), verde (ganancia intacta, sin recargos a cargo de la tienda)
+  // Semáforo de ganancia: roja (sin ganancia), amarilla (hay descuentos que sí
+  // afectan la ganancia real, pero sigue siendo positiva), verde (ganancia intacta)
   const estadoGanancia = gananciaFinal <= 0 ? 'roja' : gananciaFinal < gananciaBase ? 'amarilla' : 'verde';
   const gananciaColor = { roja: '#dc2626', amarilla: '#d97706', verde: '#16a34a' }[estadoGanancia];
   const gananciaTexto = { roja: '🔴 Sin ganancia — no procede la venta así', amarilla: '🟡 Ganancia mínima', verde: '🟢 Ganancia saludable' }[estadoGanancia];
@@ -278,8 +287,8 @@ export default function CotizacionNueva() {
       const sede = sedes.find(s => s.id === sedeCita);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
       const notasExtra = [
-        descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)}.` : null,
-        pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}).` : null,
+        descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)}${trasladoAsumeTienda ? ' — lo asume la tienda (resta ganancia)' : ' — ajuste de precio, no afecta ganancia'}.` : null,
+        pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}), no afecta ganancia.` : null,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
       return cotizacionesApi.crear({
@@ -485,9 +494,6 @@ export default function CotizacionNueva() {
                 </div>
                 );
               })}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 8 }}>
-                <div style={S.group}><label style={S.label}>Descuento S/</label><input style={S.input} type="number" min={0} value={descuento} onChange={e => setDescuento(e.target.value)} placeholder="0" /></div>
-              </div>
               <div style={S.group}><label style={S.label}>Notas</label><textarea style={{ ...S.input, height: 50, resize: 'vertical' }} value={notas} onChange={e => setNotas(e.target.value)} placeholder="Incluye instalación, garantía..." /></div>
             </div>
           )}
@@ -512,7 +518,14 @@ export default function CotizacionNueva() {
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
                     Se calcula solo según el stock de cada llanta en {sedeSel?.nombre}: si hay stock, se descuenta el traslado completo; si hay que traer, se descuenta desde la 2da unidad.
+                    {' '}Este descuento reduce el precio del cliente pero no la ganancia, salvo que actives la opción de abajo.
                   </div>
+                  {descuentoTraslado > 0 && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={trasladoAsumeTienda} onChange={e => setTrasladoAsumeTienda(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#16a34a' }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>🏪 Traslado lo paga la tienda (sí descuenta de la ganancia)</span>
+                    </label>
+                  )}
                 </div>
               )}
 
@@ -520,6 +533,14 @@ export default function CotizacionNueva() {
                 <input type="checkbox" checked={pagoTransferencia} onChange={e => setPagoTransferencia(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
                 <span style={{ fontSize: 13.5, fontWeight: 600 }}>🏦 Cliente paga por transferencia bancaria — descuento 5%</span>
               </label>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', paddingLeft: 28, marginTop: -4, marginBottom: 8 }}>
+                Reduce el precio del cliente, no afecta la ganancia de la tienda.
+              </div>
+
+              <div style={S.group}>
+                <label style={S.label}>💰 Descuento manual S/ (resta del precio y de la ganancia)</label>
+                <input style={S.input} type="number" min={0} value={descuento} onChange={e => setDescuento(e.target.value)} placeholder="0" />
+              </div>
 
               <div style={{
                 marginTop: 12, padding: '12px 14px', borderRadius: 8,
