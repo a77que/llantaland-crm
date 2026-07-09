@@ -80,8 +80,9 @@ export default function CotizacionNueva() {
 
   // ── Catálogo / llantas elegidas (múltiples) ──
   // Si el lead ya eligió marca/modelo por WhatsApp, se precarga la búsqueda
-  // y se activa de una vez para que el vendedor la vea sin un clic extra.
-  const [buscarQuery, setBuscarQuery] = useState(pre.llanta?.marca || '');
+  // con la medida detectada (no la marca, para no perder el filtrado por
+  // medida) y se activa de una vez para que el vendedor la vea sin un clic extra.
+  const [buscarQuery, setBuscarQuery] = useState(pre.medida || '');
   const [buscarActivo, setBuscarActivo] = useState(!!(pre.medida && pre.llanta?.marca));
   const [items, setItems] = useState([]); // [{ producto, cantidad }]
   const [descuento, setDescuento] = useState('');
