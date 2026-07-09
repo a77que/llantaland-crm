@@ -93,6 +93,12 @@ export default function CotizacionNueva() {
   // ── Costos adicionales de la venta (decisión del vendedor antes de confirmar) ──
   const [pagoTransferencia, setPagoTransferencia] = useState(false);
   const [trasladoAsumeTienda, setTrasladoAsumeTienda] = useState(false);
+  const [cargoManualMonto, setCargoManualMonto] = useState('');
+  const [cargoManualDesc, setCargoManualDesc] = useState('');
+
+  // ── Seguimiento interno del traslado (no se le muestra al cliente) ──
+  const [trasladoOrigen, setTrasladoOrigen] = useState('');
+  const [trasladoNotasInternas, setTrasladoNotasInternas] = useState('');
 
   // ── Tienda de instalación (se elige temprano: define prioridad del catálogo
   // y el descuento por traslado; la cita reutiliza esta misma tienda) ──
@@ -288,7 +294,12 @@ export default function CotizacionNueva() {
   // - Descuento manual (S/): siempre resta ganancia, es dinero que el
   //   vendedor decide regalar directamente.
   const gananciaFinal = gananciaBase - descuentoManual - costoTrasladoRestante;
-  const totalCalc = Math.max(0, subtotal - descuentoTotal);
+
+  // Cargo manual: un costo extra que se le cobra al cliente por algo puntual
+  // (ej. válvulas nuevas, servicio a domicilio). Suma al precio total; no es
+  // ganancia de la venta de llantas, así que no se cuenta en gananciaFinal.
+  const cargoManual = parseFloat(cargoManualMonto || 0);
+  const totalCalc = Math.max(0, subtotal - descuentoTotal + cargoManual);
 
   // Semáforo de ganancia: roja (sin ganancia), amarilla (hay descuentos que sí
   // afectan la ganancia real, pero sigue siendo positiva), verde (ganancia intacta)
@@ -296,16 +307,20 @@ export default function CotizacionNueva() {
   const gananciaColor = { roja: '#dc2626', amarilla: '#d97706', verde: '#16a34a' }[estadoGanancia];
   const gananciaTexto = { roja: '🔴 Sin ganancia — no procede la venta así', amarilla: '🟡 Ganancia mínima', verde: '🟢 Ganancia saludable' }[estadoGanancia];
 
-  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita));
+  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita)) && (cargoManual <= 0 || cargoManualDesc.trim());
 
   const crearMut = useMutation({
     mutationFn: () => {
       const sede = sedes.find(s => s.id === sedeCita);
+      const sedeOrigen = sedes.find(s => s.id === trasladoOrigen);
       const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
       const notasExtra = [
         descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
         costoTrasladoRestante > 0 ? `Traslado restante asumido por la tienda: ${fmt(costoTrasladoRestante)} — resta ganancia.` : null,
         pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}), no afecta ganancia.` : null,
+        cargoManual > 0 ? `Cargo adicional al cliente: ${fmt(cargoManual)} — ${cargoManualDesc || 'sin motivo especificado'}.` : null,
+        sedeOrigen ? `[INTERNO] Seguimiento traslado: se enviarán las llantas desde ${sedeOrigen.nombre}${sedeOrigen.tipo === 'ALMACEN' ? ' (almacén)' : ''} hacia ${sede?.nombre || 'la tienda elegida'}.` : null,
+        trasladoNotasInternas.trim() ? `[INTERNO] Notas de seguimiento: ${trasladoNotasInternas.trim()}` : null,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
       return cotizacionesApi.crear({
@@ -317,6 +332,7 @@ export default function CotizacionNueva() {
           modelo: i.producto.nombreComercial, cantidad: i.cantidad, precioUnit: parseFloat(i.producto.precioRegular),
         })),
         descuento: descuentoTotal > 0 ? descuentoTotal : undefined,
+        cargoAdicional: cargoManual > 0 ? cargoManual : undefined,
         notas: notasFinal || undefined,
         generarCita,
         ...(generarCita ? { fechaInstalacion: fechaCita || undefined, horaInstalacion: horaCita || undefined, localInstalacion: local } : {}),
@@ -524,17 +540,26 @@ export default function CotizacionNueva() {
                   Elige la tienda de instalación arriba (paso 2) para calcular el descuento por traslado.
                 </div>
               )}
-              {sedeCita && (
-                <div style={{
-                  background: descuentoTraslado > 0 ? '#f0fdf4' : 'var(--color-bg)',
-                  border: `1px solid ${descuentoTraslado > 0 ? '#bbf7d0' : 'var(--color-border)'}`,
-                  borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 13,
-                }}>
-                  <div style={{ fontWeight: 700, color: descuentoTraslado > 0 ? '#16a34a' : 'var(--color-text-muted)' }}>
-                    🚚 Descuento por traslado{descuentoTraslado > 0 ? `: ${fmt(descuentoTraslado)}` : ': S/ 0.00'}
+              {sedeCita && descuentoTraslado > 0 && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#16a34a' }}>🚚 Descuento por traslado: {fmt(descuentoTraslado)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {items.map(it => {
+                      const hayStock = stockDeSede(it.producto, sedeCita) > 0;
+                      const desc = hayStock ? montoTraslado * it.cantidad : montoTraslado * Math.max(0, it.cantidad - 1);
+                      if (desc <= 0) return null;
+                      const nombre = `${it.producto.marca} ${it.producto.medida}`;
+                      return (
+                        <div key={it.producto.id}>
+                          {hayStock
+                            ? `✅ ${nombre}: ya hay stock en ${sedeSel?.nombre}, sin traslado — descuento ${fmt(desc)}`
+                            : `🚚 Por llevar ${it.cantidad} ${nombre}, descuento por traslado: ${fmt(desc)}`}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    El precio de cada llanta ya trae el traslado incluido. Si el cliente lleva varias, solo hace falta un viaje: se descuenta el traslado de todas menos una unidad (por cada modelo que no hay en {sedeSel?.nombre}). Este descuento no afecta la ganancia, es un ajuste de precio.
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                    Es un ajuste de precio, no afecta la ganancia.
                   </div>
                   {trasladoRestanteBase > 0 && (
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, cursor: 'pointer' }}>
@@ -542,6 +567,25 @@ export default function CotizacionNueva() {
                       <span style={{ fontSize: 12.5, fontWeight: 600 }}>🏪 Traslado lo paga la tienda — descuenta {fmt(trasladoRestanteBase)} más (el viaje que aún falta), del precio y de la ganancia</span>
                     </label>
                   )}
+                </div>
+              )}
+
+              {trasladoRestanteBase > 0 && (
+                <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, background: 'var(--color-bg)', border: '1px dashed var(--color-border)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+                    🔒 Solo uso interno — seguimiento del traslado
+                  </div>
+                  <div style={S.group}>
+                    <label style={S.label}>¿Desde qué tienda/almacén se enviarán las llantas?</label>
+                    <select style={S.input} value={trasladoOrigen} onChange={e => setTrasladoOrigen(e.target.value)}>
+                      <option value="">— Elegir origen —</option>
+                      {sedes.filter(s => s.id !== sedeCita).map(s => <option key={s.id} value={s.id}>{s.nombre}{s.tipo === 'ALMACEN' ? ' (Almacén)' : ''}</option>)}
+                    </select>
+                  </div>
+                  <div style={S.group}>
+                    <label style={S.label}>Notas de seguimiento (opcional)</label>
+                    <input style={S.input} value={trasladoNotasInternas} onChange={e => setTrasladoNotasInternas(e.target.value)} placeholder="Ej: coordinar con transportista, fecha estimada..." />
+                  </div>
                 </div>
               )}
 
@@ -556,6 +600,20 @@ export default function CotizacionNueva() {
               <div style={S.group}>
                 <label style={S.label}>💰 Descuento manual S/ (resta del precio y de la ganancia)</label>
                 <input style={S.input} type="number" min={0} value={descuento} onChange={e => setDescuento(e.target.value)} placeholder="0" />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '140px 1fr', gap: 10, marginBottom: 4 }}>
+                <div style={S.group}>
+                  <label style={S.label}>➕ Cargo extra S/</label>
+                  <input style={S.input} type="number" min={0} value={cargoManualMonto} onChange={e => setCargoManualMonto(e.target.value)} placeholder="0" />
+                </div>
+                <div style={S.group}>
+                  <label style={S.label}>Motivo del cargo{cargoManual > 0 ? ' (obligatorio)' : ''}</label>
+                  <input style={S.input} value={cargoManualDesc} onChange={e => setCargoManualDesc(e.target.value)} placeholder="Ej: válvulas nuevas, servicio a domicilio..." />
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: -6, marginBottom: 8 }}>
+                Suma al precio total del cliente, con el motivo para que quede registrado por qué se cobró.
               </div>
 
               <div style={{
@@ -589,15 +647,6 @@ export default function CotizacionNueva() {
                   ) : (
                     <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>⚠️ Elige la tienda en el paso 2 antes de continuar</div>
                   )}
-                  {sedeCita && items.length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 12 }}>
-                      {items.map(it => {
-                        const stk = stockDeSede(it.producto, sedeCita);
-                        const ok = stk >= it.cantidad;
-                        return <div key={it.producto.id} style={{ fontWeight: 600, color: ok ? '#16a34a' : '#dc2626' }}>{ok ? '✅' : '⚠️'} {it.producto.marca} {it.producto.medida}: {stk} u. {ok ? '' : `(faltan para ${it.cantidad})`}</div>;
-                      })}
-                    </div>
-                  )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
                   <div style={S.group}><label style={S.label}>Fecha</label><input style={S.input} type="date" value={fechaCita} onChange={e => setFechaCita(e.target.value)} /></div>
@@ -623,6 +672,7 @@ export default function CotizacionNueva() {
             {costoTrasladoRestante > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Traslado asumido por la tienda</span><span>- {fmt(costoTrasladoRestante)}</span></div>}
             {descuentoTransferencia > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}><span>Descuento transferencia (5%)</span><span>- {fmt(descuentoTransferencia)}</span></div>}
             {descuentoManual > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#dc2626' }}><span>Descuento</span><span>- {fmt(descuentoManual)}</span></div>}
+            {cargoManual > 0 && <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>{cargoManualDesc || 'Cargo adicional'}</span><span>+ {fmt(cargoManual)}</span></div>}
             {generarCita && fechaCita && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>🗓️ Cita: {fechaCita}{horaCita ? ` ${horaCita}` : ''}</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '2px solid var(--color-border)', fontWeight: 800, fontSize: 16 }}>
               <span>TOTAL</span><span style={{ color: 'var(--color-primary)' }}>{fmt(totalCalc)}</span>
@@ -636,7 +686,7 @@ export default function CotizacionNueva() {
               style={{ width: '100%', marginTop: 16, padding: 12, background: puedeGuardar ? '#16a34a' : 'var(--color-surface2)', color: puedeGuardar ? '#fff' : 'var(--color-text-muted)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: puedeGuardar ? 'pointer' : 'default' }}>
               {crearMut.isPending ? 'Guardando...' : generarCita ? '✓ Crear cotización + cita' : '✓ Crear cotización'}
             </button>
-            {!puedeGuardar && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>Falta: {!cliente.nombre ? 'cliente, ' : ''}{!items.length ? 'llantas, ' : ''}{generarCita && !fechaCita ? 'fecha, ' : ''}{generarCita && !sedeCita ? 'tienda' : ''}</div>}
+            {!puedeGuardar && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>Falta: {!cliente.nombre ? 'cliente, ' : ''}{!items.length ? 'llantas, ' : ''}{generarCita && !fechaCita ? 'fecha, ' : ''}{generarCita && !sedeCita ? 'tienda, ' : ''}{cargoManual > 0 && !cargoManualDesc.trim() ? 'motivo del cargo extra' : ''}</div>}
           </div>
         </div>
       </div>
