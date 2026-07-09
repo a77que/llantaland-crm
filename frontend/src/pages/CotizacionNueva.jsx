@@ -502,12 +502,17 @@ export default function CotizacionNueva() {
               <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr style={{ background: 'var(--color-bg)' }}>
-                    {['Medida', 'Marca', 'Modelo', 'Precio', 'Stock', '', ''].map((h, i) => <th key={i} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--color-bg)' }}>{h}</th>)}
+                    {['Medida', 'Marca', 'Modelo', 'Precio', 'Stock', ...(sedeCita ? [`Stock en ${sedeSel?.nombre || 'tienda elegida'}`] : []), '', ''].map((h, i) => <th key={i} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--color-bg)' }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {productosCatalogo.map(p => {
                       const yaEsta = items.some(it => it.producto.id === p.id);
                       const stockTotal = p.stocks?.reduce((a, s) => a + s.cantidad, 0) ?? 0;
+                      const stockEnTienda = sedeCita ? stockDeSede(p, sedeCita) : null;
+                      const parcial = stockEnTienda > 0 && stockEnTienda < 4;
+                      const colorTienda = !stockEnTienda ? '#dc2626' : parcial ? '#d97706' : '#16a34a';
+                      const iconoTienda = !stockEnTienda ? '❌' : parcial ? '🟡' : '✅';
+                      const textoTienda = !stockEnTienda ? 'Sin stock' : parcial ? `Parcial: ${stockEnTienda} uds` : `Completo: ${stockEnTienda} uds`;
                       return (
                         <tr key={p.id} style={{ background: yaEsta ? '#f0fdf4' : stockTotal === 0 ? '#fafafa' : undefined, borderBottom: '1px solid var(--color-border)', opacity: stockTotal === 0 ? 0.6 : 1 }}>
                           <td style={{ padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }} onClick={() => setModalProdId(p.id)}>{p.medida}</td>
@@ -515,12 +520,15 @@ export default function CotizacionNueva() {
                           <td style={{ padding: '6px 10px', color: 'var(--color-text-muted)' }}>{p.nombreComercial || '—'}</td>
                           <td style={{ padding: '6px 10px', fontWeight: 700 }}>{fmt(p.precioOferta)}</td>
                           <td style={{ padding: '6px 10px' }}><StockCell value={stockTotal} /></td>
+                          {sedeCita && (
+                            <td style={{ padding: '6px 10px', fontWeight: 700, color: colorTienda, whiteSpace: 'nowrap' }}>{iconoTienda} {textoTienda}</td>
+                          )}
                           <td style={{ padding: '6px 10px' }}><button onClick={() => setModalProdId(p.id)} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, cursor: 'pointer' }}>Ver</button></td>
                           <td style={{ padding: '6px 10px' }}><button onClick={() => addLlanta(p)} style={{ fontSize: 11, padding: '3px 10px', background: yaEsta ? 'var(--color-bg)' : '#16a34a', color: yaEsta ? 'var(--color-text)' : '#fff', border: yaEsta ? '1px solid var(--color-border)' : 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>{yaEsta ? '+1' : '+ Agregar'}</button></td>
                         </tr>
                       );
                     })}
-                    {productosCatalogo.length === 0 && <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-muted)' }}>Sin resultados</td></tr>}
+                    {productosCatalogo.length === 0 && <tr><td colSpan={sedeCita ? 8 : 7} style={{ padding: 20, textAlign: 'center', color: 'var(--color-text-muted)' }}>Sin resultados</td></tr>}
                   </tbody>
                 </table>
               </div>
