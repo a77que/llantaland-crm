@@ -854,4 +854,59 @@ const igualarPrecioReferencial = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular, recalcularPrecioOferta, igualarPrecioReferencial };
+// Redondea precioProveedor hacia ARRIBA (a favor de la empresa) al entero más
+// cercano para todo el catálogo — ej. 500.30 → 501 — así no quedan precios
+// proveedor con céntimos. Recalcula precioOferta/precioRegular con el nuevo
+// proveedor redondeado, igual que hace `actualizar` cuando se edita el precio
+// proveedor a mano. Nota: esto pisa cualquier ajuste manual previo (p.ej.
+// "Igualar precio oferta con precio referencial") en los productos que sí
+// cambian de precio proveedor, porque el proveedor cambió y hay que
+// recalcular desde ahí — si se quiere conservar ambos, igualar DESPUÉS de
+// redondear, no antes.
+const redondearPrecioProveedor = async (req, res, next) => {
+  try {
+    const costos = await prisma.costoVenta.findMany({ where: { activo: true } });
+    const productos = await prisma.producto.findMany({
+      where: { activo: true, precioProveedor: { not: null } },
+      select: { id: true, precioProveedor: true },
+    });
+
+    const cambios = [];
+    for (const p of productos) {
+      const actual = Number(p.precioProveedor);
+      if (!(actual > 0)) continue;
+      const redondeado = Math.ceil(actual);
+      if (redondeado === actual) continue; // ya es un entero, no hay nada que redondear
+      let total = 0;
+      for (const c of costos) total += montoDeCosto(c, redondeado);
+      const precioOferta = Math.round((redondeado + total) * 100) / 100;
+      cambios.push({
+        id: p.id,
+        precioProveedor: redondeado,
+        precioOferta,
+        precioRegular: Math.round(precioOferta * 1.05 * 100) / 100,
+      });
+    }
+
+    let actualizados = 0;
+    const BATCH = 100;
+    for (let i = 0; i < cambios.length; i += BATCH) {
+      const lote = cambios.slice(i, i + BATCH);
+      await prisma.$transaction(
+        lote.map(c => prisma.producto.update({
+          where: { id: c.id },
+          data: { precioProveedor: c.precioProveedor, precioOferta: c.precioOferta, precioRegular: c.precioRegular },
+        })),
+        { timeout: 30000 }
+      );
+      actualizados += lote.length;
+    }
+
+    invalidarCachePrecios();
+    res.json({ ok: true, actualizados });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular, recalcularPrecioOferta, igualarPrecioReferencial, redondearPrecioProveedor };

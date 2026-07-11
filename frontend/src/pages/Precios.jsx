@@ -119,6 +119,18 @@ export default function Precios() {
     onError: () => toast.error('Error al generar precios regulares'),
   });
 
+  // ── Redondear precio proveedor hacia arriba (sin céntimos), todo el catálogo ──
+  const redondearMutation = useMutation({
+    mutationFn: () => productosApi.redondearPrecioProveedor(),
+    onSuccess: (data) => {
+      const n = data?.actualizados ?? 0;
+      if (n === 0) { toast('No había precios proveedor con céntimos', { icon: 'ℹ️' }); return; }
+      toast.success(`Precio proveedor redondeado hacia arriba en ${n} producto${n === 1 ? '' : 's'}`);
+      qc.invalidateQueries({ queryKey: ['precios-productos'] });
+    },
+    onError: () => toast.error('Error al redondear precios proveedor'),
+  });
+
   // ── Igualar precio oferta con precio referencial (solo filtro diferencia positiva) ──
   const igualarMutation = useMutation({
     mutationFn: (ids) => productosApi.igualarPrecioReferencial(ids),
@@ -175,15 +187,26 @@ export default function Precios() {
   };
 
   // filaCalculo usa valorActual (incluye edits no guardados) para mostrar en pantalla.
-  // precioOferta YA NO es un campo editable: se calcula en vivo = precioProveedor +
-  // costos activos (IGV, Instalación, Ganancia, etc.), igual que lo hará el backend
-  // al guardar precioProveedor.
+  // precioOferta se calcula en vivo = precioProveedor + costos activos (IGV,
+  // Instalación, Ganancia, etc.), igual que lo hará el backend al guardar
+  // precioProveedor — EXCEPTO cuando el valor ya guardado en BD es mayor a esa
+  // fórmula: eso pasa cuando se usó "Igualar precio oferta con precio
+  // referencial", que sube precioOferta por encima de la fórmula a propósito.
+  // Sin este máximo, el cálculo en vivo lo pisaría en pantalla al instante y
+  // parecería que el botón "Igualar" no hizo nada (aunque sí se guardó).
+  // Se ignora el valor guardado (se usa solo la fórmula) mientras se está
+  // editando el precio proveedor de esa fila o hay costos globales sin
+  // guardar, para no mostrar un precio viejo como si fuera el preview.
   const filaCalculo = (prod) => {
     const prov   = valorActual(prod, 'precioProveedor');
     const ref    = valorActual(prod, 'precioReferencialVenta');
     const { total: costoTotal, detalle } = calcCostos(prov, costos);
     const provNum = Number(prov) || 0;
-    const oferta = provNum > 0 ? String(Math.round((provNum + costoTotal) * 100) / 100) : '';
+    const ofertaFormula = provNum > 0 ? Math.round((provNum + costoTotal) * 100) / 100 : 0;
+    const editandoProveedor = !!(edits[prod.id] && 'precioProveedor' in edits[prod.id]);
+    const ofertaGuardada = Number(prod.precioOferta) || 0;
+    const ofertaFinal = (costosDirty || editandoProveedor) ? ofertaFormula : Math.max(ofertaFormula, ofertaGuardada);
+    const oferta = ofertaFinal > 0 ? String(ofertaFinal) : '';
     const tieneOferta = oferta !== '' && !isNaN(Number(oferta)) && Number(oferta) > 0;
     const tieneRef    = ref !== '' && !isNaN(Number(ref));
     const dif  = (tieneOferta && tieneRef) ? Number(ref) - Number(oferta) : null;
@@ -193,14 +216,16 @@ export default function Precios() {
   };
 
   // sortFila usa valores brutos de BD (no edits) para que el orden sea estable.
-  // La oferta se recalcula en vivo (proveedor + costos), igual que filaCalculo,
-  // en vez de leer prod.precioOferta: ese campo guardado puede estar desactualizado
-  // en productos importados que nunca pasaron por un guardado/recálculo manual.
+  // Mismo criterio que filaCalculo: se respeta precioOferta guardado cuando es
+  // mayor a la fórmula (override manual tipo "Igualar"), salvo que haya costos
+  // globales sin guardar, en cuyo caso se usa la fórmula pura como preview.
   const sortFila = (prod) => {
     const prov   = Number(prod.precioProveedor) || 0;
     const ref    = Number(prod.precioReferencialVenta) || 0;
     const { total: costoTotal } = calcCostos(prov, costos);
-    const oferta = prov > 0 ? Math.round((prov + costoTotal) * 100) / 100 : 0;
+    const ofertaFormula = prov > 0 ? Math.round((prov + costoTotal) * 100) / 100 : 0;
+    const ofertaGuardada = Number(prod.precioOferta) || 0;
+    const oferta = costosDirty ? ofertaFormula : Math.max(ofertaFormula, ofertaGuardada);
     const diferencia = (oferta > 0 && ref > 0) ? ref - oferta : null;
     const pct        = (diferencia !== null && oferta > 0) ? (diferencia / oferta) * 100 : null;
     return { costoTotal, diferencia, pct };
@@ -272,6 +297,15 @@ export default function Precios() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isAdmin && (
+            <button
+              onClick={() => redondearMutation.mutate()}
+              disabled={redondearMutation.isPending}
+              title="Redondea el precio proveedor hacia arriba al entero más cercano (ej. S/500.30 → S/501) en todo el catálogo, y recalcula precio oferta/regular"
+              style={{ padding: '7px 11px', borderRadius: 7, border: '1px solid #f59e0b30', background: 'rgba(245,158,11,.08)', color: '#f59e0b', fontSize: 11.5, fontWeight: 700, cursor: redondearMutation.isPending ? 'default' : 'pointer', opacity: redondearMutation.isPending ? .6 : 1 }}>
+              {redondearMutation.isPending ? '⏳…' : '⬆️ Redondear precio proveedor'}
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => syncMutation.mutate()}
