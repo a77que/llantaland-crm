@@ -51,6 +51,16 @@ function calcCostoTraslado(costos) {
 
 const PCT_TRANSFERENCIA = 0.05;
 
+// Diferencia = precio referencial (mercado) - precio oferta. Positiva significa
+// que hay margen frente al mercado; se usa para priorizar el catálogo (más
+// rentable primero) tanto en Nueva Cotización como en Precios y Margen.
+function diferenciaDe(prod) {
+  const oferta = Number(prod.precioOferta) || 0;
+  const ref = Number(prod.precioReferencialVenta) || 0;
+  if (oferta <= 0 || ref <= 0) return null;
+  return Math.round((ref - oferta) * 100) / 100;
+}
+
 function StockCell({ value }) {
   const c = value > 10 ? '#16a34a' : value > 3 ? '#ca8a04' : value > 0 ? '#f97316' : '#dc2626';
   return <span style={{ fontWeight: 700, color: c }}>{value}</span>;
@@ -62,6 +72,10 @@ export default function CotizacionNueva() {
   const isMobile = useIsMobileOrTablet();
 
   const pre = location.state || {}; // precarga desde lead/inventario
+  // Cantidad que el cliente pidió por WhatsApp (si vino de un lead) — se usa
+  // como umbral para "stock completo" y para el aviso de "disponible en otra
+  // tienda" en el catálogo. Si no vino de un lead, se asume un juego de 4.
+  const cantidadDeseada = Number(pre.llanta?.cantidad) || 4;
 
   // ── Cliente ──
   const [tipoDoc, setTipoDoc] = useState('DNI');
@@ -162,11 +176,21 @@ export default function CotizacionNueva() {
   const productosCatalogo = useMemo(() => {
     const list = productos?.data || [];
     return [...list].sort((a, b) => {
+      // 1. Diferencia positiva primero (más rentable frente al precio de mercado)
+      const da = diferenciaDe(a);
+      const db = diferenciaDe(b);
+      const posA = da !== null && da > 0 ? 1 : 0;
+      const posB = db !== null && db > 0 ? 1 : 0;
+      if (posA !== posB) return posB - posA;
+      if (posA && posB && da !== db) return db - da;
+
+      // 2. Stock en la tienda ya elegida
       if (sedeCita) {
         const la = stockDeSede(a, sedeCita) > 0 ? 1 : 0;
         const lb = stockDeSede(b, sedeCita) > 0 ? 1 : 0;
         if (la !== lb) return lb - la;
       }
+      // 3. Resto: mayor stock total primero
       const sa = a.stocks?.reduce((s, x) => s + x.cantidad, 0) ?? 0;
       const sb = b.stocks?.reduce((s, x) => s + x.cantidad, 0) ?? 0;
       if (sa > 0 && sb === 0) return -1;
@@ -174,6 +198,29 @@ export default function CotizacionNueva() {
       return sb - sa;
     });
   }, [productos, sedeCita]);
+
+  // Terciles de precio sobre la lista ya filtrada/ordenada, para el sombreado
+  // de 3 grupos (barata/media/cara) en la tabla del catálogo.
+  const gruposPrecio = useMemo(() => {
+    const precios = productosCatalogo
+      .map(p => Number(p.precioOferta) || 0)
+      .filter(v => v > 0)
+      .sort((a, b) => a - b);
+    const n = precios.length;
+    if (n < 3) return null; // muy pocos productos para que un sombreado en 3 grupos tenga sentido
+    const corte1 = precios[Math.floor(n / 3) - 1];
+    const corte2 = precios[Math.floor((2 * n) / 3) - 1];
+    return { corte1, corte2 };
+  }, [productosCatalogo]);
+
+  const grupoDePrecio = (prod) => {
+    if (!gruposPrecio) return null;
+    const v = Number(prod.precioOferta) || 0;
+    if (v <= 0) return null;
+    if (v <= gruposPrecio.corte1) return 'barata';
+    if (v <= gruposPrecio.corte2) return 'media';
+    return 'cara';
+  };
 
   // Sugerencias ajax de medida mientras se tipea
   const { data: medidaSugeridas = [] } = useQuery({
@@ -500,6 +547,15 @@ export default function CotizacionNueva() {
                   <button onClick={() => { setComparar([]); setVerComparador(false); }} style={{ padding: '5px 9px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-text-muted)', fontSize: 12, cursor: 'pointer' }}>✕ Limpiar</button>
                 </div>
               )}
+              {gruposPrecio && (
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' }}>
+                  <span>Grupos de precio:</span>
+                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#dbeafe', border: '1px solid #93c5fd', marginRight: 4, verticalAlign: 'middle' }} />Barata</span>
+                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#fef3c7', border: '1px solid #fcd34d', marginRight: 4, verticalAlign: 'middle' }} />Media</span>
+                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#ede9fe', border: '1px solid #c4b5fd', marginRight: 4, verticalAlign: 'middle' }} />Cara</span>
+                  <span style={{ color: '#16a34a', fontWeight: 700 }}>💚 = más rentable que el precio de mercado</span>
+                </div>
+              )}
               <div style={{ overflowX: 'auto', maxHeight: 340, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr style={{ background: 'var(--color-bg)' }}>
@@ -510,19 +566,40 @@ export default function CotizacionNueva() {
                       const yaEsta = items.some(it => it.producto.id === p.id);
                       const stockTotal = p.stocks?.reduce((a, s) => a + s.cantidad, 0) ?? 0;
                       const stockEnTienda = sedeCita ? stockDeSede(p, sedeCita) : null;
-                      const parcial = stockEnTienda > 0 && stockEnTienda < 4;
+                      const parcial = stockEnTienda > 0 && stockEnTienda < cantidadDeseada;
                       const colorTienda = !stockEnTienda ? '#dc2626' : parcial ? '#d97706' : '#16a34a';
                       const iconoTienda = !stockEnTienda ? '❌' : parcial ? '🟡' : '✅';
                       const textoTienda = !stockEnTienda ? 'Sin stock' : parcial ? `Parcial: ${stockEnTienda} uds` : `Completo: ${stockEnTienda} uds`;
+                      // Si la tienda elegida no cubre lo que el cliente pidió, avisar en qué
+                      // otra(s) tienda(s) sí hay stock suficiente, para poder ofrecerla.
+                      const otrasTiendas = (sedeCita && stockEnTienda < cantidadDeseada)
+                        ? (p.stocks || [])
+                          .filter(s => (s.sedeId || s.sede?.id) !== sedeCita && s.cantidad >= cantidadDeseada)
+                          .map(s => ({ nombre: s.sede?.nombre || '—', cantidad: s.cantidad }))
+                        : [];
+                      const dif = diferenciaDe(p);
+                      const esRentable = dif !== null && dif > 0;
+                      const grupo = grupoDePrecio(p);
+                      const bgGrupo = grupo === 'barata' ? '#eff6ff' : grupo === 'media' ? '#fffbeb' : grupo === 'cara' ? '#f5f3ff' : undefined;
+                      const bg = yaEsta ? '#f0fdf4' : stockTotal === 0 ? '#fafafa' : bgGrupo;
                       return (
-                        <tr key={p.id} style={{ background: yaEsta ? '#f0fdf4' : stockTotal === 0 ? '#fafafa' : undefined, borderBottom: '1px solid var(--color-border)', opacity: stockTotal === 0 ? 0.6 : 1 }}>
+                        <tr key={p.id} style={{ background: bg, borderBottom: '1px solid var(--color-border)', opacity: stockTotal === 0 ? 0.6 : 1 }}>
                           <td style={{ padding: '6px 10px', fontWeight: 700, cursor: 'pointer' }} onClick={() => setModalProdId(p.id)}>{p.medida}</td>
                           <td style={{ padding: '6px 10px' }}>{p.marca}</td>
                           <td style={{ padding: '6px 10px', color: 'var(--color-text-muted)' }}>{p.nombreComercial || '—'}</td>
-                          <td style={{ padding: '6px 10px', fontWeight: 700 }}>{fmt(p.precioOferta)}</td>
+                          <td style={{ padding: '6px 10px', fontWeight: 700 }}>
+                            {fmt(p.precioOferta)} {esRentable && <span title={`S/ ${dif.toFixed(2)} sobre el precio de mercado`}>💚</span>}
+                          </td>
                           <td style={{ padding: '6px 10px' }}><StockCell value={stockTotal} /></td>
                           {sedeCita && (
-                            <td style={{ padding: '6px 10px', fontWeight: 700, color: colorTienda, whiteSpace: 'nowrap' }}>{iconoTienda} {textoTienda}</td>
+                            <td style={{ padding: '6px 10px', fontWeight: 700, color: colorTienda, whiteSpace: 'nowrap' }}>
+                              <div>{iconoTienda} {textoTienda}</div>
+                              {otrasTiendas.length > 0 && (
+                                <div style={{ fontWeight: 600, color: '#1d4ed8', fontSize: 11, whiteSpace: 'normal', marginTop: 2 }}>
+                                  📦 Hay en: {otrasTiendas.map(t => `${t.nombre} (${t.cantidad})`).join(', ')}
+                                </div>
+                              )}
+                            </td>
                           )}
                           <td style={{ padding: '6px 10px' }}><button onClick={() => setModalProdId(p.id)} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 6, cursor: 'pointer' }}>Ver</button></td>
                           <td style={{ padding: '6px 10px' }}><button onClick={() => addLlanta(p)} style={{ fontSize: 11, padding: '3px 10px', background: yaEsta ? 'var(--color-bg)' : '#16a34a', color: yaEsta ? 'var(--color-text)' : '#fff', border: yaEsta ? '1px solid var(--color-border)' : 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>{yaEsta ? '+1' : '+ Agregar'}</button></td>
