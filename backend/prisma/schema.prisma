@@ -310,6 +310,13 @@ model LeadCRM {
   localAsignado          Json?       // JSON objeto tienda asignada
   localInstalacion       Json?       // JSON tienda instalación confirmada
   localOrigenTraslado    Json?
+  // Tienda que el cliente elige ANTES de ver las marcas (para priorizar el
+  // catálogo por rentabilidad + stock ahí mismo). Separado de Estado_Flujo a
+  // propósito: ese campo se sobrescribe por completo en el paso de elección
+  // de marca con el mapa número->marca, así que no es seguro mezclar datos
+  // ahí — ver n8nController.js.
+  tiendaTempranoId       String?
+  esProvinciaTemprano    Boolean?    @default(false)
   estadoFlujo            Json?       // JSON blob con estado completo del flujo
   stockMap               Json?       // mapa stock por local
   ofertaPrecios          Json?       // opciones presentadas al cliente

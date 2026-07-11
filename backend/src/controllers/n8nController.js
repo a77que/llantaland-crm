@@ -45,6 +45,13 @@ function productoAFila(p) {
     Grupo: p.grupo || '',
     Precio_Regular: parseFloat(p.precioRegular),
     Precio_Oferta: p.precioOferta ? parseFloat(p.precioOferta) : null,
+    // Precio de mercado/competencia (se configura en Precios y Margen) y la
+    // diferencia frente al precio oferta — el bot usa esto para priorizar
+    // primero las llantas mas rentables (diferencia positiva) al mostrar marcas.
+    Precio_Referencial: p.precioReferencialVenta ? parseFloat(p.precioReferencialVenta) : null,
+    Diferencia: (p.precioReferencialVenta && p.precioOferta)
+      ? Math.round((parseFloat(p.precioReferencialVenta) - parseFloat(p.precioOferta)) * 100) / 100
+      : null,
     Stock: p.stocks.reduce((sum, s) => sum + s.cantidad, 0),
     Imagen: p.imagenUrl || '',
     Ficha_Tecnica: p.fichaTecnica || '',
@@ -815,6 +822,10 @@ function mapSheetToLead(body) {
   if (body.Oferta_Precios !== undefined) data.ofertaPrecios = parseJson(body.Oferta_Precios);
   if (body.Provincia_Destino !== undefined) data.provinciaDestino = body.Provincia_Destino;
   if (body.Timestamp !== undefined) data.timestamp = new Date(body.Timestamp);
+  // Tienda elegida temprano (antes de ver marcas) — separado de Estado_Flujo
+  // a propósito, ver comentario en schema.prisma.
+  if (body.Tienda_Temprano_Id !== undefined) data.tiendaTempranoId = body.Tienda_Temprano_Id || null;
+  if (body.Es_Provincia_Temprano !== undefined) data.esProvinciaTemprano = body.Es_Provincia_Temprano === true || body.Es_Provincia_Temprano === 'true';
   return data;
 }
 
@@ -842,6 +853,8 @@ function mapLeadToSheet(lead) {
     Local_Asignado:             lead.localAsignado ? JSON.stringify(lead.localAsignado) : '',
     Local_Instalacion:          lead.localInstalacion ? JSON.stringify(lead.localInstalacion) : '',
     Local_Origen_Traslado:      lead.localOrigenTraslado ? JSON.stringify(lead.localOrigenTraslado) : '',
+    Tienda_Temprano_Id:         lead.tiendaTempranoId || '',
+    Es_Provincia_Temprano:      lead.esProvinciaTemprano === true,
     Estado_Flujo:               lead.estadoFlujo ? JSON.stringify(lead.estadoFlujo) : '',
     Stock_Map:                  lead.stockMap ? JSON.stringify(lead.stockMap) : '',
     Oferta_Precios:             lead.ofertaPrecios ? JSON.stringify(lead.ofertaPrecios) : '',
