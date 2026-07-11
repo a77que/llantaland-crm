@@ -58,6 +58,9 @@ export default function Precios() {
   const [costosDirty, setCostosDirty] = useState(false);
   const [edits, setEdits] = useState({});
   const [filtroDif, setFiltroDif] = useState('todos'); // 'todos' | 'verde'
+  // Registro de productos igualados en esta sesión (id -> monto igualado), para
+  // mostrar la columna "Monto igualado". Se reinicia al recargar la página.
+  const [igualados, setIgualados] = useState({});
 
   const isClientSort = CLIENT_SORT.has(sortBy);
   // El filtro "solo diferencia positiva" es calculado en frontend, igual que
@@ -114,6 +117,23 @@ export default function Precios() {
       qc.invalidateQueries({ queryKey: ['precios-productos'] });
     },
     onError: () => toast.error('Error al generar precios regulares'),
+  });
+
+  // ── Igualar precio oferta con precio referencial (solo filtro diferencia positiva) ──
+  const igualarMutation = useMutation({
+    mutationFn: (ids) => productosApi.igualarPrecioReferencial(ids),
+    onSuccess: (data) => {
+      const cambios = data?.actualizados || [];
+      if (cambios.length === 0) { toast('No había nada que igualar', { icon: 'ℹ️' }); return; }
+      setIgualados(s => {
+        const next = { ...s };
+        for (const c of cambios) next[c.id] = c.monto;
+        return next;
+      });
+      toast.success(`Precio oferta igualado al referencial en ${cambios.length} producto${cambios.length === 1 ? '' : 's'}`);
+      qc.invalidateQueries({ queryKey: ['precios-productos'] });
+    },
+    onError: () => toast.error('No se pudo igualar los precios'),
   });
 
   // ── Productos ──
@@ -338,6 +358,15 @@ export default function Precios() {
           style={{ padding: '7px 14px', borderRadius: 8, border: `1.5px solid ${filtroDif === 'verde' ? '#16a34a' : 'var(--color-border)'}`, background: filtroDif === 'verde' ? '#16a34a' : 'var(--color-surface)', color: filtroDif === 'verde' ? '#fff' : 'var(--color-text-muted)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
           🟢 Solo diferencia positiva
         </button>
+        {filtroDif === 'verde' && (
+          <button
+            onClick={() => igualarMutation.mutate(productosMostrados.map(p => p.id))}
+            disabled={igualarMutation.isPending || productosMostrados.length === 0}
+            title="Fija el precio oferta al precio referencial en todos los productos que se ven ahora (diferencia positiva)"
+            style={{ padding: '7px 14px', borderRadius: 8, border: '1.5px solid #1d4ed8', background: igualarMutation.isPending ? '#94a3b8' : '#1d4ed8', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: igualarMutation.isPending || productosMostrados.length === 0 ? 'default' : 'pointer' }}>
+            {igualarMutation.isPending ? '⏳ Igualando…' : '⚖️ Igualar precio oferta con precio referencial'}
+          </button>
+        )}
       </div>
 
       {/* Aviso cuando se carga todo para ordenar/filtrar columnas calculadas */}
@@ -375,6 +404,11 @@ export default function Precios() {
                   <span>Dif: {f.dif === null ? '—' : soles(f.dif)}</span>
                   <span>{f.pct === null ? '' : `${f.pct >= 0 ? '+' : ''}${f.pct.toFixed(1)}%`}</span>
                 </div>
+                {igualados[prod.id] !== undefined && (
+                  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>
+                    ⚖️ Igualado: {soles(igualados[prod.id])}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -391,6 +425,9 @@ export default function Precios() {
                 <ThSort col="precioReferencialVenta" label="Precio referencial"               />
                 <ThSort col="diferencia"             label="Diferencia"                       />
                 <ThSort col="pct"                    label="%"                                />
+                <th style={{ padding: '9px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--color-text-muted)', borderBottom: '2px solid var(--color-border)', whiteSpace: 'nowrap' }} title="Monto que se sumó al precio oferta al usar 'Igualar precio oferta con precio referencial'">
+                  Monto igualado
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -419,6 +456,9 @@ export default function Precios() {
                           {f.pct >= 0 ? '▲ +' : '▼ '}{f.pct.toFixed(1)}%
                         </span>
                       )}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#1d4ed8' }}>
+                      {igualados[prod.id] !== undefined ? soles(igualados[prod.id]) : ''}
                     </td>
                   </tr>
                 );

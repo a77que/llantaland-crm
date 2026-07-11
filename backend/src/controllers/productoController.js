@@ -800,4 +800,58 @@ const recalcularPrecioOferta = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular, recalcularPrecioOferta };
+// Iguala precioOferta con precioReferencialVenta para los productos indicados
+// (usado por el botón "Igualar precio oferta con precio referencial" en
+// Precios y Margen, filtro "solo diferencia positiva"). Solo se toca cada
+// producto si su referencial es realmente mayor al precio oferta calculado
+// en ese momento (proveedor + costos activos) — evita bajar precios por
+// error si algo cambió entre que se cargó la lista y se hizo clic. También
+// recalcula precioRegular (= nuevo precioOferta + 5%). Devuelve el monto
+// igualado por producto para mostrarlo en la columna correspondiente.
+const igualarPrecioReferencial = async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
+    if (!ids.length) return res.json({ actualizados: [] });
+
+    const costos = await prisma.costoVenta.findMany({ where: { activo: true } });
+    const productos = await prisma.producto.findMany({
+      where: { id: { in: ids }, activo: true },
+      select: { id: true, precioProveedor: true, precioReferencialVenta: true },
+    });
+
+    const cambios = [];
+    for (const p of productos) {
+      const base = Number(p.precioProveedor) || 0;
+      if (base <= 0) continue;
+      let total = 0;
+      for (const c of costos) total += montoDeCosto(c, base);
+      const ofertaActual = Math.round((base + total) * 100) / 100;
+      const ref = p.precioReferencialVenta === null || p.precioReferencialVenta === undefined
+        ? 0 : parseFloat(p.precioReferencialVenta);
+      if (!(ref > ofertaActual)) continue; // solo iguala si la diferencia sigue siendo positiva
+      const monto = Math.round((ref - ofertaActual) * 100) / 100;
+      cambios.push({ id: p.id, precioOferta: ref, precioRegular: Math.round(ref * 1.05 * 100) / 100, monto });
+    }
+
+    const actualizados = [];
+    const BATCH = 100;
+    for (let i = 0; i < cambios.length; i += BATCH) {
+      const lote = cambios.slice(i, i + BATCH);
+      await prisma.$transaction(
+        lote.map(c => prisma.producto.update({
+          where: { id: c.id },
+          data: { precioOferta: c.precioOferta, precioRegular: c.precioRegular },
+        })),
+        { timeout: 30000 }
+      );
+      actualizados.push(...lote.map(c => ({ id: c.id, monto: c.monto })));
+    }
+
+    invalidarCachePrecios();
+    res.json({ actualizados });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPorSku, compatibles, subirImagen, marcas, tipos, medidas, enriquecerConIA, hermanasImagen, aplicarImagen, gruposImagen, subirImagenMultiple, exportFaltantesImagen, incompletos, enriquecerMasivo, sincronizarPrecioRegular, recalcularPrecioOferta, igualarPrecioReferencial };
