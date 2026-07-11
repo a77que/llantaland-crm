@@ -214,11 +214,12 @@ const listarPrecios = async (req, res, next) => {
 };
 
 /** Costo fijo de traslado entre tiendas, configurado en Precios y Margen
- * (concepto "Traslado", excluido del cálculo de precioOferta — ver
- * productoController.NOMBRES_EXCLUIDOS_OFERTA). El bot lo usa para cobrarlo
- * una sola vez por cotización cuando la tienda elegida no tiene stock, o
- * para mostrar el "descuento por tienda" cuando sí tiene. 0 si no está
- * configurado (la función queda inactiva sin romper el flujo). */
+ * (concepto "Traslado"). Va incluido en el precioOferta de cada llanta como
+ * cualquier otro costo (si se lleva 1, se cobra completo). El bot usa este
+ * mismo monto para calcular el descuento: completo si la tienda elegida no
+ * tiene stock (a partir de la 2da unidad), o descuento total si sí tiene
+ * (no hace falta ningún viaje). 0 si no está configurado (la función queda
+ * inactiva sin romper el flujo). */
 const obtenerCostoTraslado = async (req, res, next) => {
   try {
     // La lista de costos es chica (unas pocas filas) — se filtra en memoria.

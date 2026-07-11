@@ -8,18 +8,19 @@ const { normalizarNombre } = require('./costosController');
 
 const prisma = require('../lib/prisma');
 
-// "Traslado" no es un costo por unidad — es un cargo condicional a nivel de
-// pedido (según stock en la tienda elegida, ver n8nController.obtenerCostoTraslado
-// y CotizacionNueva.jsx), así que se excluye de la suma que arma precioOferta.
-const NOMBRES_EXCLUIDOS_OFERTA = ['traslado'];
-
+// "Traslado" SÍ se suma al precio de oferta como cualquier otro costo: el
+// costo de traslado va incluido en el precio de cada llanta (si se lleva 1,
+// se cobra completo). El descuento por llevar varias (o por haber stock en
+// la tienda elegida) se calcula aparte, en la cotización, sobre este mismo
+// monto ya incluido — ver n8nController.obtenerCostoTraslado y
+// CotizacionNueva.jsx.
+//
 // Monto que aporta un concepto de costo sobre una base (precio proveedor),
 // para la suma que arma precioOferta. El concepto "Ganancia" tiene un piso en
 // soles configurable (montoMinimo): si el % calculado da menos que eso, se
 // cobra el piso en su lugar.
 function montoDeCosto(costo, base) {
   const nombre = normalizarNombre(costo.nombre);
-  if (NOMBRES_EXCLUIDOS_OFERTA.includes(nombre)) return 0;
   const val = Number(costo.valor) || 0;
   let monto = costo.tipo === 'porcentaje' ? base * val / 100 : val;
   if (nombre === 'ganancia' && costo.montoMinimo !== null && costo.montoMinimo !== undefined) {

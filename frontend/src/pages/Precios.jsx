@@ -12,10 +12,10 @@ const soles = (v) => (v === null || v === undefined || v === '' || isNaN(Number(
 const normalizarNombre = (s) => String(s || '').trim().toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-// "Traslado" no es un costo por unidad — es un cargo condicional a nivel de
-// pedido (según stock en la tienda elegida), así que no entra en precioOferta.
-const NOMBRES_EXCLUIDOS_OFERTA = ['traslado'];
-
+// "Traslado" sí se suma al precio de oferta como cualquier otro costo: va
+// incluido en el precio de cada llanta (si se lleva 1, se cobra completo).
+// El descuento por llevar varias (o por haber stock en la tienda elegida) se
+// calcula aparte, en la cotización, sobre este mismo monto ya incluido.
 function calcCostos(prov, costos) {
   const base = Number(prov) || 0;
   let total = 0;
@@ -23,7 +23,6 @@ function calcCostos(prov, costos) {
   for (const c of costos) {
     if (c.activo === false) continue;
     const nombre = normalizarNombre(c.nombre);
-    if (NOMBRES_EXCLUIDOS_OFERTA.includes(nombre)) continue;
     const val = Number(c.valor) || 0;
     let monto = c.tipo === 'porcentaje' ? base * val / 100 : val;
     // "Ganancia" tiene un piso en S/: si el % calculado da menos, se usa el piso.
@@ -321,7 +320,7 @@ export default function Precios() {
           Los porcentajes se calculan sobre el precio proveedor. Estos costos aplican a todas las llantas.{' '}
           🔒 <strong>IGV, Instalación y Ganancia</strong> son obligatorios para calcular el precio oferta — puedes cambiar su monto/%, pero no renombrarlos ni eliminarlos. El resto de costos que agregues sí son libres de editar o quitar.{' '}
           El <strong>mínimo S/</strong> de Ganancia es un piso: si el % da menos que ese monto (ej. en llantas baratas), se cobra el mínimo en su lugar — así nunca ganas menos de eso por llanta.{' '}
-          Si agregas un costo llamado <strong>"Traslado"</strong> (tipo Monto S/), no se suma al precio oferta — el bot de WhatsApp y Nueva Cotización lo usan aparte para cobrarlo una sola vez por venta cuando la tienda elegida no tiene stock, o mostrarlo como descuento cuando sí tiene.
+          Si agregas un costo llamado <strong>"Traslado"</strong> (tipo Monto S/), sí se suma al precio oferta como cualquier otro costo — va incluido en el precio de cada llanta. El bot de WhatsApp y Nueva Cotización lo descuentan aparte cuando corresponde: completo si la tienda elegida ya tiene stock (no hace falta viaje), o desde la 2da unidad si el cliente lleva varias llantas (un solo viaje trae todas).
         </div>
       </div>
 
