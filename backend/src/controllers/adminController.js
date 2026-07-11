@@ -37,15 +37,19 @@ const exportarStockCritico = async (req, res, next) => {
     });
 
     const stockTotal = (p) => p.stocks.reduce((s, x) => s + (x.cantidad || 0), 0);
+    const precioProv = (p) => (p.precioProveedor == null ? 0 : parseFloat(p.precioProveedor));
     const precioReg = (p) => (p.precioRegular == null ? 0 : parseFloat(p.precioRegular));
 
+    // "Sin precio" = sin precio PROVEEDOR (el dato base que hay que cargar);
+    // precioOferta/precioRegular se calculan automáticamente a partir de este,
+    // así que si falta el proveedor, esos quedan igual de vacíos/incorrectos.
     const filtrados = tipo === 'sin-precio'
-      ? productos.filter(p => !precioReg(p) || precioReg(p) <= 0)
+      ? productos.filter(p => !precioProv(p) || precioProv(p) <= 0)
       : productos.filter(p => stockTotal(p) <= 0);
 
     // Encabezados
     const headBase = ['SKU', 'Medida', 'Marca', 'Nombre Comercial', 'Tipo de vehículo', 'Grupo',
-      'Precio Regular', 'Precio Oferta', 'Stock Total'];
+      'Precio Proveedor', 'Precio Regular', 'Precio Oferta', 'Stock Total'];
     const headSedes = sedes.map(s => `Stock ${s.codigoLocal || ''} ${s.nombre}`.trim());
     const header = [...headBase, ...headSedes];
 
@@ -56,7 +60,7 @@ const exportarStockCritico = async (req, res, next) => {
       });
       return [
         p.sku, p.medida, p.marca, p.nombreComercial || '', p.tipoVehiculo || '', p.grupo || '',
-        precioReg(p), p.precioOferta == null ? '' : parseFloat(p.precioOferta), stockTotal(p),
+        precioProv(p), precioReg(p), p.precioOferta == null ? '' : parseFloat(p.precioOferta), stockTotal(p),
         ...porSede,
       ];
     });
