@@ -38,7 +38,11 @@ export default function ClienteNuevo() {
 
   const mutation = useMutation({
     mutationFn: () => clientesApi.crear({ ...form, crmEstado: 'COMPLETO' }),
-    onSuccess: (data) => { toast.success('Cliente creado'); navigate(`/clientes/${data.id}`); },
+    // La lista de /clientes hoy muestra leads de WhatsApp (leadsApi), no
+    // clientes registrados en tienda — todavía no hay una página de detalle
+    // para este modelo, así que se vuelve a la lista en vez de navegar a
+    // /clientes/:id (esa ruta espera un lead, no un Cliente).
+    onSuccess: () => { toast.success('Cliente creado'); navigate('/clientes'); },
     onError: (e) => toast.error(e?.error || 'Error al crear cliente'),
   });
 

@@ -48,7 +48,6 @@ const buscar = async (req, res, next) => {
       where: {
         OR: [{ numDoc: doc }, { celular: doc }],
       },
-      include: { vehiculos: true },
     });
     res.json(clientes);
   } catch (err) {
@@ -74,8 +73,6 @@ const obtener = async (req, res, next) => {
     const cliente = await prisma.cliente.findUnique({
       where: { id: req.params.id },
       include: {
-        vehiculos: true,
-        notas: { include: { usuario: { select: { nombre: true } } }, orderBy: { createdAt: 'desc' } },
         cotizaciones: { orderBy: { createdAt: 'desc' }, take: 10 },
         ventas: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
@@ -89,14 +86,10 @@ const obtener = async (req, res, next) => {
 
 const crear = async (req, res, next) => {
   try {
-    const { vehiculos, ...data } = req.body;
-    const cliente = await prisma.cliente.create({
-      data: {
-        ...data,
-        vehiculos: vehiculos?.length ? { create: vehiculos } : undefined,
-      },
-      include: { vehiculos: true },
-    });
+    // vehiculos: el formulario no lo envía hoy (no existe modelo Vehiculo
+    // todavía) — se descarta si llegara por algún cliente viejo del form.
+    const { vehiculos, id, createdAt, updatedAt, ...data } = req.body;
+    const cliente = await prisma.cliente.create({ data });
     res.status(201).json(cliente);
   } catch (err) {
     next(err);
@@ -105,7 +98,7 @@ const crear = async (req, res, next) => {
 
 const actualizar = async (req, res, next) => {
   try {
-    const { vehiculos, ...data } = req.body;
+    const { vehiculos, id, createdAt, updatedAt, ...data } = req.body;
     const cliente = await prisma.cliente.update({
       where: { id: req.params.id },
       data,

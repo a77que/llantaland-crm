@@ -450,6 +450,7 @@ model Cotizacion {
   numero          String           @unique
   tipoNegocio     TipoNegocio      @default(LLANTAS)
   leadId          String?
+  clienteId       String?                          // para cotizaciones de cliente registrado en tienda
   usuarioId       String
 
   // Datos del cliente (snapshot del lead)
@@ -495,6 +496,8 @@ model Cotizacion {
 
   // SetNull: si se borra el lead la cotizacion queda sin lead pero no se pierde
   lead    LeadCRM?   @relation(fields: [leadId],   references: [id], onDelete: SetNull)
+  // SetNull: si se borra el cliente la cotizacion queda sin cliente pero no se pierde
+  cliente Cliente?   @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   // Restrict: no borrar usuario con cotizaciones activas
   usuario Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
   venta   Venta?
@@ -502,8 +505,38 @@ model Cotizacion {
   @@index([estado])
   @@index([usuarioId])
   @@index([leadId])
+  @@index([clienteId])
   @@index([tipoNegocio])
   @@map("cotizaciones")
+}
+
+// ─── CLIENTES (tienda) ───────────────────────────────────────────────────────
+// Cliente registrado manualmente en el CRM (venta en tienda, no WhatsApp).
+// Distinto de LeadCRM (que representa una conversación de WhatsApp) — un
+// cliente de tienda puede no tener ningún lead asociado. El campo
+// Venta.clienteId ya existía sin relación formal; se la agregamos aquí.
+model Cliente {
+  id           String    @id @default(cuid())
+  tipoDoc      TipoDoc?
+  numDoc       String?
+  nombre       String?
+  apellidos    String?
+  razonSocial  String?
+  celular      String?
+  email        String?
+  direccion    String?
+  canalOrigen  String?   // "TIENDA" | "WHATSAPP" | "WEB" | "N8N"
+  crmEstado    String?   // ej. "COMPLETO"
+  apiRawJson   Json?     // respuesta cruda de la consulta DNI/RUC, si vino de ahí
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  cotizaciones Cotizacion[]
+  ventas       Venta[]
+
+  @@index([numDoc])
+  @@index([celular])
+  @@map("clientes")
 }
 
 // ─── VENTAS ──────────────────────────────────────────────────────────────────
@@ -562,6 +595,8 @@ model Venta {
 
   // SetNull: si se borra el lead, la venta queda sin lead pero no se pierde
   lead         LeadCRM?      @relation(fields: [leadId],    references: [id], onDelete: SetNull)
+  // SetNull: si se borra el cliente, la venta queda sin cliente pero no se pierde
+  cliente      Cliente?      @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   // Restrict: no borrar usuario con ventas — desactivarlo en su lugar
   usuario      Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
   items        ItemVenta[]
@@ -571,6 +606,7 @@ model Venta {
   @@index([usuarioId])
   @@index([createdAt])
   @@index([leadId])
+  @@index([clienteId])
   @@index([tipoNegocio])
   @@map("ventas")
 }
