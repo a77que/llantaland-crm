@@ -212,7 +212,8 @@ export default function Precios() {
     const dif  = (tieneOferta && tieneRef) ? Number(ref) - Number(oferta) : null;
     const pct  = (dif !== null && Number(oferta) > 0) ? (dif / Number(oferta)) * 100 : null;
     const col  = dif === null ? 'var(--color-text-muted)' : dif >= 0 ? '#16a34a' : '#dc2626';
-    return { prov, oferta, ref, costoTotal, detalle, dif, pct, col, tieneOferta, tieneRef };
+    const igualado = prod.ofertaIgualadaReferencial === true;
+    return { prov, oferta, ref, costoTotal, detalle, dif, pct, col, tieneOferta, tieneRef, igualado };
   };
 
   // sortFila usa valores brutos de BD (no edits) para que el orden sea estable.
@@ -426,7 +427,7 @@ export default function Precios() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio proveedor<br />
                     <input type="number" step="0.01" value={valorActual(prod, 'precioProveedor')} onChange={e => onEdit(prod.id, 'precioProveedor', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioProveedor')} style={{ ...inp, width: '100%', boxSizing: 'border-box' }} /></label>
-                  <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio oferta 🔒<br />
+                  <label style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Precio oferta 🔒{f.igualado && ' ⚖️'}<br />
                     <div title="Se calcula solo: precio proveedor + IGV + Instalación + Ganancia + otros costos activos" style={{ ...inp, width: '100%', boxSizing: 'border-box', background: 'var(--color-bg)', color: f.tieneOferta ? '#1d4ed8' : 'var(--color-text-muted)', fontWeight: 700 }}>{f.tieneOferta ? soles(f.oferta) : '—'}</div></label>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
@@ -438,9 +439,13 @@ export default function Precios() {
                   <span>Dif: {f.dif === null ? '—' : soles(f.dif)}</span>
                   <span>{f.pct === null ? '' : `${f.pct >= 0 ? '+' : ''}${f.pct.toFixed(1)}%`}</span>
                 </div>
-                {igualados[prod.id] !== undefined && (
+                {igualados[prod.id] !== undefined ? (
                   <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>
                     ⚖️ Igualado: {soles(igualados[prod.id])}
+                  </div>
+                ) : f.igualado && (
+                  <div style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: '#1d4ed8' }} title="Marcado como igualado en una sesión anterior — el bot de WhatsApp lo sigue recomendando primero">
+                    ⚖️ Igualado con el referencial
                   </div>
                 )}
               </div>
@@ -479,6 +484,7 @@ export default function Precios() {
                     <td style={{ ...td, textAlign: 'right', color: 'var(--color-text-muted)' }} title={f.detalle.join('\n') || 'Sin costos'}>{soles(f.costoTotal)}</td>
                     <td style={{ ...td, textAlign: 'right' }} title="Se calcula solo: precio proveedor + IGV + Instalación + Ganancia + otros costos activos">
                       <span style={{ fontWeight: 700, color: f.tieneOferta ? '#1d4ed8' : 'var(--color-text-muted)' }}>{f.tieneOferta ? soles(f.oferta) : '—'}</span> <span style={{ fontSize: 11 }}>🔒</span>
+                      {f.igualado && <span style={{ fontSize: 11 }} title="Igualado a mano con el precio referencial — el bot de WhatsApp lo sigue recomendando primero"> ⚖️</span>}
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>
                       <input type="number" step="0.01" value={valorActual(prod, 'precioReferencialVenta')} onChange={e => onEdit(prod.id, 'precioReferencialVenta', e.target.value)} onBlur={() => onBlurGuardar(prod, 'precioReferencialVenta')} placeholder="mercado" style={inp} />
@@ -492,7 +498,9 @@ export default function Precios() {
                       )}
                     </td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#1d4ed8' }}>
-                      {igualados[prod.id] !== undefined ? soles(igualados[prod.id]) : ''}
+                      {igualados[prod.id] !== undefined
+                        ? soles(igualados[prod.id])
+                        : f.igualado ? <span style={{ fontSize: 12 }} title="Igualado en una sesión anterior">⚖️ Igualado</span> : ''}
                     </td>
                   </tr>
                 );

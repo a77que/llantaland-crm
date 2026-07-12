@@ -61,6 +61,17 @@ function diferenciaDe(prod) {
   return Math.round((ref - oferta) * 100) / 100;
 }
 
+// Un producto igualado a mano (botón "Igualar precio oferta con precio
+// referencial" en Precios y Margen) queda con diferencia = 0 — sin esto se
+// vería como "no rentable" pese a haberse fijado deliberadamente al precio
+// de mercado. Se trata igual que diferencia positiva (mismo criterio que usa
+// el bot de WhatsApp, ver n8nController.productoAFila / Reordenar | Marcas
+// Por Rentabilidad).
+function esRentableProd(prod) {
+  const dif = diferenciaDe(prod);
+  return (dif !== null && dif > 0) || prod.ofertaIgualadaReferencial === true;
+}
+
 function StockCell({ value }) {
   const c = value > 10 ? '#16a34a' : value > 3 ? '#ca8a04' : value > 0 ? '#f97316' : '#dc2626';
   return <span style={{ fontWeight: 700, color: c }}>{value}</span>;
@@ -179,10 +190,10 @@ export default function CotizacionNueva() {
       // 1. Diferencia positiva primero (más rentable frente al precio de mercado)
       const da = diferenciaDe(a);
       const db = diferenciaDe(b);
-      const posA = da !== null && da > 0 ? 1 : 0;
-      const posB = db !== null && db > 0 ? 1 : 0;
+      const posA = esRentableProd(a) ? 1 : 0;
+      const posB = esRentableProd(b) ? 1 : 0;
       if (posA !== posB) return posB - posA;
-      if (posA && posB && da !== db) return db - da;
+      if (posA && posB && da !== db) return (db || 0) - (da || 0);
 
       // 2. Stock en la tienda ya elegida
       if (sedeCita) {
@@ -578,7 +589,7 @@ export default function CotizacionNueva() {
                           .map(s => ({ nombre: s.sede?.nombre || '—', cantidad: s.cantidad }))
                         : [];
                       const dif = diferenciaDe(p);
-                      const esRentable = dif !== null && dif > 0;
+                      const esRentable = esRentableProd(p);
                       const grupo = grupoDePrecio(p);
                       const bgGrupo = grupo === 'barata' ? '#eff6ff' : grupo === 'media' ? '#fffbeb' : grupo === 'cara' ? '#f5f3ff' : undefined;
                       const bg = yaEsta ? '#f0fdf4' : stockTotal === 0 ? '#fafafa' : bgGrupo;
@@ -588,7 +599,9 @@ export default function CotizacionNueva() {
                           <td style={{ padding: '6px 10px' }}>{p.marca}</td>
                           <td style={{ padding: '6px 10px', color: 'var(--color-text-muted)' }}>{p.nombreComercial || '—'}</td>
                           <td style={{ padding: '6px 10px', fontWeight: 700 }}>
-                            {fmt(p.precioOferta)} {esRentable && <span title={`S/ ${dif.toFixed(2)} sobre el precio de mercado`}>💚</span>}
+                            {fmt(p.precioOferta)} {esRentable && (
+                              <span title={dif ? `S/ ${dif.toFixed(2)} sobre el precio de mercado` : 'Igualado al precio de mercado'}>💚</span>
+                            )}
                           </td>
                           <td style={{ padding: '6px 10px' }}><StockCell value={stockTotal} /></td>
                           {sedeCita && (

@@ -52,6 +52,11 @@ function productoAFila(p) {
     Diferencia: (p.precioReferencialVenta && p.precioOferta)
       ? Math.round((parseFloat(p.precioReferencialVenta) - parseFloat(p.precioOferta)) * 100) / 100
       : null,
+    // true si el admin igualó precioOferta a precioReferencialVenta a mano
+    // (botón "Igualar" en Precios y Margen): la Diferencia calculada queda
+    // en 0 en ese caso, así que el bot usa esta marca para seguir
+    // recomendando la llanta como si tuviera diferencia positiva.
+    Recomendado_Manual: p.ofertaIgualadaReferencial === true,
     Stock: p.stocks.reduce((sum, s) => sum + s.cantidad, 0),
     Imagen: p.imagenUrl || '',
     Ficha_Tecnica: p.fichaTecnica || '',

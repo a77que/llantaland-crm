@@ -187,6 +187,14 @@ model Producto {
   precioOferta    Decimal?     @db.Decimal(10, 2) // null = sin oferta
   precioProveedor        Decimal? @db.Decimal(10, 2) // costo base del proveedor (para calcular precio de venta)
   precioReferencialVenta Decimal? @db.Decimal(10, 2) // precio de mercado actual (referencia)
+  // true cuando precioOferta fue igualado a precioReferencialVenta a mano
+  // (botón "Igualar precio oferta con precio referencial" en Precios y
+  // Margen). La diferencia calculada (referencial - oferta) queda en 0 en
+  // ese momento, así que sin esta marca el producto dejaría de verse como
+  // "rentable" — con ella, el bot de WhatsApp lo sigue recomendando primero.
+  // Se limpia automáticamente cada vez que precioOferta se vuelve a calcular
+  // por fórmula (edición de precio proveedor, redondeo, o recálculo masivo).
+  ofertaIgualadaReferencial Boolean @default(false)
   imagenUrl       String?                        // URL imagen en sheet PRECIOS
   // Ficha técnica
   indice_carga           String?

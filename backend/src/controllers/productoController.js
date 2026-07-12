@@ -172,9 +172,12 @@ const actualizar = async (req, res, next) => {
 
     // precioOferta ya no se acepta manual: se recalcula automáticamente cada
     // vez que esta misma edición toca precioProveedor (precioProveedor + IGV +
-    // Instalación + Ganancia + costos activos).
+    // Instalación + Ganancia + costos activos). Esto invalida cualquier
+    // "Igualar precio oferta con precio referencial" previo, así que se
+    // limpia la marca — ver comentario en schema.prisma.
     if ('precioProveedor' in data) {
       data.precioOferta = await calcularPrecioOfertaDesdeProveedor(data.precioProveedor);
+      data.ofertaIgualadaReferencial = false;
     }
 
     // Auto-calcular precio regular = precio oferta + 5%
@@ -787,7 +790,9 @@ const recalcularPrecioOferta = async (req, res, next) => {
           let total = 0;
           for (const c of costos) total += montoDeCosto(c, base);
           const precioOferta = Math.round((base + total) * 100) / 100;
-          return prisma.producto.update({ where: { id: p.id }, data: { precioOferta } });
+          // Recalculo masivo por fórmula: invalida cualquier "Igualar precio
+          // oferta con precio referencial" previo (ver schema.prisma).
+          return prisma.producto.update({ where: { id: p.id }, data: { precioOferta, ofertaIgualadaReferencial: false } });
         }),
         { timeout: 30000 } // default 5s se queda corto con lotes de 100 updates
       );
@@ -840,7 +845,11 @@ const igualarPrecioReferencial = async (req, res, next) => {
       await prisma.$transaction(
         lote.map(c => prisma.producto.update({
           where: { id: c.id },
-          data: { precioOferta: c.precioOferta, precioRegular: c.precioRegular },
+          // ofertaIgualadaReferencial=true: marca el producto como "igualado
+          // a mano" para que siga viéndose como rentable (diferencia
+          // positiva) aunque la diferencia calculada quede en 0 — el bot de
+          // WhatsApp lo sigue recomendando primero (ver n8nController.js).
+          data: { precioOferta: c.precioOferta, precioRegular: c.precioRegular, ofertaIgualadaReferencial: true },
         })),
         { timeout: 30000 }
       );
@@ -895,7 +904,9 @@ const redondearPrecioProveedor = async (req, res, next) => {
       await prisma.$transaction(
         lote.map(c => prisma.producto.update({
           where: { id: c.id },
-          data: { precioProveedor: c.precioProveedor, precioOferta: c.precioOferta, precioRegular: c.precioRegular },
+          // El proveedor cambió, así que cualquier "Igualar" previo queda
+          // invalidado (ver comentario arriba y en schema.prisma).
+          data: { precioProveedor: c.precioProveedor, precioOferta: c.precioOferta, precioRegular: c.precioRegular, ofertaIgualadaReferencial: false },
         })),
         { timeout: 30000 }
       );
