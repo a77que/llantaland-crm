@@ -212,8 +212,14 @@ export default function Clientes() {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexWrap:'wrap', gap:10 }}>
         <div>
           <div style={{ fontSize: isMobile?18:22, fontWeight:700 }}>Clientes</div>
-          <div style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:2 }}>{total} clientes · ordenado por {sortBy} {sortDir==='asc'?'↑':'↓'}</div>
+          <div style={{ fontSize:12, color:'var(--color-text-muted)', marginTop:2 }}>{total} leads de WhatsApp · ordenado por {sortBy} {sortDir==='asc'?'↑':'↓'}</div>
         </div>
+        {/* Esta lista es de leads de WhatsApp (se registran solos). Un cliente
+            registrado a mano en tienda es un registro aparte — no aparecerá
+            en esta lista. */}
+        <Link to="/clientes/nuevo" style={{ padding:'9px 16px', borderRadius:9, background:'var(--color-primary)', color:'#000', textDecoration:'none', fontSize:13, fontWeight:700, whiteSpace:'nowrap' }}>
+          + Registrar cliente de tienda
+        </Link>
       </div>
 
       {/* Filtros */}

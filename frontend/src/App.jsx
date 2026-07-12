@@ -16,6 +16,7 @@ import Leads from './pages/Leads';
 import Citas from './pages/Citas';
 import Clientes from './pages/Clientes';
 import ClienteDetalle from './pages/ClienteDetalle';
+import ClienteNuevo from './pages/ClienteNuevo';
 import Cotizaciones from './pages/Cotizaciones';
 import CotizacionNueva from './pages/CotizacionNueva';
 import CotizacionDetalle from './pages/CotizacionDetalle';
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="leads" element={<Leads />} />
             <Route path="citas" element={<Citas />} />
             <Route path="clientes" element={<Clientes />} />
+            <Route path="clientes/nuevo" element={<ClienteNuevo />} />
             <Route path="clientes/:id" element={<ClienteDetalle />} />
             <Route path="cotizaciones" element={<Cotizaciones />} />
             <Route path="cotizaciones/nueva" element={<CotizacionNueva />} />
