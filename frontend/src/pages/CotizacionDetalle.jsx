@@ -162,7 +162,9 @@ export default function CotizacionDetalle() {
         </div>
       )}
 
-      <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
+      {/* minmax(0, 1fr) en vez de 1fr: evita que la tabla de llantas empuje
+          la columna de resumen fuera de pantalla en anchos de laptop. */}
+      <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 20, alignItems: 'start' }}>
         <div>
           {/* Cliente */}
           <div style={S.card}>

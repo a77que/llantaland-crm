@@ -439,7 +439,10 @@ export default function CotizacionNueva() {
         </div>
       )}
 
-      <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'start' }}>
+      {/* minmax(0, 1fr) en vez de 1fr: sin esto, la columna izquierda no se
+          encoge por debajo del ancho del contenido (la tabla del catálogo),
+          y en anchos de laptop (~1024px) empuja el resumen fuera de pantalla. */}
+      <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', gap: 20, alignItems: 'start' }}>
         <div>
           {/* 1. Cliente */}
           <div style={S.card}>

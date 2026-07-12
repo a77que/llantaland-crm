@@ -94,7 +94,9 @@ export default function VentaDetalle() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: 14 }}>
+      {/* minmax(0, 1fr) en vez de 1fr: evita que la tabla de items empuje
+          la columna de resumen fuera de pantalla en anchos de laptop. */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 320px', gap: 14 }}>
         <div>
           {/* Cliente */}
           <Seccion titulo="👤 Datos del cliente">
