@@ -6,15 +6,23 @@ const { listar, obtener, crear, actualizar, eliminar, eliminarMasivo, eliminarPo
 const { listar: listarCostos } = require('../controllers/costosController');
 const { auth, requireAdmin } = require('../middleware/auth');
 
+// La extensión con la que se guarda SIEMPRE sale del mimetype (ya validado
+// contra ALLOWED_MIME abajo), nunca del nombre original que manda el
+// cliente: si se tomara del originalname, un archivo SVG/HTML disfrazado de
+// imagen (Content-Type mentiroso "image/png" pero nombre "x.svg") terminaría
+// guardado como .svg y servido luego como tal desde /uploads — riesgo de
+// XSS almacenado, ya que un SVG puede llevar <script> embebido.
+const MIME_TO_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+const ALLOWED_MIME = Object.keys(MIME_TO_EXT);
+
 const storage = multer.diskStorage({
   destination: path.join(__dirname, '..', '..', 'uploads'),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
+    const ext = MIME_TO_EXT[file.mimetype] || '.bin';
     cb(null, `${uuidv4()}${ext}`);
   },
 });
 
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },

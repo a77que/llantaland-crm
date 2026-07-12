@@ -9,11 +9,19 @@ const auth = async (req, res, next) => {
   }
   const token = header.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, nombre: true, email: true, rol: true, activo: true },
+    jwt.verify(token, process.env.JWT_SECRET);
+    // También se verifica contra la tabla Sesion, no solo la firma/expiración
+    // del JWT: así "cerrar sesión" invalida el token de verdad en el server,
+    // en vez de solo borrar el localStorage del navegador — un token robado
+    // deja de servir apenas el usuario legítimo cierra sesión.
+    const sesion = await prisma.sesion.findUnique({
+      where: { token },
+      include: { usuario: { select: { id: true, nombre: true, email: true, rol: true, activo: true } } },
     });
+    if (!sesion || sesion.expiresAt < new Date()) {
+      return res.status(401).json({ error: 'Token inválido o expirado' });
+    }
+    const usuario = sesion.usuario;
     if (!usuario || !usuario.activo) {
       return res.status(401).json({ error: 'Usuario inactivo o no encontrado' });
     }
