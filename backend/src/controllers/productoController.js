@@ -153,6 +153,9 @@ async function calcularPrecioOfertaDesdeProveedor(precioProveedor) {
 const actualizar = async (req, res, next) => {
   try {
     const data = { ...req.body };
+    delete data.id;
+    delete data.createdAt;
+    delete data.updatedAt;
     if (data.medida) data.medidaNorm = normalizarMedida(data.medida);
     // precioRegular se auto-calcula desde precioOferta (+5%); no se acepta manual.
     delete data.precioRegular;

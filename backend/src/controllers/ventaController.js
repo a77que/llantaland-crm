@@ -79,8 +79,15 @@ const crear = async (req, res, next) => {
     const numero = `VTA-${String(count + 1).padStart(5, '0')}`;
 
     const venta = await prisma.$transaction(async (tx) => {
+      // ...rest va PRIMERO: los campos explicitos de abajo (numero, usuarioId,
+      // estado, precioTotal, etc.) siempre ganan y no se pueden sobreescribir
+      // con el body del cliente (evita mass-assignment: un vendedor podria
+      // mandar { usuarioId: 'otro-id', estado: 'COMPLETADA', precioTotal: 0.01 }).
       const v = await tx.venta.create({
         data: {
+          ...rest,
+          id: undefined,
+          createdAt: undefined,
           numero,
           tipoNegocio: negocioFinal,
           usuarioId: req.usuario.id,
@@ -92,7 +99,6 @@ const crear = async (req, res, next) => {
           precioTotal: precioFinal * cantFinal,
           tipoVenta: rest.tipoVenta || 'tienda',
           estado: 'PENDIENTE',
-          ...rest,
         },
       });
 
