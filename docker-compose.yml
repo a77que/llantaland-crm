@@ -39,11 +39,6 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       CORS_EXTRA_ORIGIN: ${CORS_EXTRA_ORIGIN:-http://161.97.102.3:3000}
       N8N_API_KEY: ${N8N_API_KEY:-}
-      # Solo se usa durante una rotacion de N8N_API_KEY: mientras el workflow
-      # de n8n todavia tiene nodos con la clave vieja, el backend acepta
-      # ambas para no cortar el bot. Se quita despues de confirmar que ya
-      # no llegan pedidos con la clave vieja.
-      N8N_API_KEY_OLD: ${N8N_API_KEY_OLD:-}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
       API_DNI_URL: ${API_DNI_URL:-}
       API_DNI_KEY: ${API_DNI_KEY:-}
