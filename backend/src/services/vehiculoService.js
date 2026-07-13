@@ -7,6 +7,12 @@ const { llamarIA: iaLlamar } = require('./iaService');
 const { normalizarMedida } = require('../utils/medida');
 
 // Consulta una placa peruana y devuelve marca, modelo y año si la API responde.
+// Dos estilos de API soportados, según cómo esté configurada la URL:
+// - GET con la placa en la URL (ej. Factiliza: .../placa/info/{placa}) — si la
+//   URL trae {placa} o {numero}, se sustituye y se manda GET.
+// - POST con la placa en el cuerpo JSON (ej. api.json.pe: URL fija +
+//   {"placa": "..."}) — si la URL no trae marcador, este es el modo por
+//   defecto, ya que es el proveedor real configurado hoy.
 async function consultarPlaca(placa) {
   const cfg = await getConfigApis();
   const token = cfg.factilizaToken;
@@ -16,19 +22,26 @@ async function consultarPlaca(placa) {
   if (!token) return { encontrado: false, mensaje: 'API de placa no configurada (falta el token)' };
   if (!baseUrl) return { encontrado: false, mensaje: 'API de placa no configurada (falta la URL)' };
 
-  // Soporta {placa} en la URL o se agrega al final (estilo Factiliza)
-  const endpoint = baseUrl.includes('{placa}') ? baseUrl.replace('{placa}', limpia) : `${baseUrl}/${limpia}`;
+  const tieneMarcador = baseUrl.includes('{placa}') || baseUrl.includes('{numero}');
+  const endpoint = tieneMarcador ? baseUrl.replace('{placa}', limpia).replace('{numero}', limpia) : baseUrl;
 
   try {
     const resp = await fetch(endpoint, {
-      headers: { Authorization: `Bearer ${token}` },
+      method: tieneMarcador ? 'GET' : 'POST',
+      headers: tieneMarcador
+        ? { Authorization: `Bearer ${token}` }
+        : { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: tieneMarcador ? undefined : JSON.stringify({ placa: limpia }),
       signal: AbortSignal.timeout(9000),
     });
-    if (!resp.ok) return { encontrado: false, mensaje: `No se encontró la placa ${limpia}` };
+    if (!resp.ok) return { encontrado: false, mensaje: `No se encontró la placa ${limpia} (HTTP ${resp.status})` };
     const json = await resp.json();
-    const d = json?.data || {};
-    if (!d || (json.status && json.status !== 200)) {
-      return { encontrado: false, mensaje: `Placa ${limpia} no encontrada` };
+    // Distintos proveedores devuelven la data en distinto lugar/forma:
+    // {success, data:{...}} (json.pe), {status, data:{...}} (Factiliza), o plano.
+    const d = json?.data || json || {};
+    const exito = json.success !== false && (json.status === undefined || json.status === 200) && d && Object.keys(d).length > 0;
+    if (!exito) {
+      return { encontrado: false, mensaje: json.message || json.mensaje || `Placa ${limpia} no encontrada` };
     }
     // Año: a veces viene directo, a veces en el VIN (10º carácter)
     let anio = d.anio || d.año || null;
