@@ -53,6 +53,25 @@ const etiquetaTarjeta = (key) =>
 const badge = (color) => ({ display: 'inline-block', padding: '2px 9px', borderRadius: 10, fontSize: 11, fontWeight: 600, background: color + '22', color });
 const pill  = (color) => ({ display: 'inline-block', padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: color + '18', color, border: `1px solid ${color}40` });
 
+// Destino del lead: provincia siempre manda (nunca convive con un local de
+// Lima real, ver localValido() en el backend); si no hay provincia, se
+// muestra la tienda de Lima elegida cuando existe.
+function destinoDe(lead) {
+  if (lead.provinciaDestino) return { tipo: 'provincia', texto: lead.provinciaDestino };
+  const local = lead.localInstalacion || lead.localAsignado;
+  const nombre = local?.Nombre || local?.nombre;
+  if (nombre) return { tipo: 'lima', texto: nombre };
+  return null;
+}
+
+function DestinoBadge({ lead }) {
+  const d = destinoDe(lead);
+  if (!d) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
+  return d.tipo === 'provincia'
+    ? <span style={{ color: '#c2410c', fontWeight: 700, fontSize: 12.5 }}>🗺️ {d.texto}</span>
+    : <span style={{ color: '#16a34a', fontWeight: 700, fontSize: 12.5 }}>🏪 {d.texto}</span>;
+}
+
 /* ─── Modal / Drawer detalle ──────────────────────────────────── */
 function LeadDetalle({ lead, onClose, isMobile }) {
   const navigate = useNavigate();
@@ -106,7 +125,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
       provinciaDestino: lead.provinciaDestino || null,
     } });
   };
-  const localNombre = local?.Nombre || local?.nombre || '—';
+  const destino = destinoDe(lead);
 
   const overlayStyle = {
     position: 'fixed', inset: 0, zIndex: 400,
@@ -195,7 +214,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             <Field label="Medida llanta" value={lead.medidaDetectada} />
             <Field label="Precio" value={lead.precioLlanta ? `S/ ${parseFloat(lead.precioLlanta).toFixed(2)}` : null} />
             <Field label="Distrito" value={lead.distritoCliente} />
-            <Field label="Local asignado" value={localNombre} />
+            <Field label={destino?.tipo === 'provincia' ? 'Provincia destino' : 'Local asignado'} value={destino ? destino.texto : '—'} />
             <Field label="Fecha cita" value={lead.fechaCita} />
             <Field label="Logística" value={lead.estadoLogistica} />
           </div>
@@ -334,8 +353,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
 
 /* ─── Card individual para lista móvil ────────────────────────── */
 function LeadCard({ lead, onClick, isNuevo }) {
-  const local = lead.localInstalacion || lead.localAsignado;
-  const localNombre = local?.Nombre || local?.nombre;
+  const destino = destinoDe(lead);
   const color = PASO_COLOR[lead.pasoActual] || '#64748b';
 
   return (
@@ -391,7 +409,7 @@ function LeadCard({ lead, onClick, isNuevo }) {
         {[lead.marcaAuto, lead.modeloAuto].filter(Boolean).length > 0 && (
           <span>🚗 {[lead.marcaAuto, lead.modeloAuto].filter(Boolean).join(' ')}</span>
         )}
-        {localNombre && <span>📍 {localNombre}</span>}
+        {destino && <span>{destino.tipo === 'provincia' ? '🗺️' : '📍'} {destino.texto}</span>}
         {lead.fechaCita && <span>📅 {lead.fechaCita}</span>}
       </div>
 
@@ -667,11 +685,10 @@ export default function Leads() {
                 {[
                   { k:null,             label:'Cotización' },
                   { k:'telefono',       label:'Teléfono' },
-                  { k:'nombreCliente',  label:'Cliente' },
+                  { k:null,             label:'Lima / Provincia' },
                   { k:'medidaDetectada',label:'Medida' },
                   { k:'pasoActual',     label:'Paso' },
                   { k:'ranking',        label:'Ranking' },
-                  { k:null,             label:'Local' },
                   { k:'fechaCita',      label:'Cita' },
                   { k:null,             label:'1er mensaje' },
                 ].map(({ k, label }) => {
@@ -698,7 +715,6 @@ export default function Leads() {
             </thead>
             <tbody>
               {leads.map(lead => {
-                const local = lead.localInstalacion || lead.localAsignado;
                 const tieneCot = (lead._count?.cotizaciones || 0) > 0;
                 // "Nuevo" es por dispositivo (localStorage); si ya tiene cotización (atendido,
                 // dato del servidor) no se resalta como nuevo en NINGÚN dispositivo → consistente.
@@ -718,11 +734,10 @@ export default function Leads() {
                       {isNuevo && <span style={{ background: '#f5c400', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 8, marginRight: 6, letterSpacing: 1 }}>🔔 NUEVO</span>}
                       {lead.telefono}
                     </td>
-                    <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.nombreCliente || <span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
+                    <td style={{ padding: '11px 14px', fontSize: 13 }}><DestinoBadge lead={lead} /></td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.medidaDetectada || '—'}</td>
                     <td style={{ padding: '11px 14px' }}><span style={badge(PASO_COLOR[lead.pasoActual] || '#64748b')}>{PASO_LABEL[lead.pasoActual] || lead.pasoActual}</span></td>
                     <td style={{ padding: '11px 14px' }}>{lead.ranking ? <span style={pill(RANKING_COLOR[lead.ranking])}>{RANKING_ICON[lead.ranking]} {lead.ranking}</span> : '—'}</td>
-                    <td style={{ padding: '11px 14px', fontSize: 13 }}>{local?.Nombre || local?.nombre || '—'}</td>
                     <td style={{ padding: '11px 14px', fontSize: 13 }}>{lead.fechaCita || '—'}</td>
                     <td style={{ padding: '11px 14px', fontSize: 12, color: 'var(--color-text-muted)' }}>{new Date(lead.timestamp).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                   </tr>

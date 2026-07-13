@@ -37,7 +37,7 @@ const LEAD_SELECT_VENDEDOR = {
   pasoActual: true, ranking: true, tipoServicio: true,
   medidaDetectada: true, marcaLlanta: true, modeloLlanta: true,
   precioLlanta: true, cantidadLlantas: true,
-  distritoCliente: true, localInstalacion: true,
+  distritoCliente: true, localInstalacion: true, localAsignado: true, provinciaDestino: true,
   estadoLogistica: true, fechaCita: true,
   nombreCliente: true,           // necesario para llamar al cliente
   marcaAuto: true, modeloAuto: true, anioAuto: true,
