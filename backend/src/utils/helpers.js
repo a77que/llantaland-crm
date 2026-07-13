@@ -35,4 +35,15 @@ function paginar(page = 1, limit = 20) {
   return { skip: (p - 1) * l, take: l, page: p, limit: l };
 }
 
-module.exports = { calcularTotales, generarNumero, paginar, IGV_RATE };
+// Un lead que eligió "envío a provincia" puede traer un Local_Asignado "{}"
+// (objeto vacío) heredado del flujo de n8n, que en JS es verdadero aunque no
+// tenga datos reales. localValido() sólo acepta un local con nombre real, y
+// nunca lo devuelve si el lead ya tiene provincia de destino — evita que un
+// mismo registro muestre local Y provincia a la vez ("se cruzan los datos").
+function localValido(local, provinciaDestino) {
+  if (provinciaDestino) return null;
+  if (!local || typeof local !== 'object') return null;
+  return (local.Nombre || local.nombre) ? local : null;
+}
+
+module.exports = { calcularTotales, generarNumero, paginar, localValido, IGV_RATE };

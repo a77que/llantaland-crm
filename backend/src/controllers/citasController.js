@@ -1,5 +1,6 @@
 const pdfService = require('../services/pdfService');
 const prisma = require('../lib/prisma');
+const { localValido } = require('../utils/helpers');
 
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
 // (negocio Llantas) o ya cotizó un show (negocio Patrón)
@@ -117,7 +118,7 @@ const listar = async (req, res, next) => {
       const cotReciente = l.cotizaciones?.[0] || null;
       const tieneCot    = (l._count?.cotizaciones || 0) > 0;
 
-      const localElegido = parseJsonField(l.localInstalacion) || parseJsonField(l.localAsignado) || null;
+      const localElegido = localValido(parseJsonField(l.localInstalacion) || parseJsonField(l.localAsignado), l.provinciaDestino);
 
       // Precio: desde cotización si existe, si no desde el lead
       const precioUnit  = cotReciente ? parseFloat(cotReciente.precioUnit  || 0) : (l.precioLlanta  ? parseFloat(l.precioLlanta) : null);
@@ -210,7 +211,7 @@ const generarPdf = async (req, res, next) => {
         medidaLlanta: lead.medidaDetectada, marcaLlanta: lead.marcaLlanta, modeloLlanta: lead.modeloLlanta,
         cantidad: cant, precioUnit: pUnit, precioTotal: pUnit * cant,
         fechaInstalacion: lead.fechaInstalacion, horaInstalacion: lead.horaInstalacion,
-        localInstalacion: lead.localInstalacion || lead.localAsignado || null,
+        localInstalacion: localValido(lead.localInstalacion || lead.localAsignado, lead.provinciaDestino),
         provinciaDestino: lead.provinciaDestino, fechaCita: lead.fechaCita,
         notas: null, items: null,
       };

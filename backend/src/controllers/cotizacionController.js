@@ -1,4 +1,4 @@
-const { paginar } = require('../utils/helpers');
+const { paginar, localValido } = require('../utils/helpers');
 const pdfService = require('../services/pdfService');
 const prisma = require('../lib/prisma');
 
@@ -114,7 +114,7 @@ const crear = async (req, res, next) => {
         modeloLlanta:    modeloLlanta || lead.modeloLlanta,
         // Datos de cita
         fechaCita:        lead.fechaCita        || null,
-        localInstalacion: lead.localInstalacion || lead.localAsignado || null,
+        localInstalacion: localValido(lead.localInstalacion || lead.localAsignado, lead.provinciaDestino),
         provinciaDestino: lead.provinciaDestino || null,
         esTraslado:       !!(lead.localOrigenTraslado),
       };
@@ -338,7 +338,7 @@ const convertirAVenta = async (req, res, next) => {
           fechaCita:        cot.fechaCita        || null,
           fechaInstalacion: cot.fechaInstalacion || null,
           horaInstalacion:  cot.horaInstalacion  || null,
-          localInstalacion: cot.localInstalacion || null,
+          localInstalacion: localValido(cot.localInstalacion, cot.provinciaDestino),
           provinciaDestino: cot.provinciaDestino || null,
           esTraslado:       cot.esTraslado       || false,
           tipoVenta:        cot.leadId ? 'whatsapp' : 'tienda',

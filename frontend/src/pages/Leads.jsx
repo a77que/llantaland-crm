@@ -88,8 +88,12 @@ function LeadDetalle({ lead, onClose, isMobile }) {
 
   if (!lead) return null;
 
-  // Abrir el flujo completo de cotización con los datos del lead precargados (desde cualquier paso)
-  const local = lead.localInstalacion || lead.localAsignado;
+  // Abrir el flujo completo de cotización con los datos del lead precargados (desde cualquier paso).
+  // Si el lead es de provincia, nunca hay un local de Lima real que precargar
+  // (aunque llegue un objeto vacío heredado del bot) — evita que se active
+  // "generar cita" con una tienda fantasma para un envío a provincia.
+  const localBruto = lead.localInstalacion || lead.localAsignado;
+  const local = (!lead.provinciaDestino && (localBruto?.Nombre || localBruto?.nombre)) ? localBruto : null;
   const crearCotizacion = () => {
     onClose();
     navigate('/cotizaciones/nueva', { state: {
