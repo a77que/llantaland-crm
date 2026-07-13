@@ -75,42 +75,48 @@ async function llamarIA(prompt) {
 async function buscarVersiones(marca, modelo, anio) {
   if (!marca || !modelo) return { encontrado: false, mensaje: 'Marca y modelo son obligatorios', versiones: [] };
 
-  const prompt = `Eres un experto en especificaciones técnicas de automóviles y sus neumáticos de equipo original (OEM).
-Para el siguiente vehículo, lista TODAS las versiones/equipamientos disponibles en el mercado peruano con su medida de neumático de fábrica.
+  // Mismo prompt (y mismo criterio: máximo 5, solo OEM real) que usa el bot
+  // de WhatsApp (n8n, nodo "Groq chainLlm | versiones auto") — antes el CRM
+  // tenía su propio prompt aparte, más permisivo (hasta 8, cualquier
+  // formato), por eso mostraba más opciones que el bot para el mismo auto.
+  const prompt = `Eres un experto en especificaciones tecnicas de vehiculos para el mercado peruano.
 
-Vehículo:
-- Marca: ${marca}
-- Modelo: ${modelo}
-- Año: ${anio || 'no especificado'}
+Lista las medidas de llanta originales de fabrica (OEM) para este vehiculo:
+- Marca: ${marca || 'no especificado'}
+- Modelo: ${modelo || 'no especificado'}
+- Anio: ${anio || 'no especificado'}
 
-Responde ÚNICAMENTE con un JSON válido con esta forma exacta:
-{
-  "versiones": [
-    { "version": "nombre de la versión/equipamiento", "medida": "medida en formato 195/65R15", "aro": 15 }
-  ]
-}
-Reglas:
-- Acepta cualquier formato de medida (métrico 205/55R16, comercial 205/65R16C, sin perfil 165R13, pulgadas 7.50R16 o 31X10.50R15).
-- Si una versión tiene varias medidas según el aro, lista cada una como una entrada separada.
-- Si no estás seguro del año, da las versiones más comunes de ese modelo.
-- SIEMPRE devuelve al menos UNA entrada. Si NO puedes determinar versiones específicas,
-  devuelve una sola entrada con "version": "GENERAL" y la medida de neumático original
-  más común para ese modelo/año. Nunca devuelvas la lista vacía.
-- Máximo 8 versiones, las más relevantes. No inventes versiones inexistentes.`;
+REGLAS:
+1. Lista SOLO medidas OEM originales de fabrica. No inventes medidas.
+2. Maximo 5 versiones, ordenadas de la mas comun a la menos comun en Peru.
+3. SIEMPRE devuelve al menos UNA medida si conoces la marca y el modelo; si no estas seguro de las versiones exactas, devuelve solo la medida de fabrica mas comun para ese modelo/anio (una sola entrada). Devuelve array vacio [] UNICAMENTE si no hay marca ni modelo.
+4. El campo "descripcion" debe indicar brevemente que version/trim del vehiculo usa esa medida.
+
+EJEMPLOS:
+Marca:Toyota Modelo:Yaris Anio:2019 -> {"versiones":[{"medida":"185/65R15","descripcion":"version base XL aro 15"},{"medida":"195/60R16","descripcion":"version XLS sedan aro 16"}]}
+Marca:Kia Modelo:Sportage Anio:2020 -> {"versiones":[{"medida":"235/55R18","descripcion":"version EX/LX"},{"medida":"235/50R19","descripcion":"version SXL premium"}]}
+Marca:desconocido Modelo:desconocido Anio:no especificado -> {"versiones":[]}
+
+Responde SOLO con JSON valido sin markdown:
+{"versiones":[]}`;
 
   const datos = await llamarIA(prompt);
   if (!datos || !Array.isArray(datos.versiones)) {
     return { encontrado: false, mensaje: 'No se pudieron obtener las versiones', versiones: [] };
   }
 
-  // Normalizar la medida de cada versión (acepta TODAS las familias)
+  // Normalizar la medida de cada versión (acepta TODAS las familias — esta
+  // parte SÍ se queda más permisiva que n8n a propósito: es solo la
+  // validación de formato de lo que la IA ya devolvió, no cambia cuántas
+  // opciones se piden ni el criterio de la IA, que es lo que se unificó).
   const reCanon = /^(\d{3}\/\d{2,3}R\d{2}(?:\.\d)?|\d{2}X[\d.]+R\d{2}|\d\.\d{2}R\d{2}|\d{3}R\d{2})$/;
   const versiones = datos.versiones
     .map(v => {
       const norm = normalizarMedida(String(v.medida || ''));
       if (!norm || !reCanon.test(norm)) return null;
       const aro = (norm.match(/R(\d{2})/) || [])[1];
-      return { version: String(v.version || '').slice(0, 80) || 'Estándar', medida: norm, aro: aro ? parseInt(aro) : null };
+      const desc = String(v.descripcion || v.version || '').slice(0, 80);
+      return { version: desc || 'Estándar', medida: norm, aro: aro ? parseInt(aro) : null };
     })
     .filter(Boolean);
 

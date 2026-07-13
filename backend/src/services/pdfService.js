@@ -42,8 +42,10 @@ function bloqueInstalacion(doc, obj, y, C) {
   doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('CITA DE INSTALACIÓN:', 50, y);
   y += 14;
   if (local?.Nombre || local?.nombre) {
+    // Sin dirección impresa (puede quedar desactualizada) — se coordina la
+    // ubicación exacta por WhatsApp, con el mismo número que usa el bot.
     doc.fontSize(9).font('Helvetica').fillColor(C.texto)
-      .text(`Local: ${local.Nombre || local.nombre}  —  ${local.Direccion || local.direccion || local.Distrito || local.distrito || ''}`, 50, y);
+      .text(`Local: ${local.Nombre || local.nombre}  —  Coordina por WhatsApp: ${EMPRESA.telefono}`, 50, y);
     y += 14;
   }
   if (diaFecha) {
