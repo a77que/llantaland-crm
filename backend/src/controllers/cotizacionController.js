@@ -53,6 +53,7 @@ const crear = async (req, res, next) => {
       nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
       // Datos de cita ingresados en el CRM
       generarCita, fechaInstalacion, horaInstalacion, localInstalacion: localInstalacionBody,
+      provinciaDestino: provinciaDestinoBody,
       // Múltiples llantas (opcional): [{ sku, medida, marca, modelo, cantidad, precioUnit }]
       items: itemsBody,
     } = req.body;
@@ -130,13 +131,16 @@ const crear = async (req, res, next) => {
     const finalMarca     = (primero && primero.marca)  || marcaLlanta  || leadData.marcaLlanta  || null;
     const finalModelo    = (primero && primero.modelo) || modeloLlanta || leadData.modeloLlanta || null;
     const finalFechaCita        = leadData.fechaCita        || null;
-    const finalLocalInstalacion = localInstalacionBody || leadData.localInstalacion || null;
-    const finalProvinciaDestino = leadData.provinciaDestino || null;
-    const finalEsTraslado       = leadData.esTraslado       || false;
+    // provinciaDestino manda: si el vendedor elige provincia en el CRM (o el
+    // lead ya venía de provincia), nunca se guarda un local de Lima junto con
+    // ella — mismo criterio de exclusión mutua que localValido().
+    const finalProvinciaDestino = provinciaDestinoBody || leadData.provinciaDestino || null;
+    const finalLocalInstalacion = finalProvinciaDestino ? null : (localInstalacionBody || leadData.localInstalacion || null);
+    const finalEsTraslado       = finalProvinciaDestino ? false : (leadData.esTraslado || false);
     const finalFechaInst        = quiereCita && fechaInstalacion ? new Date(fechaInstalacion) : null;
     const finalHoraInst         = quiereCita ? (horaInstalacion || null) : null;
-    // Si se genera cita y se confirma local+fecha, la cotización nace ACEPTADA
-    const estadoInicial         = (quiereCita && finalFechaInst && finalLocalInstalacion) ? 'ACEPTADA' : 'BORRADOR';
+    // Si se genera cita y se confirma destino (local en Lima, o provincia) + fecha, nace ACEPTADA
+    const estadoInicial         = (quiereCita && finalFechaInst && (finalLocalInstalacion || finalProvinciaDestino)) ? 'ACEPTADA' : 'BORRADOR';
     const negocioFinal          = tipoNegocio || 'LLANTAS';
 
     const cot = await prisma.$transaction(async (tx) => {
@@ -189,6 +193,7 @@ const crear = async (req, res, next) => {
               medidaDetectada: finalMedida, marcaLlanta: finalMarca, modeloLlanta: finalModelo,
               precioLlanta: pUnit > 0 ? pUnit : null, cantidadLlantas: qty,
               pasoActual: 'completado', origenCita: 'crm',
+              provinciaDestino: finalProvinciaDestino || null,
             },
           });
           citaLeadId = nuevoLead.id;
@@ -201,6 +206,7 @@ const crear = async (req, res, next) => {
             fechaInstalacion: finalFechaInst,
             horaInstalacion:  finalHoraInst,
             localInstalacion: finalLocalInstalacion || undefined,
+            provinciaDestino: finalProvinciaDestino || undefined,
           },
         });
       }

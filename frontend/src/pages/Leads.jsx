@@ -103,6 +103,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
       medida: lead.medidaDetectada || '',
       llanta: { marca: lead.marcaLlanta || '', modelo: lead.modeloLlanta || '', cantidad: lead.cantidadLlantas || 4 },
       sede: local ? { codigoLocal: local.ID || local.codigoLocal, nombre: local.Nombre || local.nombre } : null,
+      provinciaDestino: lead.provinciaDestino || null,
     } });
   };
   const localNombre = local?.Nombre || local?.nombre || '—';

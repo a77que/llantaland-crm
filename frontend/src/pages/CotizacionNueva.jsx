@@ -137,12 +137,24 @@ export default function CotizacionNueva() {
     }));
   };
 
+  // ── Destino de la venta: Lima (instalación en tienda) o envío a provincia.
+  // Se detecta automático si el lead ya venía identificado como provincia por
+  // WhatsApp; el vendedor puede cambiarlo a mano si hace falta.
+  const [destino, setDestino] = useState(pre.provinciaDestino ? 'provincia' : 'lima');
+  const [provinciaDestino, setProvinciaDestino] = useState(pre.provinciaDestino || '');
+
   // ── Tienda de instalación (se elige temprano: define prioridad del catálogo
   // y el descuento por traslado; la cita reutiliza esta misma tienda) ──
+  // Solo aplica para destino Lima — un envío a provincia nunca usa una tienda.
   const [sedeCita, setSedeCita] = useState('');
+  const elegirDestino = (d) => {
+    setDestino(d);
+    if (d === 'provincia') setSedeCita('');
+    else setProvinciaDestino('');
+  };
 
-  // ── Cita ──
-  const [generarCita, setGenerarCita] = useState(!!pre.sede);
+  // ── Cita / seguimiento ──
+  const [generarCita, setGenerarCita] = useState(!!pre.sede || !!pre.provinciaDestino);
   const [fechaCita, setFechaCita] = useState('');
   const [horaCita, setHoraCita] = useState('');
 
@@ -328,11 +340,21 @@ export default function CotizacionNueva() {
   // completo de todas las unidades. Si NO tiene stock (hay que traerla), solo
   // se descuenta a partir de la 2da unidad porque el mismo viaje trae varias.
   const montoTraslado = calcCostoTraslado(costosVenta);
-  const descuentoTraslado = sedeCita ? items.reduce((sum, it) => {
+  const descuentoTrasladoLima = sedeCita ? items.reduce((sum, it) => {
     const hayStock = stockDeSede(it.producto, sedeCita) > 0;
     const desc = hayStock ? montoTraslado * it.cantidad : montoTraslado * Math.max(0, it.cantidad - 1);
     return sum + desc;
   }, 0) : 0;
+
+  // Envío a provincia: no hay tienda ni stock que consultar (siempre viaja
+  // desde Lima), así que se aplica la misma regla que usa el bot de WhatsApp
+  // para provincia — si es 1 llanta se cobra el traslado normal, si son más
+  // se descuenta a partir de la 2da porque el mismo envío las trae juntas.
+  const descuentoTrasladoProvincia = destino === 'provincia'
+    ? items.reduce((sum, it) => sum + montoTraslado * Math.max(0, it.cantidad - 1), 0)
+    : 0;
+
+  const descuentoTraslado = destino === 'provincia' ? descuentoTrasladoProvincia : descuentoTrasladoLima;
 
   // Traslado restante: el descuento automático de arriba deja SIEMPRE un
   // viaje sin descontar por cada modelo que de verdad hay que traer (por
@@ -379,13 +401,16 @@ export default function CotizacionNueva() {
   const gananciaTexto = { roja: '🔴 Sin ganancia — no procede la venta así', amarilla: '🟡 Ganancia mínima', verde: '🟢 Ganancia saludable' }[estadoGanancia];
 
   const cargosExtraIncompletos = cargosExtra.some(c => (parseFloat(c.monto) || 0) > 0 && !c.descripcion.trim());
-  const puedeGuardar = cliente.nombre && items.length > 0 && (!generarCita || (fechaCita && sedeCita)) && !cargosExtraIncompletos;
+  const destinoOk = destino === 'provincia' ? !!provinciaDestino.trim() : true;
+  const puedeGuardar = cliente.nombre && items.length > 0 && destinoOk
+    && (!generarCita || (fechaCita && (destino === 'provincia' || sedeCita)))
+    && !cargosExtraIncompletos;
 
   const crearMut = useMutation({
     mutationFn: () => {
       const sede = sedes.find(s => s.id === sedeCita);
-      const local = sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
-      const notasOrigenes = items.map(it => {
+      const local = destino === 'lima' && sede ? { ID: sede.codigoLocal, Nombre: sede.nombre, Direccion: sede.direccion || '', Distrito: sede.distrito || '' } : undefined;
+      const notasOrigenes = destino === 'lima' ? items.map(it => {
         const asignaciones = origenesPorItem[it.producto.id] || {};
         const partes = Object.entries(asignaciones)
           .filter(([, cant]) => (parseInt(cant) || 0) > 0)
@@ -395,9 +420,10 @@ export default function CotizacionNueva() {
           }).filter(Boolean);
         if (partes.length === 0) return null;
         return `[INTERNO] ${it.producto.marca} ${it.producto.medida}: traer ${partes.join(', ')} hacia ${sede?.nombre || 'la tienda elegida'}.`;
-      }).filter(Boolean);
+      }).filter(Boolean) : [];
       const notasExtra = [
-        descuentoTraslado > 0 ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
+        descuentoTraslado > 0 && destino === 'lima' ? `Descuento por traslado (según stock en ${sede?.nombre || 'tienda elegida'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
+        descuentoTraslado > 0 && destino === 'provincia' ? `Descuento por traslado (envío a ${provinciaDestino || 'provincia'}): ${fmt(descuentoTraslado)} — ajuste de precio, no afecta ganancia.` : null,
         costoTrasladoRestante > 0 ? `Traslado restante asumido por la tienda: ${fmt(costoTrasladoRestante)} — resta ganancia.` : null,
         pagoTransferencia ? `Pago por transferencia bancaria: descuento 5% (${fmt(descuentoTransferencia)}), no afecta ganancia.` : null,
         ...cargosExtra.filter(c => (parseFloat(c.monto) || 0) > 0).map(c => `Cargo adicional al cliente: ${fmt(c.monto)} — ${c.descripcion || 'sin motivo especificado'}.`),
@@ -415,8 +441,13 @@ export default function CotizacionNueva() {
         descuento: descuentoTotal > 0 ? descuentoTotal : undefined,
         cargoAdicional: cargoManual > 0 ? cargoManual : undefined,
         notas: notasFinal || undefined,
+        ...(destino === 'provincia' ? { provinciaDestino: provinciaDestino.trim() } : {}),
         generarCita,
-        ...(generarCita ? { fechaInstalacion: fechaCita || undefined, horaInstalacion: horaCita || undefined, localInstalacion: local } : {}),
+        ...(generarCita ? {
+          fechaInstalacion: fechaCita || undefined,
+          horaInstalacion: destino === 'lima' ? (horaCita || undefined) : undefined,
+          ...(destino === 'lima' ? { localInstalacion: local } : {}),
+        } : {}),
       });
     },
     onSuccess: (data) => { toast.success(`Cotización ${data.numero} creada`); navigate(`/cotizaciones/${data.id}`); },
@@ -430,12 +461,13 @@ export default function CotizacionNueva() {
         <h1 style={{ fontSize: 18, fontWeight: 700 }}>Nueva Cotización</h1>
       </div>
 
-      {(pre.llanta?.marca || pre.sede) && (
+      {(pre.llanta?.marca || pre.sede || pre.provinciaDestino) && (
         <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>💬 Elegido por WhatsApp:</span>
           {pre.llanta?.marca && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>🛞 {pre.llanta.marca} {pre.llanta.modelo || ''}</span>}
           {pre.medida && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>📏 {pre.medida}</span>}
           {pre.sede?.nombre && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>🏪 {pre.sede.nombre}</span>}
+          {pre.provinciaDestino && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>🗺️ Envío a {pre.provinciaDestino}</span>}
         </div>
       )}
 
@@ -464,30 +496,51 @@ export default function CotizacionNueva() {
             </div>
           </div>
 
-          {/* 2. Tienda de instalación */}
+          {/* 2. Destino de la venta: Lima (tienda) o envío a provincia */}
           <div style={S.card}>
-            <div style={S.cardTitle}>2. Tienda de instalación</div>
-            <div style={S.group}>
-              <label style={S.label}>¿En qué tienda va a instalar el cliente?</label>
-              {pre.sede?.nombre && (
-                <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600, marginBottom: 6 }}>
-                  🏪 Ya elegida por WhatsApp
-                </div>
-              )}
-              <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
-                <option value="">— Elegir tienda —</option>
-                {tiendas.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-              </select>
-            </div>
-            {sedeSel && (
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', fontSize: 12.5 }}>
-                📍 {sedeSel.direccion || 'Sin dirección registrada'}{sedeSel.distrito ? ` · ${sedeSel.distrito}` : ''}
-                {sedeSel.telefono && <div style={{ marginTop: 2 }}>📞 {sedeSel.telefono}</div>}
+            <div style={S.cardTitle}>2. Destino de la venta</div>
+            {(pre.sede?.nombre || pre.provinciaDestino) && (
+              <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600, marginBottom: 10 }}>
+                {pre.provinciaDestino ? `🗺️ Identificado por WhatsApp: envío a ${pre.provinciaDestino}` : '🏪 Tienda ya elegida por WhatsApp'}
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 8 }}>
-              Al elegir la tienda, el catálogo de abajo mostrará primero las llantas que ya hay en stock ahí.
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <div style={S.tab(destino === 'lima')} onClick={() => elegirDestino('lima')}>🏪 Lima — tienda</div>
+              <div style={S.tab(destino === 'provincia')} onClick={() => elegirDestino('provincia')}>🚚 Envío a provincia</div>
             </div>
+
+            {destino === 'lima' && (
+              <>
+                <div style={S.group}>
+                  <label style={S.label}>¿En qué tienda va a instalar el cliente?</label>
+                  <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
+                    <option value="">— Elegir tienda —</option>
+                    {tiendas.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                  </select>
+                </div>
+                {sedeSel && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', fontSize: 12.5 }}>
+                    📍 {sedeSel.direccion || 'Sin dirección registrada'}{sedeSel.distrito ? ` · ${sedeSel.distrito}` : ''}
+                    {sedeSel.telefono && <div style={{ marginTop: 2 }}>📞 {sedeSel.telefono}</div>}
+                  </div>
+                )}
+                <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 8 }}>
+                  Al elegir la tienda, el catálogo de abajo mostrará primero las llantas que ya hay en stock ahí.
+                </div>
+              </>
+            )}
+
+            {destino === 'provincia' && (
+              <>
+                <div style={S.group}>
+                  <label style={S.label}>Provincia / ciudad de destino</label>
+                  <input style={S.input} value={provinciaDestino} onChange={e => setProvinciaDestino(e.target.value)} placeholder="Ej: Arequipa" />
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                  Es un envío — no se asigna tienda de Lima ni se descuenta stock de ninguna sede.
+                </div>
+              </>
+            )}
           </div>
 
           {/* 3. Medida */}
@@ -710,12 +763,28 @@ export default function CotizacionNueva() {
             <div style={S.card}>
               <div style={S.cardTitle}>6. Costos adicionales de la venta</div>
 
-              {!sedeCita && (
+              {destino === 'lima' && !sedeCita && (
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
                   Elige la tienda de instalación arriba (paso 2) para calcular el descuento por traslado.
                 </div>
               )}
-              {sedeCita && descuentoTraslado > 0 && (
+              {destino === 'provincia' && descuentoTraslado > 0 && (
+                <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#c2410c' }}>🚚 Descuento por traslado (envío a provincia): {fmt(descuentoTraslado)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {items.map(it => {
+                      const desc = montoTraslado * Math.max(0, it.cantidad - 1);
+                      if (desc <= 0) return null;
+                      const nombre = `${it.producto.marca} ${it.producto.medida}`;
+                      return <div key={it.producto.id}>🚚 {it.cantidad} {nombre}: mismo envío las trae juntas, descuento {fmt(desc)}</div>;
+                    })}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                    Si es 1 sola llanta se cobra el traslado completo; desde la 2da se descuenta porque viajan en el mismo envío. Es un ajuste de precio, no afecta la ganancia.
+                  </div>
+                </div>
+              )}
+              {destino === 'lima' && sedeCita && descuentoTraslado > 0 && (
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 13 }}>
                   <div style={{ fontWeight: 700, color: '#16a34a' }}>🚚 Descuento por traslado: {fmt(descuentoTraslado)}</div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -792,13 +861,13 @@ export default function CotizacionNueva() {
             </div>
           )}
 
-          {/* 7. Generar cita */}
+          {/* 7. Generar cita / seguimiento de envío */}
           <div style={S.card}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: generarCita ? 16 : 0 }}>
               <input type="checkbox" checked={generarCita} onChange={e => setGenerarCita(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#16a34a' }} />
-              <span style={{ fontSize: 14, fontWeight: 700 }}>🗓️ Generar cita de instalación ahora</span>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>{destino === 'provincia' ? '📦 Programar seguimiento de envío ahora' : '🗓️ Generar cita de instalación ahora'}</span>
             </label>
-            {generarCita && (
+            {generarCita && destino === 'lima' && (
               <>
                 <div style={S.group}>
                   <label style={S.label}>Tienda de instalación</label>
@@ -811,6 +880,22 @@ export default function CotizacionNueva() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
                   <div style={S.group}><label style={S.label}>Fecha</label><input style={S.input} type="date" value={fechaCita} onChange={e => setFechaCita(e.target.value)} /></div>
                   <div style={S.group}><label style={S.label}>Hora</label><input style={S.input} type="time" value={horaCita} onChange={e => setHoraCita(e.target.value)} /></div>
+                </div>
+              </>
+            )}
+            {generarCita && destino === 'provincia' && (
+              <>
+                <div style={S.group}>
+                  <label style={S.label}>Destino</label>
+                  {provinciaDestino ? (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#c2410c' }}>🗺️ {provinciaDestino}</div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>⚠️ Escribe la provincia de destino en el paso 2 antes de continuar</div>
+                  )}
+                </div>
+                <div style={S.group}><label style={S.label}>Fecha estimada de envío</label><input style={S.input} type="date" value={fechaCita} onChange={e => setFechaCita(e.target.value)} /></div>
+                <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: -6 }}>
+                  Queda en el calendario de Citas como seguimiento del envío, no como instalación.
                 </div>
               </>
             )}
@@ -835,7 +920,12 @@ export default function CotizacionNueva() {
             {cargosExtra.filter(c => (parseFloat(c.monto) || 0) > 0).map(c => (
               <div key={c.id} style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#b45309' }}><span>{c.descripcion || 'Cargo adicional'}</span><span>+ {fmt(c.monto)}</span></div>
             ))}
-            {generarCita && fechaCita && <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>🗓️ Cita: {fechaCita}{horaCita ? ` ${horaCita}` : ''}</div>}
+            {destino === 'provincia' && provinciaDestino && <div style={{ fontSize: 12, color: '#c2410c', fontWeight: 600, marginTop: 6 }}>🗺️ Envío a {provinciaDestino}</div>}
+            {generarCita && fechaCita && (
+              <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginTop: 6 }}>
+                {destino === 'provincia' ? `📦 Envío: ${fechaCita}` : `🗓️ Cita: ${fechaCita}${horaCita ? ` ${horaCita}` : ''}`}
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '2px solid var(--color-border)', fontWeight: 800, fontSize: 16 }}>
               <span>TOTAL</span><span style={{ color: 'var(--color-primary)' }}>{fmt(totalCalc)}</span>
             </div>
@@ -846,9 +936,13 @@ export default function CotizacionNueva() {
             )}
             <button onClick={() => crearMut.mutate()} disabled={!puedeGuardar || crearMut.isPending}
               style={{ width: '100%', marginTop: 16, padding: 12, background: puedeGuardar ? '#16a34a' : 'var(--color-surface2)', color: puedeGuardar ? '#fff' : 'var(--color-text-muted)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: puedeGuardar ? 'pointer' : 'default' }}>
-              {crearMut.isPending ? 'Guardando...' : generarCita ? '✓ Crear cotización + cita' : '✓ Crear cotización'}
+              {crearMut.isPending ? 'Guardando...' : generarCita ? (destino === 'provincia' ? '✓ Crear cotización + seguimiento' : '✓ Crear cotización + cita') : '✓ Crear cotización'}
             </button>
-            {!puedeGuardar && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>Falta: {!cliente.nombre ? 'cliente, ' : ''}{!items.length ? 'llantas, ' : ''}{generarCita && !fechaCita ? 'fecha, ' : ''}{generarCita && !sedeCita ? 'tienda, ' : ''}{cargosExtraIncompletos ? 'motivo de algún cargo extra' : ''}</div>}
+            {!puedeGuardar && (
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>
+                Falta: {!cliente.nombre ? 'cliente, ' : ''}{!items.length ? 'llantas, ' : ''}{!destinoOk ? 'provincia de destino, ' : ''}{generarCita && !fechaCita ? 'fecha, ' : ''}{generarCita && destino === 'lima' && !sedeCita ? 'tienda, ' : ''}{cargosExtraIncompletos ? 'motivo de algún cargo extra' : ''}
+              </div>
+            )}
           </div>
         </div>
       </div>

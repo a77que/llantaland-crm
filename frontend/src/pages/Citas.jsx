@@ -321,6 +321,7 @@ export default function Citas() {
       cliente: { nombre: cita.nombreCliente, telefono: cita.telefono, dniCe: cita.dniCe },
       vehiculo: { marca: cita.marcaAuto, modelo: cita.modeloAuto, anio: cita.anioAuto },
       medida: cita.medidaDetectada || cita.medida || '',
+      provinciaDestino: cita.provinciaDestino || null,
     } });
   };
 
