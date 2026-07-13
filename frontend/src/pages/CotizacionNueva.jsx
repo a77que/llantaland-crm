@@ -245,13 +245,18 @@ export default function CotizacionNueva() {
     return 'cara';
   };
 
-  // Sugerencias ajax de medida mientras se tipea
-  const { data: medidaSugeridas = [] } = useQuery({
+  // Sugerencias ajax de medida mientras se tipea. Se filtra a Array.isArray
+  // porque el default de destructuring (`= []`) solo aplica si data es
+  // undefined -- si la respuesta llega con otra forma, medidaSugeridas.map()
+  // tumbaba la página entera (Nueva Cotización, con todo lo precargado de
+  // WhatsApp incluido) sin ningún aviso para el vendedor.
+  const { data: medidaSugeridasRaw } = useQuery({
     queryKey: ['medidas-sug', medida],
     queryFn: () => productosApi.medidas(medida),
     enabled: modoMedida === 'directa' && medida.length >= 2,
     staleTime: 60_000,
   });
+  const medidaSugeridas = Array.isArray(medidaSugeridasRaw) ? medidaSugeridasRaw : [];
 
   const addLlanta = (prod, cantidadInicial = 4) => {
     setItems(prev => {
