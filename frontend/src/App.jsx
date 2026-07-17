@@ -51,6 +51,7 @@ export default function App() {
             <Route path="clientes/:id" element={<ClienteDetalle />} />
             <Route path="cotizaciones" element={<Cotizaciones />} />
             <Route path="cotizaciones/nueva" element={<CotizacionNueva />} />
+            <Route path="cotizaciones/:id/editar" element={<CotizacionNueva />} />
             <Route path="cotizaciones/:id" element={<CotizacionDetalle />} />
             <Route path="ventas" element={<Ventas />} />
             <Route path="ventas/:id" element={<VentaDetalle />} />

@@ -145,7 +145,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
       borderRadius: '20px 20px 0 0',
       padding: '0 0 calc(var(--safe-bottom) + 16px)',
     } : {
-      width: '100%', maxWidth: 660,
+      width: '100%', maxWidth: 980,
       maxHeight: '90vh',
       borderRadius: 14,
       padding: 28,
@@ -195,6 +195,11 @@ function LeadDetalle({ lead, onClose, isMobile }) {
             )}
           </div>
 
+          {/* Cuerpo: en desktop, columna de info a la izquierda + chat completo
+              al costado derecho (para que el vendedor vea la conversación sin
+              tener que bajar hasta el final del modal). En móvil se apila. */}
+          <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: isMobile ? undefined : '1fr 340px', gap: isMobile ? 0 : 24, alignItems: 'start' }}>
+          <div>
           {/* Estado */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={badge(PASO_COLOR[lead.pasoActual] || '#64748b')}>{PASO_LABEL[lead.pasoActual] || lead.pasoActual}</span>
@@ -321,30 +326,46 @@ function LeadDetalle({ lead, onClose, isMobile }) {
               );
             })()}
           </div>
+          </div>
 
-          {/* Historial */}
-          {lead.historial?.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--color-text-muted)' }}>
-                CONVERSACIÓN ({lead.historial.length} mensajes)
-              </div>
-              <div style={{ maxHeight: isMobile ? 320 : 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Chat completo (columna derecha en desktop, al final en móvil) —
+              todo lo que el cliente escribió y lo que el bot le respondió,
+              para que el vendedor esté al tanto de cómo va la conversación
+              sin salir del modal. */}
+          <div style={isMobile ? { marginTop: 12 } : { position: 'sticky', top: 0, maxHeight: 'calc(90vh - 56px)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--color-text-muted)' }}>
+              💬 CONVERSACIÓN {lead.historial?.length > 0 ? `(${lead.historial.length} mensajes)` : ''}
+            </div>
+            {lead.historial?.length > 0 ? (
+              <div style={{
+                flex: isMobile ? undefined : 1,
+                maxHeight: isMobile ? 340 : undefined,
+                overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6,
+                background: 'var(--color-bg)', borderRadius: 10, padding: 10,
+                border: '1px solid var(--color-border)',
+              }}>
                 {lead.historial.map((m, i) => (
                   <div key={i} style={{
-                    padding: '8px 12px', borderRadius: 10, fontSize: 12.5, maxWidth: '86%',
+                    padding: '8px 12px', borderRadius: 10, fontSize: 12.5, maxWidth: '88%',
                     alignSelf: m.rol === 'bot' ? 'flex-end' : 'flex-start',
-                    background: m.rol === 'bot' ? 'var(--color-primary)' : 'var(--color-bg)',
+                    background: m.rol === 'bot' ? 'var(--color-primary)' : 'var(--color-surface)',
                     color: m.rol === 'bot' ? '#fff' : 'var(--color-text)',
+                    border: m.rol === 'bot' ? 'none' : '1px solid var(--color-border)',
                   }}>
                     <div style={{ fontSize: 9, opacity: .65, marginBottom: 2 }}>
-                      {m.rol.toUpperCase()} · {new Date(m.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                      {m.rol === 'bot' ? '🤖 BOT' : '🧑 CLIENTE'} · {new Date(m.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     {m.mensaje}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontStyle: 'italic', padding: '10px 12px', background: 'var(--color-bg)', borderRadius: 10, border: '1px dashed var(--color-border)' }}>
+                Sin mensajes todavía.
+              </div>
+            )}
+          </div>
+          </div>
         </div>
       </div>
     </div>

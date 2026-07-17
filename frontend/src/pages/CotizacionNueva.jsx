@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { clientesApi, productosApi, sedesApi, vehiculosApi, cotizacionesApi } from '../services/api';
 import { useIsMobileOrTablet } from '../hooks/useIsMobile';
 import ProductoModal from '../components/ProductoModal';
 import ComparadorModal from '../components/ComparadorModal';
+import { waLink } from '../components/WhatsAppButtons';
+import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const S = {
   card: { background: 'var(--color-surface)', borderRadius: 10, padding: 20, boxShadow: 'var(--shadow)', border: '1px solid var(--color-border)', marginBottom: 16 },
@@ -77,12 +79,93 @@ function StockCell({ value }) {
   return <span style={{ fontWeight: 700, color: c }}>{value}</span>;
 }
 
+function toDateInput(d) {
+  if (!d) return '';
+  const f = new Date(d);
+  if (isNaN(f)) return '';
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+}
+
+// Reconstruye el mismo objeto "pre" que usa el flujo de creación (Leads/Citas
+// lo arman al navegar aquí), pero a partir de una cotización ya guardada —
+// así todo el formulario (destino, tienda, medida, banner "elegido por
+// WhatsApp") funciona igual al editar que al crear, sin duplicar lógica.
+function preDesdeExistente(cot) {
+  if (!cot) return {};
+  const local = cot.localInstalacion;
+  const codigoLocal = local?.ID || local?.codigoLocal;
+  return {
+    leadId: cot.leadId || null,
+    cliente: { nombre: cot.nombreCliente || '', telefono: cot.telefonoCliente || '', dniCe: cot.dniCe || '' },
+    vehiculo: { marca: cot.marcaAuto || '', modelo: cot.modeloAuto || '', anio: cot.anioAuto || '' },
+    medida: cot.medidaLlanta || '',
+    llanta: { marca: cot.marcaLlanta || '', modelo: cot.modeloLlanta || '', cantidad: cot.cantidad || 4 },
+    sede: codigoLocal ? { codigoLocal, nombre: local.Nombre || local.nombre } : null,
+    provinciaDestino: cot.provinciaDestino || null,
+  };
+}
+
+// Punto de entrada de la ruta: decide si es creación (sin :id) o edición
+// (con :id) y, si es edición, espera a tener la cotización y sus llantas
+// resueltas contra el catálogo actual antes de montar el formulario grande
+// — así los useState de abajo se inicializan ya con los datos correctos en
+// vez de tener que parchearlos después con efectos.
 export default function CotizacionNueva() {
+  const { id: editId } = useParams();
+
+  const { data: cotExistente, isLoading: cargandoCot } = useQuery({
+    queryKey: ['cotizacion-editar', editId],
+    queryFn: () => cotizacionesApi.obtener(editId),
+    enabled: !!editId,
+  });
+
+  const itemsGuardados = useMemo(() => {
+    if (!cotExistente) return [];
+    if (Array.isArray(cotExistente.items) && cotExistente.items.length > 0) return cotExistente.items;
+    if (!cotExistente.medidaLlanta) return [];
+    return [{ sku: null, medida: cotExistente.medidaLlanta, marca: cotExistente.marcaLlanta, modelo: cotExistente.modeloLlanta, cantidad: cotExistente.cantidad, precioUnit: cotExistente.precioUnit }];
+  }, [cotExistente]);
+
+  // Cada ítem guardado es un snapshot (sku/medida/marca/modelo/precio) — se
+  // busca el producto real por SKU para poder editarlo con el mismo flujo
+  // (stock, rentabilidad, traslado) que al crear. Si ya no existe en el
+  // catálogo (descontinuado), se arma un producto "reconstruido" desde el
+  // snapshot para no perder la línea, sin datos de stock.
+  const { data: itemsResueltos, isLoading: cargandoItems } = useQuery({
+    queryKey: ['cotizacion-editar-items', editId, itemsGuardados],
+    queryFn: async () => Promise.all(itemsGuardados.map(async (it) => {
+      if (it.sku) {
+        try {
+          const r = await productosApi.listar({ q: it.sku, limit: 5 });
+          const match = (r?.data || []).find(p => p.sku === it.sku);
+          if (match) return { producto: match, cantidad: parseInt(it.cantidad) || 1 };
+        } catch { /* sigue al fallback */ }
+      }
+      return {
+        producto: {
+          id: `snapshot-${it.sku || ''}-${it.medida || ''}-${it.marca || ''}`,
+          sku: it.sku || '', medida: it.medida || '', marca: it.marca || '',
+          nombreComercial: it.modelo || '', precioOferta: it.precioUnit || 0,
+          precioReferencialVenta: 0, precioProveedor: 0, stocks: [],
+        },
+        cantidad: parseInt(it.cantidad) || 1,
+      };
+    })),
+    enabled: !!cotExistente,
+  });
+
+  if (editId && (cargandoCot || cargandoItems)) return <LoadingSpinner fullPage />;
+  if (editId && !cotExistente) return <div style={{ padding: 24 }}>Cotización no encontrada</div>;
+
+  return <CotizacionForm editId={editId} cotExistente={cotExistente} itemsIniciales={itemsResueltos || []} />;
+}
+
+function CotizacionForm({ editId, cotExistente, itemsIniciales }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobileOrTablet();
 
-  const pre = location.state || {}; // precarga desde lead/inventario
+  const pre = editId ? preDesdeExistente(cotExistente) : (location.state || {}); // precarga desde lead/inventario/cotización existente
   // Cantidad que el cliente pidió por WhatsApp (si vino de un lead) — se usa
   // como umbral para "stock completo" y para el aviso de "disponible en otra
   // tienda" en el catálogo. Si no vino de un lead, se asume un juego de 4.
@@ -109,9 +192,9 @@ export default function CotizacionNueva() {
   // medida) y se activa de una vez para que el vendedor la vea sin un clic extra.
   const [buscarQuery, setBuscarQuery] = useState(pre.medida || '');
   const [buscarActivo, setBuscarActivo] = useState(!!(pre.medida && pre.llanta?.marca));
-  const [items, setItems] = useState([]); // [{ producto, cantidad }]
-  const [descuento, setDescuento] = useState('');
-  const [notas, setNotas] = useState('');
+  const [items, setItems] = useState(editId ? itemsIniciales : []); // [{ producto, cantidad }]
+  const [descuento, setDescuento] = useState(editId && cotExistente?.descuento ? String(cotExistente.descuento) : '');
+  const [notas, setNotas] = useState(editId ? (cotExistente?.notas || '') : '');
   const [modalProdId, setModalProdId] = useState(null);
   const [comparar, setComparar] = useState([]);
   const [verComparador, setVerComparador] = useState(false);
@@ -120,8 +203,14 @@ export default function CotizacionNueva() {
   const [pagoTransferencia, setPagoTransferencia] = useState(false);
   const [trasladoAsumeTienda, setTrasladoAsumeTienda] = useState(false);
   // Cargos extra al cliente: se pueden agregar varios, cada uno con su propio
-  // motivo, para que quede claro por qué se cobró cada uno.
-  const [cargosExtra, setCargosExtra] = useState([]); // [{ id, monto, descripcion }]
+  // motivo, para que quede claro por qué se cobró cada uno. Una cotización
+  // existente solo guarda un monto total (cargoAdicional, sin desglose), así
+  // que al editar se reconstruye como una sola línea genérica.
+  const [cargosExtra, setCargosExtra] = useState(
+    editId && cotExistente?.cargoAdicional && parseFloat(cotExistente.cargoAdicional) > 0
+      ? [{ id: crypto.randomUUID(), monto: String(cotExistente.cargoAdicional), descripcion: 'Cargo adicional (de la cotización original)' }]
+      : []
+  ); // [{ id, monto, descripcion }]
   const agregarCargoExtra = () => setCargosExtra(prev => [...prev, { id: crypto.randomUUID(), monto: '', descripcion: '' }]);
   const actualizarCargoExtra = (id, campo, valor) => setCargosExtra(prev => prev.map(c => c.id === id ? { ...c, [campo]: valor } : c));
   const eliminarCargoExtra = (id) => setCargosExtra(prev => prev.filter(c => c.id !== id));
@@ -154,9 +243,9 @@ export default function CotizacionNueva() {
   };
 
   // ── Cita / seguimiento ──
-  const [generarCita, setGenerarCita] = useState(!!pre.sede || !!pre.provinciaDestino);
-  const [fechaCita, setFechaCita] = useState('');
-  const [horaCita, setHoraCita] = useState('');
+  const [generarCita, setGenerarCita] = useState(editId ? !!cotExistente?.fechaInstalacion : (!!pre.sede || !!pre.provinciaDestino));
+  const [fechaCita, setFechaCita] = useState(editId ? toDateInput(cotExistente?.fechaInstalacion) : '');
+  const [horaCita, setHoraCita] = useState(editId ? (cotExistente?.horaInstalacion || '') : '');
 
   const { data: sedes = [] } = useQuery({ queryKey: ['sedes'], queryFn: sedesApi.listar, staleTime: Infinity });
   // El cliente solo puede instalar en una tienda, nunca en un almacén.
@@ -279,9 +368,10 @@ export default function CotizacionNueva() {
 
   // Precargar la llanta exacta que el cliente eligió por WhatsApp (medida +
   // marca + modelo) directo en "3. Llantas en la cotización", sin que el
-  // vendedor tenga que buscarla de nuevo.
+  // vendedor tenga que buscarla de nuevo. Al editar, los ítems ya vienen
+  // resueltos desde la cotización existente — no repetir la búsqueda.
   useEffect(() => {
-    if (!pre.medida || !pre.llanta?.marca) return;
+    if (editId || !pre.medida || !pre.llanta?.marca) return;
     productosApi.listar({ medida: pre.medida, q: pre.llanta.marca, limit: 20 }).then(r => {
       const lista = r?.data || [];
       const match = pre.llanta.modelo
@@ -435,10 +525,10 @@ export default function CotizacionNueva() {
         ...notasOrigenes,
       ].filter(Boolean);
       const notasFinal = [notas, ...notasExtra].filter(Boolean).join('\n');
-      return cotizacionesApi.crear({
+      const payload = {
         leadId: leadId || undefined,
         nombreCliente: cliente.nombre, telefonoCliente: cliente.telefono, dniCe: cliente.dniCe,
-        marcaAuto: veh.marca, modeloAuto: veh.modelo, anioAuto: veh.anio,
+        marcaAuto: veh.marca, modeloAuto: veh.modelo, anioAuto: veh.anio ? parseInt(veh.anio) : null,
         items: items.map(i => ({
           sku: i.producto.sku, medida: i.producto.medida, marca: i.producto.marca,
           modelo: i.producto.nombreComercial, cantidad: i.cantidad, precioUnit: parseFloat(i.producto.precioOferta),
@@ -453,20 +543,24 @@ export default function CotizacionNueva() {
           horaInstalacion: destino === 'lima' ? (horaCita || undefined) : undefined,
           ...(destino === 'lima' ? { localInstalacion: local } : {}),
         } : {}),
-      });
+      };
+      return editId ? cotizacionesApi.actualizar(editId, payload) : cotizacionesApi.crear(payload);
     },
-    onSuccess: (data) => { toast.success(`Cotización ${data.numero} creada`); navigate(`/cotizaciones/${data.id}`); },
-    onError: (e) => toast.error(e?.error || 'Error al crear cotización'),
+    onSuccess: (data) => {
+      toast.success(editId ? `Cotización ${cotExistente.numero} actualizada` : `Cotización ${data.numero} creada`);
+      navigate(`/cotizaciones/${editId || data.id}`);
+    },
+    onError: (e) => toast.error(e?.error || (editId ? 'Error al actualizar cotización' : 'Error al crear cotización')),
   });
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
         <button onClick={() => navigate(-1)} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', cursor: 'pointer', fontSize: 13 }}>← Volver</button>
-        <h1 style={{ fontSize: 18, fontWeight: 700 }}>Nueva Cotización</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 700 }}>{editId ? `Editar Cotización ${cotExistente?.numero || ''}` : 'Nueva Cotización'}</h1>
       </div>
 
-      {(pre.llanta?.marca || pre.sede || pre.provinciaDestino) && (
+      {!editId && (pre.llanta?.marca || pre.sede || pre.provinciaDestino) && (
         <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>💬 Elegido por WhatsApp:</span>
           {pre.llanta?.marca && <span style={{ fontSize: 13, color: 'var(--color-text)' }}>🛞 {pre.llanta.marca} {pre.llanta.modelo || ''}</span>}
@@ -504,7 +598,7 @@ export default function CotizacionNueva() {
           {/* 2. Destino de la venta: Lima (tienda) o envío a provincia */}
           <div style={S.card}>
             <div style={S.cardTitle}>2. Destino de la venta</div>
-            {(pre.sede?.nombre || pre.provinciaDestino) && (
+            {!editId && (pre.sede?.nombre || pre.provinciaDestino) && (
               <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600, marginBottom: 10 }}>
                 {pre.provinciaDestino ? `🗺️ Identificado por WhatsApp: envío a ${pre.provinciaDestino}` : '🏪 Tienda ya elegida por WhatsApp'}
               </div>
@@ -518,17 +612,41 @@ export default function CotizacionNueva() {
               <>
                 <div style={S.group}>
                   <label style={S.label}>¿En qué tienda va a instalar el cliente?</label>
-                  <select style={S.input} value={sedeCita} onChange={e => setSedeCita(e.target.value)}>
-                    <option value="">— Elegir tienda —</option>
-                    {tiendas.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                  </select>
-                </div>
-                {sedeSel && (
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', fontSize: 12.5 }}>
-                    📍 {sedeSel.direccion || 'Sin dirección registrada'}{sedeSel.distrito ? ` · ${sedeSel.distrito}` : ''}
-                    {sedeSel.telefono && <div style={{ marginTop: 2 }}>📞 {sedeSel.telefono}</div>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {tiendas.map(s => {
+                      const seleccionada = sedeCita === s.id;
+                      const mapsLink = s.googleMaps || (s.latitud && s.longitud
+                        ? `https://www.google.com/maps/search/?api=1&query=${s.latitud},${s.longitud}`
+                        : null);
+                      const textoWa = `📍 *${s.nombre}*\n${s.direccion || 'Dirección no registrada'}${s.distrito ? ` · ${s.distrito}` : ''}` +
+                        (mapsLink ? `\n🗺️ Ubicación en Google Maps: ${mapsLink}` : '');
+                      const linkWa = cliente.telefono ? waLink(cliente.telefono, textoWa) : null;
+                      return (
+                        <div key={s.id} onClick={() => setSedeCita(s.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                            border: `1.5px solid ${seleccionada ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                            background: seleccionada ? '#fffbeb' : 'var(--color-bg)' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{seleccionada ? '✓ ' : ''}{s.nombre}</div>
+                            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+                              📍 {s.direccion || 'Sin dirección registrada'}{s.distrito ? ` · ${s.distrito}` : ''}
+                            </div>
+                            {s.telefono && <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>📞 {s.telefono}</div>}
+                          </div>
+                          {linkWa ? (
+                            <a href={linkWa} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                              title={`Enviar dirección y ubicación de ${s.nombre} por WhatsApp a ${cliente.telefono}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', fontSize: 11.5, fontWeight: 700, background: '#25D366', color: '#fff', borderRadius: 7, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              📤 Enviar dirección
+                            </a>
+                          ) : (
+                            <span title="Agrega el teléfono del cliente para poder enviarle la dirección" style={{ fontSize: 10.5, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>Sin teléfono del cliente</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
                 <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 8 }}>
                   Al elegir la tienda, el catálogo de abajo mostrará primero las llantas que ya hay en stock ahí.
                 </div>
@@ -622,9 +740,9 @@ export default function CotizacionNueva() {
               {gruposPrecio && (
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8, fontSize: 11, color: 'var(--color-text-muted)', flexWrap: 'wrap' }}>
                   <span>Grupos de precio:</span>
-                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#dbeafe', border: '1px solid #93c5fd', marginRight: 4, verticalAlign: 'middle' }} />Barata</span>
-                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#fef3c7', border: '1px solid #fcd34d', marginRight: 4, verticalAlign: 'middle' }} />Media</span>
-                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#ede9fe', border: '1px solid #c4b5fd', marginRight: 4, verticalAlign: 'middle' }} />Cara</span>
+                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#bbf7d0', border: '1px solid #22c55e', marginRight: 4, verticalAlign: 'middle' }} />Barata</span>
+                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#fde68a', border: '1px solid #d97706', marginRight: 4, verticalAlign: 'middle' }} />Media</span>
+                  <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: '#fecaca', border: '1px solid #dc2626', marginRight: 4, verticalAlign: 'middle' }} />Cara</span>
                   <span style={{ color: '#16a34a', fontWeight: 700 }}>💚 = más rentable que el precio de mercado</span>
                 </div>
               )}
@@ -652,7 +770,9 @@ export default function CotizacionNueva() {
                       const dif = diferenciaDe(p);
                       const esRentable = esRentableProd(p);
                       const grupo = grupoDePrecio(p);
-                      const bgGrupo = grupo === 'barata' ? '#eff6ff' : grupo === 'media' ? '#fffbeb' : grupo === 'cara' ? '#f5f3ff' : undefined;
+                      // Verde/ámbar/rojo (barata→cara): antes eran 3 tintes pálidos casi
+                      // idénticos (azul/amarillo/morado muy claros) y no se distinguían.
+                      const bgGrupo = grupo === 'barata' ? '#dcfce7' : grupo === 'media' ? '#fef3c7' : grupo === 'cara' ? '#fee2e2' : undefined;
                       const bg = yaEsta ? '#f0fdf4' : stockTotal === 0 ? '#fafafa' : bgGrupo;
                       return (
                         <tr key={p.id} style={{ background: bg, borderBottom: '1px solid var(--color-border)', opacity: stockTotal === 0 ? 0.6 : 1 }}>
@@ -941,7 +1061,11 @@ export default function CotizacionNueva() {
             )}
             <button onClick={() => crearMut.mutate()} disabled={!puedeGuardar || crearMut.isPending}
               style={{ width: '100%', marginTop: 16, padding: 12, background: puedeGuardar ? '#16a34a' : 'var(--color-surface2)', color: puedeGuardar ? '#fff' : 'var(--color-text-muted)', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: puedeGuardar ? 'pointer' : 'default' }}>
-              {crearMut.isPending ? 'Guardando...' : generarCita ? (destino === 'provincia' ? '✓ Crear cotización + seguimiento' : '✓ Crear cotización + cita') : '✓ Crear cotización'}
+              {crearMut.isPending
+                ? 'Guardando...'
+                : editId
+                  ? '💾 Guardar cambios'
+                  : generarCita ? (destino === 'provincia' ? '✓ Crear cotización + seguimiento' : '✓ Crear cotización + cita') : '✓ Crear cotización'}
             </button>
             {!puedeGuardar && (
               <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 8, textAlign: 'center' }}>
