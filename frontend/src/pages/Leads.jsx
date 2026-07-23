@@ -84,6 +84,20 @@ function LeadDetalle({ lead, onClose, isMobile }) {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [nMensajes]);
 
+  // Control manual del bot para este cliente (no depende de WhatsApp).
+  const botActivoParaCliente = lead.humanTakeover?.agenteActivo === true;
+  const takeoverMutation = useMutation({
+    mutationFn: (activo) => leadsApi.takeover(lead.id, activo),
+    onSuccess: (_d, activo) => {
+      toast.success(activo
+        ? 'Bot pausado: tú atiendes esta conversación'
+        : 'Bot reactivado para este cliente');
+      queryClient.invalidateQueries({ queryKey: ['lead', lead.id] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+    },
+    onError: () => toast.error('No se pudo cambiar el control del bot'),
+  });
+
   const noDeseaMutation = useMutation({
     mutationFn: () => leadsApi.noDesea(lead.id),
     onSuccess: () => {
@@ -346,6 +360,31 @@ function LeadDetalle({ lead, onClose, isMobile }) {
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
                 EN VIVO
               </span>
+            </div>
+
+            {/* Control manual del bot: instantáneo y sin depender de WhatsApp */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+              marginBottom: 8, padding: '8px 10px', borderRadius: 10,
+              background: botActivoParaCliente ? '#fffbeb' : 'var(--color-bg)',
+              border: `1px solid ${botActivoParaCliente ? '#fde68a' : 'var(--color-border)'}`,
+            }}>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: botActivoParaCliente ? '#92400e' : 'var(--color-text-muted)' }}>
+                {botActivoParaCliente ? '🙋 Estás atendiendo tú — el bot está pausado' : '🤖 El bot está atendiendo a este cliente'}
+              </span>
+              <button
+                onClick={() => takeoverMutation.mutate(!botActivoParaCliente)}
+                disabled={takeoverMutation.isPending}
+                style={{
+                  padding: '7px 13px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap', color: '#fff',
+                  background: botActivoParaCliente ? '#16a34a' : '#dc2626',
+                }}
+              >
+                {takeoverMutation.isPending
+                  ? 'Guardando…'
+                  : botActivoParaCliente ? '🤖 Devolver al bot' : '🔕 Apagar bot y atender yo'}
+              </button>
             </div>
             {lead.historial?.length > 0 ? (
               <div ref={chatRef} style={{

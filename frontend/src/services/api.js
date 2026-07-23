@@ -53,6 +53,7 @@ export const leadsApi = {
   obtenerPorTelefono:(tel)      => api.get(`/leads/tel/${tel}`),
   actualizar:        (id, data) => api.put(`/leads/${id}`, data),
   eliminar:          (id)       => api.delete(`/leads/${id}`),
+  takeover:          (id, activo) => api.post(`/leads/${id}/takeover`, { activo }),
   noDesea:           (id)       => api.post(`/leads/${id}/no-desea`),
   deshacerNoDesea:   (id)       => api.post(`/leads/${id}/no-desea/deshacer`),
 };

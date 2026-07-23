@@ -263,6 +263,37 @@ const desmarcarNoDesea = async (req, res, next) => {
   }
 };
 
+/**
+ * El vendedor toma o devuelve la conversación desde el CRM.
+ * activo=true  → el bot deja de responder a ese cliente.
+ * activo=false → el bot vuelve a atender (igual que enviar /bot por WhatsApp).
+ * Es el control manual: no depende de que WhatsApp avise que el vendedor escribió.
+ */
+const tomarConversacion = async (req, res, next) => {
+  try {
+    const activo = req.body?.activo !== false;
+    const lead = await prisma.leadCRM.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, telefono: true },
+    });
+    if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+
+    const ht = await prisma.humanTakeover.upsert({
+      where: { telefono: lead.telefono },
+      update: { agenteActivo: activo, timestampUltimoAgente: activo ? new Date() : null },
+      create: {
+        leadId: lead.id,
+        telefono: lead.telefono,
+        agenteActivo: activo,
+        timestampUltimoAgente: activo ? new Date() : null,
+      },
+    });
+    res.json({ ok: true, agenteActivo: ht.agenteActivo, humanTakeover: ht });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const resumen = async (req, res, next) => {
   try {
     const { tipoNegocio } = req.query;
@@ -312,4 +343,4 @@ const eliminar = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen, marcarNoDesea, desmarcarNoDesea };
+module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen, marcarNoDesea, desmarcarNoDesea, tomarConversacion };
