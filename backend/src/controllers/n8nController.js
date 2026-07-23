@@ -133,6 +133,66 @@ const leerCRM = async (req, res, next) => {
 };
 
 /** CRM | Crear Fila Nueva — captura TODOS los datos disponibles del primer mensaje */
+/**
+ * Registra en el historial de conversación lo que escribió el cliente y lo que
+ * respondió el bot, a partir de los datos que n8n ya envía en cada paso.
+ * Evita duplicados: si el último mensaje de ese mismo rol es idéntico, no lo repite
+ * (n8n reenvía el mismo Respuesta_Bot en varios PATCH del mismo turno).
+ */
+function textoDeRespuesta(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object') return String(v.texto || v.mensaje || '').trim();
+  const s = String(v).trim();
+  if (!s) return '';
+  // n8n manda la respuesta del bot como JSON: {"texto":"..."}
+  if (s.startsWith('{') || s.startsWith('[')) {
+    try {
+      const o = JSON.parse(s);
+      const t = Array.isArray(o) ? o[0] : o;
+      return String(t?.texto || t?.mensaje || s).trim();
+    } catch { return s; }
+  }
+  return s;
+}
+
+async function registrarConversacion(telefono, body, leadId) {
+  try {
+    const entradas = [
+      { rol: 'cliente', texto: textoDeRespuesta(body.Mensaje_Cliente ?? body.mensaje_cliente ?? body.texto_mensaje) },
+      { rol: 'bot',     texto: textoDeRespuesta(body.Respuesta_Bot ?? body.respuesta_bot ?? body.respuesta_final) },
+    ].filter(e => e.texto && e.texto.length > 0);
+    if (entradas.length === 0) return;
+
+    let lid = leadId;
+    if (!lid) {
+      const lead = await prisma.leadCRM.findUnique({ where: { telefono }, select: { id: true } });
+      if (!lead) return;
+      lid = lead.id;
+    }
+
+    for (const { rol, texto } of entradas) {
+      const ultimo = await prisma.mensajeHistorial.findFirst({
+        where: { telefono, rol },
+        orderBy: { timestamp: 'desc' },
+        select: { mensaje: true },
+      });
+      if (ultimo && ultimo.mensaje === texto) continue; // mismo turno reenviado
+      await prisma.mensajeHistorial.create({
+        data: {
+          leadId: lid,
+          telefono,
+          rol,
+          mensaje: texto,
+          pasoActual: body.Paso_Actual || body.paso_actual || null,
+        },
+      });
+    }
+  } catch (err) {
+    // El historial es informativo: nunca debe romper el flujo del bot.
+    console.error('registrarConversacion:', err.message);
+  }
+}
+
 const crearCRM = async (req, res, next) => {
   try {
     const b = req.body;
@@ -166,6 +226,7 @@ const crearCRM = async (req, res, next) => {
       },
     });
 
+    await registrarConversacion(tel, b, lead.id);
     res.json(mapLeadToSheet(lead));
   } catch (err) {
     next(err);
@@ -183,6 +244,8 @@ const actualizarCRM = async (req, res, next) => {
       update: data,
       create: { telefono, ...data },
     });
+
+    await registrarConversacion(telefono, req.body, lead.id);
     res.json(mapLeadToSheet(lead));
   } catch (err) {
     next(err);

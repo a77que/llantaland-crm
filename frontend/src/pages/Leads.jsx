@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -76,6 +76,13 @@ function DestinoBadge({ lead }) {
 function LeadDetalle({ lead, onClose, isMobile }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // La conversación se refresca sola: mantener la vista en el último mensaje.
+  const chatRef = useRef(null);
+  const nMensajes = lead.historial?.length || 0;
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [nMensajes]);
 
   const noDeseaMutation = useMutation({
     mutationFn: () => leadsApi.noDesea(lead.id),
@@ -333,11 +340,15 @@ function LeadDetalle({ lead, onClose, isMobile }) {
               para que el vendedor esté al tanto de cómo va la conversación
               sin salir del modal. */}
           <div style={isMobile ? { marginTop: 12 } : { position: 'sticky', top: 0, maxHeight: 'calc(90vh - 56px)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--color-text-muted)' }}>
-              💬 CONVERSACIÓN {lead.historial?.length > 0 ? `(${lead.historial.length} mensajes)` : ''}
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span>💬 CONVERSACIÓN {nMensajes > 0 ? `(${nMensajes} mensajes)` : ''}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 999, padding: '1px 8px' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+                EN VIVO
+              </span>
             </div>
             {lead.historial?.length > 0 ? (
-              <div style={{
+              <div ref={chatRef} style={{
                 flex: isMobile ? undefined : 1,
                 maxHeight: isMobile ? 340 : undefined,
                 overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6,
@@ -347,6 +358,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
                 {lead.historial.map((m, i) => (
                   <div key={i} style={{
                     padding: '8px 12px', borderRadius: 10, fontSize: 12.5, maxWidth: '88%',
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                     alignSelf: m.rol === 'bot' ? 'flex-end' : 'flex-start',
                     background: m.rol === 'bot' ? 'var(--color-primary)' : 'var(--color-surface)',
                     color: m.rol === 'bot' ? '#fff' : 'var(--color-text)',
@@ -547,6 +559,9 @@ export default function Leads() {
     queryKey: ['lead', selectedId],
     queryFn: () => leadsApi.obtener(selectedId),
     enabled: !!selectedId,
+    // La conversación con el bot se sigue en vivo mientras el modal esté abierto.
+    refetchInterval: selectedId ? 5_000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const leads = data?.leads || [];
