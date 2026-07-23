@@ -53,6 +53,9 @@ function calcCostoTraslado(costos) {
 
 const PCT_TRANSFERENCIA = 0.05;
 
+// Cliente provisional para cotizar al instante, sin esperar datos del cliente.
+const CLIENTE_PRUEBA = { nombre: 'Cliente de prueba', dniCe: '00000000' };
+
 // Diferencia = precio referencial (mercado) - precio oferta. Positiva significa
 // que hay margen frente al mercado; se usa para priorizar el catálogo (más
 // rentable primero) tanto en Nueva Cotización como en Precios y Margen.
@@ -177,6 +180,20 @@ function CotizacionForm({ editId, cotExistente, itemsIniciales }) {
   const [cliente, setCliente] = useState({
     nombre: pre.cliente?.nombre || '', telefono: pre.cliente?.telefono || '', dniCe: pre.cliente?.dniCe || '',
   });
+
+  // Cliente provisional: permite cotizar sin esperar los datos reales. Al
+  // concretar la venta se reemplaza por el cliente verdadero.
+  const usarClientePrueba = () => setCliente(c => ({
+    ...c,
+    nombre: CLIENTE_PRUEBA.nombre,
+    dniCe: c.dniCe || CLIENTE_PRUEBA.dniCe,
+  }));
+  const esClientePrueba = cliente.nombre.trim().toLowerCase() === CLIENTE_PRUEBA.nombre.toLowerCase();
+  // Si el vendedor escribe solo "cliente" / "prueba", se autorrellena.
+  const autoCompletarCliente = () => {
+    const v = cliente.nombre.trim().toLowerCase();
+    if (['cliente', 'prueba', 'cliente prueba', 'test'].includes(v)) usarClientePrueba();
+  };
   const [leadId] = useState(pre.leadId || null);
 
   // ── Vehículo / medida ──
@@ -590,7 +607,24 @@ function CotizacionForm({ editId, cotExistente, itemsIniciales }) {
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
-              <div style={S.group}><label style={S.label}>Nombre / Razón social</label><input style={S.input} value={cliente.nombre} onChange={e => setCliente(c => ({ ...c, nombre: e.target.value }))} placeholder="Cliente" /></div>
+              <div style={S.group}>
+                <label style={S.label}>Nombre / Razón social</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input style={{ ...S.input, flex: 1, minWidth: 0 }} value={cliente.nombre}
+                    onChange={e => setCliente(c => ({ ...c, nombre: e.target.value }))}
+                    onBlur={autoCompletarCliente}
+                    placeholder='Escribe "cliente" para usar uno de prueba' />
+                  <button type="button" onClick={usarClientePrueba} title="Cotizar sin datos del cliente"
+                    style={{ padding: '0 12px', borderRadius: 8, border: '1.5px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    👤 Prueba
+                  </button>
+                </div>
+                {esClientePrueba && (
+                  <div style={{ fontSize: 11, color: '#b45309', marginTop: 4, lineHeight: 1.45 }}>
+                    Cliente provisional: sirve para cotizar de una. Al concretar la venta, reemplázalo por los datos reales.
+                  </div>
+                )}
+              </div>
               <div style={S.group}><label style={S.label}>Teléfono</label><input style={S.input} value={cliente.telefono} onChange={e => setCliente(c => ({ ...c, telefono: e.target.value }))} placeholder="51..." /></div>
             </div>
           </div>

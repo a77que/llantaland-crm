@@ -441,13 +441,15 @@ function LeadDetalle({ lead, onClose, isMobile }) {
                   <div key={i} style={{
                     padding: '8px 12px', borderRadius: 10, fontSize: 12.5, maxWidth: '88%',
                     whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    alignSelf: m.rol === 'bot' ? 'flex-end' : 'flex-start',
-                    background: m.rol === 'bot' ? 'var(--color-primary)' : 'var(--color-surface)',
-                    color: m.rol === 'bot' ? '#fff' : 'var(--color-text)',
-                    border: m.rol === 'bot' ? 'none' : '1px solid var(--color-border)',
+                    // Cliente a la izquierda; bot y vendedor (los dos "del negocio") a la derecha.
+                    alignSelf: m.rol === 'cliente' ? 'flex-start' : 'flex-end',
+                    background: m.rol === 'bot' ? 'var(--color-primary)'
+                      : m.rol === 'vendedor' ? '#16a34a' : 'var(--color-surface)',
+                    color: m.rol === 'cliente' ? 'var(--color-text)' : '#fff',
+                    border: m.rol === 'cliente' ? '1px solid var(--color-border)' : 'none',
                   }}>
                     <div style={{ fontSize: 9, opacity: .65, marginBottom: 2 }}>
-                      {m.rol === 'bot' ? '🤖 BOT' : '🧑 CLIENTE'} · {new Date(m.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+                      {m.rol === 'bot' ? '🤖 BOT' : m.rol === 'vendedor' ? '🙋 VENDEDOR' : '🧑 CLIENTE'} · {new Date(m.timestamp).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                     {m.mensaje}
                   </div>
