@@ -119,6 +119,17 @@ export default function CotizacionDetalle() {
         {cot.venta && <button style={S.btn('#8b5cf6')} onClick={() => navigate(`/ventas/${cot.venta.id}`)}>Ver venta {cot.venta.numero} →</button>}
       </div>
 
+      {/* Cotización armada con lo que el cliente consultó por WhatsApp:
+          las llantas son OPCIONES a elegir, no se suman entre sí. */}
+      {cot.esConsulta && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#1e40af', lineHeight: 1.6 }}>
+          <strong style={{ color: '#1d4ed8' }}>🛞 Opciones consultadas por el cliente</strong><br />
+          Estas llantas son <strong>alternativas a elegir</strong>: sus precios <strong>no se suman</strong>.
+          Para cada una, el PDF muestra el <strong>precio por llevar 1</strong> y el <strong>total por llevar 4</strong> con el descuento ya aplicado,
+          más un <strong>5% adicional si paga por transferencia bancaria</strong>. El local de instalación se define al momento de la compra.
+        </div>
+      )}
+
       {/* Motivo de rechazo */}
       {cot.estado === 'RECHAZADA' && cot.motivoRechazo && (
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13 }}>

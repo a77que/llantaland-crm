@@ -99,6 +99,19 @@ function LeadDetalle({ lead, onClose, isMobile }) {
     onError: () => toast.error('No se pudo cambiar el control del bot'),
   });
 
+  // Cotizar las llantas que el bot ya le mostró y que el cliente no llegó a elegir.
+  const consultadas = lead?.llantasConsultadas || 0;
+  const cotizarConsultaMutation = useMutation({
+    mutationFn: () => leadsApi.cotizarConsulta(lead?.id),
+    onSuccess: (cot) => {
+      toast.success(`Cotización ${cot.numero} creada con las llantas consultadas`);
+      queryClient.invalidateQueries({ queryKey: ['lead', lead.id] });
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      navigate(`/cotizaciones/${cot.id}`);
+    },
+    onError: (e) => toast.error(e?.error || 'No se pudo generar la cotización'),
+  });
+
   const noDeseaMutation = useMutation({
     mutationFn: () => leadsApi.noDesea(lead.id),
     onSuccess: () => {
@@ -396,6 +409,26 @@ function LeadDetalle({ lead, onClose, isMobile }) {
                   : botActivoParaCliente ? '🤖 Devolver al bot' : '🔕 Apagar bot y atender yo'}
               </button>
             </div>
+
+            {/* Cliente que solo consultó llantas y no siguió: se le arma la
+                cotización con esas mismas opciones para que pueda volver a comprar. */}
+            {consultadas > 0 && (
+              <div style={{ marginBottom: 8, padding: '9px 10px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1d4ed8', marginBottom: 6 }}>
+                  🛞 El bot le mostró {consultadas} llanta{consultadas === 1 ? '' : 's'}{lead.medidaDetectada ? ` en ${lead.medidaDetectada}` : ''} y no eligió ninguna.
+                </div>
+                <button
+                  onClick={() => cotizarConsultaMutation.mutate()}
+                  disabled={cotizarConsultaMutation.isPending}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}
+                >
+                  {cotizarConsultaMutation.isPending ? 'Generando…' : '📋 Cotizar lo que consultó'}
+                </button>
+                <div style={{ fontSize: 10.5, color: '#1e40af', marginTop: 5, lineHeight: 1.45 }}>
+                  Arma una cotización con esas llantas: precio por 1, total por 4 con descuento y 5% extra por transferencia. El local se define después.
+                </div>
+              </div>
+            )}
             {lead.historial?.length > 0 ? (
               <div ref={chatRef} style={{
                 flex: isMobile ? undefined : 1,

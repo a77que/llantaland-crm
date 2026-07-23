@@ -257,6 +257,65 @@ async function generarCotizacion(cot) {
       const lineas = Array.isArray(cot.items) && cot.items.length > 0
         ? cot.items
         : [{ marca: cot.marcaLlanta, modelo: cot.modeloLlanta, medida: cot.medidaLlanta, cantidad: cot.cantidad || 1, precioUnit: parseFloat(cot.precioUnit) }];
+
+      // ── Cotización de OPCIONES consultadas ──────────────────────────────
+      // No se suman entre sí: el cliente elige una. Por cada llanta se muestra
+      // el precio por llevar 1 y el total por llevar 4 (con descuento aplicado).
+      if (cot.esConsulta) {
+        // Reescribir la cabecera con las columnas de esta modalidad
+        doc.rect(50, y - 20, doc.page.width - 100, 20).fill(C.negro);
+        doc.fontSize(8.5).font('Helvetica-Bold').fillColor(C.amarillo)
+          .text('LLANTA', 62, y - 15, { width: 150 })
+          .text('MEDIDA', 212, y - 15, { width: 70 })
+          .text('POR 1', 282, y - 15, { width: 68, align: 'right' })
+          .text('POR 4', 350, y - 15, { width: 78, align: 'right' })
+          .text('POR 4 c/TRANSF.', 428, y - 15, { width: 82, align: 'right' });
+
+        lineas.forEach((it, idx) => {
+          const bg = idx % 2 === 0 ? 'white' : C.grisClaro;
+          doc.rect(50, y, doc.page.width - 100, 24).fill(bg);
+          const nombreProd = [it.marca, it.modelo].filter(Boolean).join(' ') || 'Llanta';
+          const pu = parseFloat(it.precioUnit || 0) || 0;
+          const t4 = parseFloat(it.totalCuatro || pu * 4) || 0;
+          const t4t = parseFloat(it.totalCuatroTransferencia || t4 * 0.95) || 0;
+          doc.fontSize(9).font('Helvetica-Bold').fillColor(C.texto)
+            .text(nombreProd, 62, y + 7, { width: 150 });
+          doc.font('Helvetica')
+            .text(it.medida || '—', 212, y + 7, { width: 70 })
+            .text(fmt(pu), 282, y + 7, { width: 68, align: 'right' })
+            .font('Helvetica-Bold').text(fmt(t4), 350, y + 7, { width: 78, align: 'right' })
+            .fillColor(C.verde || '#16a34a').text(fmt(t4t), 428, y + 7, { width: 82, align: 'right' })
+            .fillColor(C.texto);
+          y += 26;
+        });
+        y += 10;
+
+        doc.fontSize(8.5).font('Helvetica').fillColor(C.gris).text(
+          'Elige la llanta que prefieras: los precios NO se suman entre sí.\n' +
+          'El precio "POR 4" ya incluye el descuento por llevar el juego completo.\n' +
+          'Pagando por transferencia bancaria se descuenta 5% adicional (última columna).\n' +
+          'El local de instalación se coordina al momento de la compra. Precios sujetos a stock.',
+          50, y, { width: doc.page.width - 100 });
+        y += 52;
+
+        y = bloqueInstalacion(doc, cot, y, C);
+        if (cot.notas) {
+          doc.fontSize(9).font('Helvetica-Bold').fillColor(C.amarillo).text('NOTAS:', 50, y);
+          y += 14;
+          doc.fontSize(9).font('Helvetica').fillColor(C.texto).text(cot.notas, 50, y, { width: doc.page.width - 100 });
+        }
+        const pieY0 = doc.page.height - 50;
+        doc.rect(0, pieY0 - 5, doc.page.width, 2).fill(C.amarillo);
+        doc.fontSize(8).font('Helvetica').fillColor(C.gris)
+          .text('Cotización válida por 7 días  •  Llantaland — Tu llanta, nuestra pasión  •  www.llantaland.com', 50, pieY0 + 4, {
+            align: 'center', width: doc.page.width - 100,
+          });
+        doc.end();
+        stream.on('finish', () => resolve(filename));
+        stream.on('error', reject);
+        return;
+      }
+
       lineas.forEach((it, idx) => {
         const bg = idx % 2 === 0 ? 'white' : C.grisClaro;
         doc.rect(50, y, doc.page.width - 100, 24).fill(bg);

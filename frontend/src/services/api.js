@@ -54,6 +54,7 @@ export const leadsApi = {
   actualizar:        (id, data) => api.put(`/leads/${id}`, data),
   eliminar:          (id)       => api.delete(`/leads/${id}`),
   takeover:          (id, activo) => api.post(`/leads/${id}/takeover`, { activo }),
+  cotizarConsulta:   (id)       => api.post(`/leads/${id}/cotizar-consulta`),
   noDesea:           (id)       => api.post(`/leads/${id}/no-desea`),
   deshacerNoDesea:   (id)       => api.post(`/leads/${id}/no-desea/deshacer`),
 };

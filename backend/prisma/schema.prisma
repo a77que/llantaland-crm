@@ -486,6 +486,10 @@ model Cotizacion {
   esTraslado       Boolean          @default(false)
   generarCita      Boolean          @default(false) // si el vendedor activó generar cita
 
+  // Cotización armada con las llantas que el cliente consultó por WhatsApp y no
+  // llegó a elegir: son OPCIONES (no se suman) y aún no hay local de instalación.
+  esConsulta      Boolean          @default(false)
+
   // Estado y notas
   estado          EstadoCotizacion @default(BORRADOR)
   motivoRechazo   String?          @db.Text // razón cuando estado = RECHAZADA

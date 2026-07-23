@@ -137,6 +137,15 @@ const obtener = async (req, res, next) => {
     });
     if (!lead) return res.status(404).json({ error: 'Cliente no encontrado' });
 
+    // ¿El bot ya le mostró llantas? Sirve para ofrecer "cotizar lo consultado"
+    // también al vendedor, que no puede ver ofertaPrecios en crudo.
+    let _consultadas = 0;
+    try {
+      const o = typeof lead.ofertaPrecios === 'string' ? JSON.parse(lead.ofertaPrecios) : lead.ofertaPrecios;
+      if (Array.isArray(o)) _consultadas = o.length;
+    } catch { _consultadas = 0; }
+    lead.llantasConsultadas = _consultadas;
+
     if (!isAdmin) {
       delete lead.dniCe;
       delete lead.estadoFlujo;
@@ -294,6 +303,109 @@ const tomarConversacion = async (req, res, next) => {
   }
 };
 
+/**
+ * Genera una cotización a partir de las llantas que el bot ya le mostró al
+ * cliente por WhatsApp y que quedaron sin elegir (lead.ofertaPrecios).
+ *
+ * Son OPCIONES, no ítems que se suman: por eso se marca esConsulta y en el
+ * documento se muestra, por cada llanta, el precio por llevar 1 y el total por
+ * llevar 4 con el descuento del sistema ya aplicado.
+ *
+ * Descuento por traslado: el costo de traslado va incluido en el precio de cada
+ * llanta. Al llevar varias, un solo viaje las trae todas, así que se descuenta
+ * ese costo por cada llanta a partir de la segunda (misma regla que usa el bot
+ * cuando aún no hay local elegido).
+ */
+const PCT_TRANSFERENCIA = 0.05;
+const CANT_REFERENCIA = 4;
+const normNombre = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+const cotizarConsulta = async (req, res, next) => {
+  try {
+    const lead = await prisma.leadCRM.findUnique({ where: { id: req.params.id } });
+    if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
+
+    let opciones = lead.ofertaPrecios;
+    if (typeof opciones === 'string') {
+      try { opciones = JSON.parse(opciones); } catch { opciones = null; }
+    }
+    if (!Array.isArray(opciones) || opciones.length === 0) {
+      return res.status(400).json({ error: 'Este cliente todavía no tiene llantas consultadas por el bot.' });
+    }
+
+    // Costo de traslado configurado en Precios y Margen (por defecto 30).
+    const costos = await prisma.costoVenta.findMany();
+    const cTraslado = costos.find(c => normNombre(c.nombre) === 'traslado');
+    const montoTraslado = cTraslado ? (Number(cTraslado.valor) || 0) : 30;
+
+    const medida = lead.medidaDetectada || null;
+    const items = opciones.map(o => {
+      const precioUnit = Number(o.precio_oferta ?? o.precioOferta ?? o.precio ?? 0) || 0;
+      const brutoCuatro = precioUnit * CANT_REFERENCIA;
+      const descTraslado = montoTraslado * (CANT_REFERENCIA - 1);
+      const totalCuatro = Math.max(0, brutoCuatro - descTraslado);
+      return {
+        marca: o.marca || null,
+        modelo: o.modelo || o.nombre_comercial || o.nombreComercial || null,
+        medida: o.medida || medida,
+        grupo: o.grupo || null,
+        sku: o.sku || null,
+        cantidad: 1,
+        precioUnit: Number(precioUnit.toFixed(2)),
+        // Referencias que se muestran en el documento
+        totalCuatro: Number(totalCuatro.toFixed(2)),
+        totalCuatroTransferencia: Number((totalCuatro * (1 - PCT_TRANSFERENCIA)).toFixed(2)),
+        unoTransferencia: Number((precioUnit * (1 - PCT_TRANSFERENCIA)).toFixed(2)),
+      };
+    }).filter(i => i.precioUnit > 0);
+
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'Las llantas consultadas no tienen precio válido.' });
+    }
+
+    // Referencia para los listados: la opción más económica.
+    const masBarata = items.reduce((a, b) => (b.precioUnit < a.precioUnit ? b : a), items[0]);
+
+    const count = await prisma.cotizacion.count();
+    const numero = `COT-${String(count + 1).padStart(5, '0')}`;
+
+    const notas = [
+      'Cotización de las llantas que el cliente consultó por WhatsApp (opciones a elegir, no se suman).',
+      `Precio por llevar 1 llanta y total por llevar ${CANT_REFERENCIA}, con el descuento por traslado ya aplicado.`,
+      'Pagando por transferencia bancaria se descuenta 5% adicional.',
+      'El local de instalación se define al momento de la compra. Precios sujetos a stock.',
+    ].join('\n');
+
+    const cot = await prisma.cotizacion.create({
+      data: {
+        numero,
+        esConsulta: true,
+        estado: 'BORRADOR',
+        leadId: lead.id,
+        usuarioId: req.usuario.id,
+        telefonoCliente: lead.telefono,
+        nombreCliente: lead.nombreCliente || null,
+        dniCe: lead.dniCe || null,
+        marcaAuto: lead.marcaAuto || null,
+        modeloAuto: lead.modeloAuto || null,
+        anioAuto: lead.anioAuto || null,
+        medidaLlanta: medida,
+        marcaLlanta: masBarata.marca,
+        modeloLlanta: masBarata.modelo,
+        cantidad: 1,
+        precioUnit: masBarata.precioUnit,
+        precioTotal: masBarata.totalCuatro,   // referencia "desde" en los listados
+        items,
+        notas,
+      },
+    });
+
+    res.status(201).json(cot);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const resumen = async (req, res, next) => {
   try {
     const { tipoNegocio } = req.query;
@@ -343,4 +455,4 @@ const eliminar = async (req, res, next) => {
   }
 };
 
-module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen, marcarNoDesea, desmarcarNoDesea, tomarConversacion };
+module.exports = { listar, obtener, obtenerPorTelefono, actualizar, eliminar, resumen, marcarNoDesea, desmarcarNoDesea, tomarConversacion, cotizarConsulta };
