@@ -157,9 +157,11 @@ function textoDeRespuesta(v) {
 
 async function registrarConversacion(telefono, body, leadId) {
   try {
+    // Solo el lado del CLIENTE: las respuestas del bot llegan una por una desde
+    // n8n (nodo HISTORIAL | Guardar Bot, con el texto real enviado por YCloud).
+    // Registrarlas también aquí duplicaría la conversación.
     const entradas = [
       { rol: 'cliente', texto: textoDeRespuesta(body.Mensaje_Cliente ?? body.mensaje_cliente ?? body.texto_mensaje) },
-      { rol: 'bot',     texto: textoDeRespuesta(body.Respuesta_Bot ?? body.respuesta_bot ?? body.respuesta_final) },
     ].filter(e => e.texto && e.texto.length > 0);
     if (entradas.length === 0) return;
 
@@ -352,6 +354,18 @@ const guardarHistorial = async (req, res, next) => {
         const existe = await tx.mensajeHistorial.findUnique({ where: { hashMensaje: Hash_Mensaje } });
         if (existe) return existe;
       }
+
+      // Reintentos de n8n: si el mismo texto y rol se guardó hace menos de 2
+      // minutos, no lo repetimos (evita mensajes duplicados en la conversación).
+      const textoMsg = Mensaje || mensaje || '';
+      const rolMsg = Rol || rol || 'cliente';
+      const reciente = await tx.mensajeHistorial.findFirst({
+        where: {
+          telefono: tel, rol: rolMsg, mensaje: textoMsg,
+          timestamp: { gte: new Date(Date.now() - 2 * 60 * 1000) },
+        },
+      });
+      if (reciente) return reciente;
 
       return tx.mensajeHistorial.create({
         data: {
