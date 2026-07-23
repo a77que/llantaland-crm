@@ -78,16 +78,17 @@ function LeadDetalle({ lead, onClose, isMobile }) {
   const queryClient = useQueryClient();
 
   // La conversación se refresca sola: mantener la vista en el último mensaje.
+  // Ojo: `lead` llega undefined mientras carga la query, por eso todo va opcional.
   const chatRef = useRef(null);
-  const nMensajes = lead.historial?.length || 0;
+  const nMensajes = lead?.historial?.length || 0;
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [nMensajes]);
 
   // Control manual del bot para este cliente (no depende de WhatsApp).
-  const botActivoParaCliente = lead.humanTakeover?.agenteActivo === true;
+  const botActivoParaCliente = lead?.humanTakeover?.agenteActivo === true;
   const takeoverMutation = useMutation({
-    mutationFn: (activo) => leadsApi.takeover(lead.id, activo),
+    mutationFn: (activo) => leadsApi.takeover(lead?.id, activo),
     onSuccess: (_d, activo) => {
       toast.success(activo
         ? 'Bot pausado: tú atiendes esta conversación'
@@ -126,7 +127,16 @@ function LeadDetalle({ lead, onClose, isMobile }) {
     }
   };
 
-  if (!lead) return null;
+  // Mientras carga el detalle mostramos el modal vacío (no una pantalla en blanco).
+  if (!lead) {
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ background: 'var(--color-surface)', borderRadius: 12, padding: '26px 34px', fontSize: 14, fontWeight: 600, color: 'var(--color-text-muted)' }}>
+          ⏳ Cargando conversación…
+        </div>
+      </div>
+    );
+  }
 
   // Abrir el flujo completo de cotización con los datos del lead precargados (desde cualquier paso).
   // Si el lead es de provincia, nunca hay un local de Lima real que precargar
