@@ -137,20 +137,22 @@ const obtener = async (req, res, next) => {
     });
     if (!lead) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    // ¿El bot ya le mostró llantas? Sirve para ofrecer "cotizar lo consultado"
-    // también al vendedor, que no puede ver ofertaPrecios en crudo.
-    let _consultadas = 0;
+    // ¿El cliente ya ELIGIÓ marcas y el bot le mostró esos precios? Solo en ese
+    // caso se ofrece la cotización anticipada (también al vendedor, que no ve
+    // el JSON en crudo).
+    let _elegidas = 0;
     try {
-      const o = typeof lead.ofertaPrecios === 'string' ? JSON.parse(lead.ofertaPrecios) : lead.ofertaPrecios;
-      if (Array.isArray(o)) _consultadas = o.length;
-    } catch { _consultadas = 0; }
-    lead.llantasConsultadas = _consultadas;
+      const o = typeof lead.llantasElegidas === 'string' ? JSON.parse(lead.llantasElegidas) : lead.llantasElegidas;
+      if (o && Array.isArray(o.items)) _elegidas = o.items.length;
+    } catch { _elegidas = 0; }
+    lead.llantasConsultadas = _elegidas;
 
     if (!isAdmin) {
       delete lead.dniCe;
       delete lead.estadoFlujo;
       delete lead.stockMap;
       delete lead.ofertaPrecios;
+      delete lead.llantasElegidas;
       delete lead.hashMensaje;
       delete lead.respuestaBot;
     }
@@ -325,12 +327,14 @@ const cotizarConsulta = async (req, res, next) => {
     const lead = await prisma.leadCRM.findUnique({ where: { id: req.params.id } });
     if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
 
-    let opciones = lead.ofertaPrecios;
-    if (typeof opciones === 'string') {
-      try { opciones = JSON.parse(opciones); } catch { opciones = null; }
+    // Solo se cotiza lo que el cliente ELIGIÓ por marca (no todas las de la medida).
+    let elegidas = lead.llantasElegidas;
+    if (typeof elegidas === 'string') {
+      try { elegidas = JSON.parse(elegidas); } catch { elegidas = null; }
     }
-    if (!Array.isArray(opciones) || opciones.length === 0) {
-      return res.status(400).json({ error: 'Este cliente todavía no tiene llantas consultadas por el bot.' });
+    const opciones = elegidas && Array.isArray(elegidas.items) ? elegidas.items : [];
+    if (opciones.length === 0) {
+      return res.status(400).json({ error: 'El cliente todavía no eligió ninguna marca. Aún no hay llantas específicas para cotizar.' });
     }
 
     // Costo de traslado configurado en Precios y Margen (por defecto 30).

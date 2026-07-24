@@ -327,7 +327,8 @@ model LeadCRM {
   esProvinciaTemprano    Boolean?    @default(false)
   estadoFlujo            Json?       // JSON blob con estado completo del flujo
   stockMap               Json?       // mapa stock por local
-  ofertaPrecios          Json?       // opciones presentadas al cliente
+  ofertaPrecios          Json?       // opciones presentadas al cliente (todas las marcas con stock de esa medida)
+  llantasElegidas        Json?       // { texto, items[] } — las llantas que el cliente eligió por marca
 
   // Negocio "El Patrón" (shows de personajes)
   personajeId            String?

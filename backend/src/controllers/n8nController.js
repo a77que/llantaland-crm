@@ -338,9 +338,20 @@ const listarLocales = async (req, res, next) => {
 /** HISTORIAL | Guardar Mensaje */
 const guardarHistorial = async (req, res, next) => {
   try {
-    const { Telefono, telefono, Hash_Mensaje, Rol, rol, Mensaje, mensaje, Paso_Actual, paso_actual } = req.body;
+    const { Telefono, telefono, Hash_Mensaje, Rol, rol, Mensaje, mensaje, Paso_Actual, paso_actual, Timestamp, timestamp } = req.body;
     const tel = Telefono || telefono;
     if (!tel) return res.status(400).json({ error: 'Telefono requerido' });
+
+    // Momento real del mensaje (el cliente lo envió ~10s antes por el debounce).
+    // Así la conversación queda en orden aunque el bot se guarde en la misma
+    // ejecución. Acepta epoch en ms o ISO; si no es válido usa la hora actual.
+    let ts = null;
+    const rawTs = Timestamp ?? timestamp;
+    if (rawTs !== undefined && rawTs !== null && rawTs !== '') {
+      const n = Number(rawTs);
+      const d = new Date(Number.isFinite(n) && String(rawTs).length >= 10 ? n : rawTs);
+      if (!isNaN(d.getTime())) ts = d;
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const lead = await tx.leadCRM.upsert({
@@ -375,6 +386,7 @@ const guardarHistorial = async (req, res, next) => {
           rol: Rol || rol || 'cliente',
           mensaje: Mensaje || mensaje || '',
           pasoActual: Paso_Actual || paso_actual || null,
+          ...(ts ? { timestamp: ts } : {}),
         },
       });
     });
@@ -902,6 +914,12 @@ function mapSheetToLead(body) {
   if (body.Modelo_Auto !== undefined) data.modeloAuto = body.Modelo_Auto;
   if (body.Anio_Auto !== undefined) data.anioAuto = body.Anio_Auto ? parseInt(body.Anio_Auto) : null;
   if (body.Oferta_Precios !== undefined) data.ofertaPrecios = parseJson(body.Oferta_Precios);
+  // Llantas que el cliente eligió por marca (para cotización anticipada).
+  if (body.Llantas_Guardadas_Json !== undefined || body.llantas_guardadas_json !== undefined) {
+    const lg = parseJson(body.Llantas_Guardadas_Json ?? body.llantas_guardadas_json);
+    // Solo guardar cuando tiene ítems reales (no el '{}' de reinicio).
+    if (lg && Array.isArray(lg.items) && lg.items.length > 0) data.llantasElegidas = lg;
+  }
   if (body.Provincia_Destino !== undefined) data.provinciaDestino = body.Provincia_Destino;
   if (body.Timestamp !== undefined) data.timestamp = new Date(body.Timestamp);
   // Tienda elegida temprano (antes de ver marcas) — separado de Estado_Flujo

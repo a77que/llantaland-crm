@@ -182,15 +182,19 @@ function LeadDetalle({ lead, onClose, isMobile }) {
 
   const boxStyle = {
     background: 'var(--color-surface)',
-    overflowY: 'auto',
     ...(isMobile ? {
+      overflowY: 'auto',
       width: '100%',
       maxHeight: '92dvh',
       borderRadius: '20px 20px 0 0',
       padding: '0 0 calc(var(--safe-bottom) + 16px)',
     } : {
+      // Desktop: altura fija y sin scroll propio — solo scrollean las columnas
+      // internas (info a la izquierda, chat a la derecha). Evita la doble barra.
+      overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
       width: '100%', maxWidth: 980,
-      maxHeight: '90vh',
+      height: '90vh',
       borderRadius: 14,
       padding: 28,
     }),
@@ -213,7 +217,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
           </div>
         )}
 
-        <div style={{ padding: isMobile ? '8px 16px 16px' : 0 }}>
+        <div style={{ padding: isMobile ? '8px 16px 16px' : 0, ...(isMobile ? {} : { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }) }}>
           {/* Estado de cotización (atendido / en espera) */}
           {(() => {
             const tc = (lead.cotizaciones?.length || lead._count?.cotizaciones || 0) > 0;
@@ -242,8 +246,8 @@ function LeadDetalle({ lead, onClose, isMobile }) {
           {/* Cuerpo: en desktop, columna de info a la izquierda + chat completo
               al costado derecho (para que el vendedor vea la conversación sin
               tener que bajar hasta el final del modal). En móvil se apila. */}
-          <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: isMobile ? undefined : '1fr 340px', gap: isMobile ? 0 : 24, alignItems: 'start' }}>
-          <div>
+          <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: isMobile ? undefined : '1fr 340px', gap: isMobile ? 0 : 24, alignItems: isMobile ? 'start' : 'stretch', ...(isMobile ? {} : { flex: 1, minHeight: 0 }) }}>
+          <div style={isMobile ? undefined : { overflowY: 'auto', minHeight: 0, paddingRight: 6 }}>
           {/* Estado */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={badge(PASO_COLOR[lead.pasoActual] || '#64748b')}>{PASO_LABEL[lead.pasoActual] || lead.pasoActual}</span>
@@ -376,7 +380,7 @@ function LeadDetalle({ lead, onClose, isMobile }) {
               todo lo que el cliente escribió y lo que el bot le respondió,
               para que el vendedor esté al tanto de cómo va la conversación
               sin salir del modal. */}
-          <div style={isMobile ? { marginTop: 12 } : { position: 'sticky', top: 0, maxHeight: 'calc(90vh - 56px)', display: 'flex', flexDirection: 'column' }}>
+          <div style={isMobile ? { marginTop: 12 } : { minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span>💬 CONVERSACIÓN {nMensajes > 0 ? `(${nMensajes} mensajes)` : ''}</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 999, padding: '1px 8px' }}>
@@ -385,50 +389,34 @@ function LeadDetalle({ lead, onClose, isMobile }) {
               </span>
             </div>
 
-            {/* Control manual del bot: instantáneo y sin depender de WhatsApp */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
-              marginBottom: 8, padding: '8px 10px', borderRadius: 10,
-              background: botActivoParaCliente ? '#fffbeb' : 'var(--color-bg)',
-              border: `1px solid ${botActivoParaCliente ? '#fde68a' : 'var(--color-border)'}`,
-            }}>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: botActivoParaCliente ? '#92400e' : 'var(--color-text-muted)' }}>
-                {botActivoParaCliente ? '🙋 Estás atendiendo tú — el bot está pausado' : '🤖 El bot está atendiendo a este cliente'}
-              </span>
+            {/* Estado del bot + acciones. Los dos botones (apagar bot / cotizar
+                lo consultado) van en una sola línea. */}
+            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6, color: botActivoParaCliente ? '#92400e' : 'var(--color-text-muted)' }}>
+              {botActivoParaCliente ? '🙋 Estás atendiendo tú — el bot está pausado' : '🤖 El bot está atendiendo a este cliente'}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'nowrap' }}>
               <button
                 onClick={() => takeoverMutation.mutate(!botActivoParaCliente)}
                 disabled={takeoverMutation.isPending}
                 style={{
-                  padding: '7px 13px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap', color: '#fff',
+                  flex: 1, minWidth: 0, padding: '9px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#fff',
                   background: botActivoParaCliente ? '#16a34a' : '#dc2626',
                 }}
               >
-                {takeoverMutation.isPending
-                  ? 'Guardando…'
-                  : botActivoParaCliente ? '🤖 Devolver al bot' : '🔕 Apagar bot y atender yo'}
+                {takeoverMutation.isPending ? 'Guardando…' : botActivoParaCliente ? '🤖 Devolver al bot' : '🔕 Apagar bot'}
               </button>
-            </div>
-
-            {/* Cliente que solo consultó llantas y no siguió: se le arma la
-                cotización con esas mismas opciones para que pueda volver a comprar. */}
-            {consultadas > 0 && (
-              <div style={{ marginBottom: 8, padding: '9px 10px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1d4ed8', marginBottom: 6 }}>
-                  🛞 El bot le mostró {consultadas} llanta{consultadas === 1 ? '' : 's'}{lead.medidaDetectada ? ` en ${lead.medidaDetectada}` : ''} y no eligió ninguna.
-                </div>
+              {consultadas > 0 && (
                 <button
                   onClick={() => cotizarConsultaMutation.mutate()}
                   disabled={cotizarConsultaMutation.isPending}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: 'pointer' }}
+                  title={`El cliente eligió ${consultadas} llanta(s)${lead.medidaDetectada ? ` en ${lead.medidaDetectada}` : ''}. Cotización anticipada: precio por 1, total por 4 con descuento y 5% por transferencia.`}
+                  style={{ flex: 1, minWidth: 0, padding: '9px 10px', borderRadius: 8, border: 'none', background: '#1d4ed8', color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                 >
-                  {cotizarConsultaMutation.isPending ? 'Generando…' : '📋 Cotizar lo que consultó'}
+                  {cotizarConsultaMutation.isPending ? 'Generando…' : `📋 Cotizar lo elegido (${consultadas})`}
                 </button>
-                <div style={{ fontSize: 10.5, color: '#1e40af', marginTop: 5, lineHeight: 1.45 }}>
-                  Arma una cotización con esas llantas: precio por 1, total por 4 con descuento y 5% extra por transferencia. El local se define después.
-                </div>
-              </div>
-            )}
+              )}
+            </div>
             {lead.historial?.length > 0 ? (
               <div ref={chatRef} style={{
                 flex: isMobile ? undefined : 1,
