@@ -8,7 +8,7 @@ const LOGO_OSO    = path.join(__dirname, '..', 'assets', 'logo-oso.png');
 
 const EMPRESA = {
   nombre: 'LLANTALAND S.A.C.',
-  ruc: process.env.SUNAT_RUC || '20xxxxxxxxx',
+  ruc: process.env.SUNAT_RUC || '10450311052',
   web: 'www.llantaland.com',
   telefono: '+51 972 124 470',
 };
@@ -70,7 +70,9 @@ async function generarVenta(venta) {
 
       const filename = `venta-${venta.numero}-${uuidv4().slice(0, 8)}.pdf`;
       const filepath = path.join(UPLOADS_DIR, filename);
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      // Margen inferior chico: el pie va cerca del borde y con bottom=50 PDFKit
+      // lo empujaba a una 2ª página en blanco.
+      const doc = new PDFDocument({ margins: { top: 50, bottom: 12, left: 50, right: 50 }, size: 'A4' });
       const stream = fs.createWriteStream(filepath);
       doc.pipe(stream);
 
@@ -205,7 +207,9 @@ async function generarCotizacion(cot) {
 
       const filename = `cotizacion-${cot.numero}-${uuidv4().slice(0, 8)}.pdf`;
       const filepath = path.join(UPLOADS_DIR, filename);
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      // Margen inferior chico: el pie va cerca del borde y con bottom=50 PDFKit
+      // lo empujaba a una 2ª página en blanco.
+      const doc = new PDFDocument({ margins: { top: 50, bottom: 12, left: 50, right: 50 }, size: 'A4' });
       const stream = fs.createWriteStream(filepath);
       doc.pipe(stream);
 
