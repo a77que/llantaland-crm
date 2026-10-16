@@ -54,7 +54,11 @@ const allowedOrigins = [
   `http://${process.env.VPS_IP || '161.97.102.3'}`,
 ].filter(Boolean);
 
-app.use(cors({
+// El chat del cliente es público (llantaland.com, landings de ads, etc.):
+// CORS abierto solo para /api/chat y el socket, sin credenciales.
+app.use('/api/chat', cors({ origin: true, credentials: false }));
+
+const strictCors = cors({
   origin: (origin, cb) => {
     // Requests sin origin: n8n server-side, mobile apps, curl — permitir
     if (!origin) return cb(null, true);
@@ -62,7 +66,9 @@ app.use(cors({
     cb(new Error(`Origin ${origin} no permitido por CORS`));
   },
   credentials: true,
-}));
+});
+// El resto de la API mantiene el CORS estricto; /api/chat ya quedó resuelto arriba.
+app.use((req, res, next) => (req.path.startsWith('/api/chat') ? next() : strictCors(req, res, next)));
 app.use(morgan('dev'));
 app.use(express.json({ limit: process.env.MAX_FILE_SIZE || '10mb' }));
 app.use(express.urlencoded({ extended: true }));
