@@ -145,4 +145,29 @@ const relay = async (req, res, next) => {
   }
 };
 
-module.exports = { iniciarSesion, enviarMensaje, listarMensajes, relay, esWeb };
+// POST /api/chat/vendedor  { sessionId, texto }  (requiere login) — el vendedor
+// responde en un chat web. Pausa el bot (takeover) y entrega al navegador.
+const responderVendedor = async (req, res, next) => {
+  try {
+    const { sessionId, texto } = req.body || {};
+    if (!esWeb(sessionId)) return res.status(400).json({ error: 'Sesión inválida' });
+    const t = String(texto || '').trim();
+    if (!t) return res.status(400).json({ error: 'Mensaje vacío' });
+
+    const lead = await prisma.leadCRM.findUnique({ where: { telefono: sessionId }, select: { id: true } });
+    if (!lead) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+    // Al entrar el vendedor, se pausa el bot para ese cliente (como en WhatsApp).
+    await prisma.humanTakeover.upsert({
+      where: { telefono: sessionId },
+      update: { agenteActivo: true, timestampUltimoAgente: new Date() },
+      create: { leadId: lead.id, telefono: sessionId, agenteActivo: true, timestampUltimoAgente: new Date() },
+    });
+
+    await prisma.mensajeHistorial.create({ data: { leadId: lead.id, telefono: sessionId, rol: 'vendedor', mensaje: t } });
+    emitirChat(sessionId, 'chat:bot', { texto: t, opciones: [], vendedor: true, ts: Date.now() });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+};
+
+module.exports = { iniciarSesion, enviarMensaje, listarMensajes, relay, responderVendedor, esWeb };
