@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Llantaland Vendedor",
+    "slug": "llantaland-vendedor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "llantaland-vendedor",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.llantaland.vendedor"
+    },
+    "android": {
+      "package": "com.llantaland.vendedor",
+      "permissions": ["INTERNET", "VIBRATE"]
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "extra": {
+      "eas": { "projectId": "" }
+    },
+    "owner": "a77que"
+  }
+}

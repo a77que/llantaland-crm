@@ -1,0 +1,16 @@
+{
+  "cli": { "version": ">= 5.9.3", "appVersionSource": "local" },
+  "build": {
+    "development": { "developmentClient": true, "distribution": "internal" },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_API_URL": "https://crm.llantaland.com" }
+    },
+    "production": {
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_API_URL": "https://crm.llantaland.com" }
+    }
+  },
+  "submit": { "production": {} }
+}
