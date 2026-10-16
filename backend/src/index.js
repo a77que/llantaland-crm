@@ -38,6 +38,7 @@ const vehiculoRoutes = require('./routes/vehiculos');
 const clienteRoutes = require('./routes/clientes');
 const usuarioRoutes = require('./routes/usuarios');
 const patronRoutes = require('./routes/patron');
+const chatRoutes = require('./routes/chat');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -92,15 +93,36 @@ app.use('/api/vehiculos', vehiculoRoutes);
 app.use('/api/clientes', clienteRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/patron', patronRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', build: '2026-06-16-busqueda-factiliza-v13', timestamp: new Date() }));
 
 
 app.use(errorHandler);
 
+// ─── Servidor HTTP + WebSocket (chat interno en vivo) ───────────────────────
+const http = require('http');
+const { Server } = require('socket.io');
+const { setIO } = require('./lib/io');
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: true, credentials: true },
+  path: '/socket.io',
+});
+setIO(io);
+
+io.on('connection', (socket) => {
+  // El cliente web se une a su sala de sesión; el vendedor a la sala general.
+  socket.on('chat:join', (sessionId) => {
+    if (typeof sessionId === 'string' && sessionId) socket.join('chat:' + sessionId);
+  });
+  socket.on('vendedor:join', () => socket.join('vendedores'));
+});
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Llantaland CRM API corriendo en puerto ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Llantaland CRM API + WebSocket en puerto ${PORT}`);
 });
 
 module.exports = app;

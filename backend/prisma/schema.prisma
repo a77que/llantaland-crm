@@ -281,9 +281,10 @@ model MovimientoStock {
 
 model LeadCRM {
   id                     String      @id @default(cuid())
-  telefono               String      @unique       // clave principal = Telefono del sheet
+  telefono               String      @unique       // clave principal = Telefono del sheet / id de sesión web
   timestamp              DateTime    @default(now())
   tipoNegocio            TipoNegocio @default(LLANTAS)
+  canal                  String      @default("whatsapp") // 'whatsapp' | 'web' — por dónde llegó el cliente
 
   // Datos del cliente (se completan durante el flujo)
   nombreCliente          String?
