@@ -12,11 +12,20 @@
     },
     "android": {
       "package": "com.llantaland.vendedor",
-      "permissions": ["INTERNET", "VIBRATE"]
+      "permissions": [
+        "INTERNET",
+        "VIBRATE"
+      ]
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
     "extra": {
-      "eas": { "projectId": "" }
+      "eas": {
+        "projectId": "76448d45-0060-4de1-9a33-88f3dbc74187"
+      },
+      "router": {}
     },
     "owner": "a77que"
   }
