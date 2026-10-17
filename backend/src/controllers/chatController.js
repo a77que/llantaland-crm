@@ -1,5 +1,11 @@
 const prisma = require('../lib/prisma');
 const { emitirChat, emitirVendedores } = require('../lib/io');
+const { notificarVendedores, vapidPublicKey, guardarSuscripcion, borrarSuscripcion } = require('../lib/push');
+
+// WhatsApp pausado: mientras YCloud cobra, no se envía nada a WhatsApp. El bot y
+// el chat web siguen funcionando; solo los números reales se dejan de reenviar.
+// Reactivar = poner WHATSAPP_ENABLED=true en el entorno y reiniciar. No borra nada.
+const WHATSAPP_ENABLED = process.env.WHATSAPP_ENABLED === 'true';
 
 // ─── Chat interno (web) ──────────────────────────────────────────────────────
 // Reusa el MISMO cerebro del bot en n8n: cada sesión web se identifica con un
@@ -75,6 +81,15 @@ const enviarMensaje = async (req, res, next) => {
     await guardarMensaje(sessionId, 'cliente', t);
     emitirVendedores('chat:cliente', { sessionId, texto: t, ts: Date.now() });
 
+    // Aviso push a los vendedores (PWA en iOS/Android/escritorio). Despierta al
+    // vendedor aunque tenga el CRM cerrado; al abrirlo arranca la sirena fuerte.
+    notificarVendedores({
+      title: '💬 Nuevo mensaje de cliente',
+      body: t.length > 120 ? t.slice(0, 117) + '…' : t,
+      sessionId,
+      url: '/chat?c=' + sessionId,
+    }).catch(() => { /* el push nunca debe cortar el chat */ });
+
     // Reenviar al cerebro del bot (n8n), con el mismo formato que usa WhatsApp.
     try {
       await fetch(N8N_WEBHOOK, {
@@ -130,6 +145,13 @@ const relay = async (req, res, next) => {
       return res.json({ ok: true, canal: 'web' });
     }
 
+    // WhatsApp pausado: no se reenvía a YCloud (así no hay conversación facturable).
+    // Respondemos 200 para que n8n no reintente. Reversible con WHATSAPP_ENABLED=true.
+    if (!WHATSAPP_ENABLED) {
+      console.log('[WhatsApp OFF] mensaje a', toRaw, '— NO enviado a YCloud (WHATSAPP_ENABLED=false)');
+      return res.json({ ok: true, canal: 'whatsapp', disabled: true });
+    }
+
     // Número real → reenviar a YCloud con la misma autorización que mandó n8n.
     const headers = { 'Content-Type': 'application/json' };
     if (req.headers['x-api-key']) headers['X-API-Key'] = req.headers['x-api-key'];
@@ -170,4 +192,66 @@ const responderVendedor = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { iniciarSesion, enviarMensaje, listarMensajes, relay, responderVendedor, esWeb };
+// GET /api/chat/conversaciones  (requiere login) — lista las conversaciones web
+// para el panel del vendedor, con el último mensaje y si hay agente atendiendo.
+const listarConversaciones = async (req, res, next) => {
+  try {
+    const leads = await prisma.leadCRM.findMany({
+      where: { canal: 'web' },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+      select: {
+        telefono: true, nombreCliente: true, pasoActual: true, updatedAt: true,
+        humanTakeover: { select: { agenteActivo: true } },
+      },
+    });
+    const tels = leads.map(l => l.telefono);
+    const ultimos = await prisma.mensajeHistorial.findMany({
+      where: { telefono: { in: tels } },
+      orderBy: { timestamp: 'desc' },
+      select: { telefono: true, rol: true, mensaje: true, timestamp: true },
+    });
+    const ultimoPorTel = {};
+    for (const m of ultimos) if (!ultimoPorTel[m.telefono]) ultimoPorTel[m.telefono] = m;
+
+    const conversaciones = leads.map(l => {
+      const u = ultimoPorTel[l.telefono];
+      return {
+        sessionId: l.telefono,
+        nombre: l.nombreCliente || null,
+        pasoActual: l.pasoActual,
+        agenteActivo: l.humanTakeover?.agenteActivo || false,
+        ultimoMensaje: u?.mensaje || '',
+        ultimoRol: u?.rol || '',
+        ts: u?.timestamp || l.updatedAt,
+      };
+    }).sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+    res.json({ conversaciones });
+  } catch (err) { next(err); }
+};
+
+// GET /api/chat/vapid — llave pública para suscribir el navegador al push.
+const vapid = (req, res) => res.json({ publicKey: vapidPublicKey() });
+
+// POST /api/chat/push/subscribe  (requiere login) — guarda la suscripción del navegador.
+const suscribirPush = async (req, res, next) => {
+  try {
+    const sub = (req.body && req.body.subscription) || req.body;
+    const r = await guardarSuscripcion(sub, req.usuario?.id, req.headers['user-agent']);
+    res.json({ ok: !!r });
+  } catch (err) { next(err); }
+};
+
+// POST /api/chat/push/unsubscribe  (requiere login) — elimina la suscripción.
+const desuscribirPush = async (req, res, next) => {
+  try {
+    await borrarSuscripcion(req.body && req.body.endpoint);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+};
+
+module.exports = {
+  iniciarSesion, enviarMensaje, listarMensajes, relay, responderVendedor, esWeb,
+  listarConversaciones, vapid, suscribirPush, desuscribirPush,
+};

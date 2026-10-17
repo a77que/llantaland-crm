@@ -31,6 +31,7 @@ import ImagenesStock from './pages/ImagenesStock';
 import CompletarIA from './pages/CompletarIA';
 import Precios from './pages/Precios';
 import PersonajesAgregados from './pages/PersonajesAgregados';
+import Chat from './pages/Chat';
 
 export default function App() {
   const token = useAuthStore((s) => s.token);
@@ -44,6 +45,7 @@ export default function App() {
         <Route element={<PrivateRoute />}>
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
+            <Route path="chat" element={<Chat />} />
             <Route path="leads" element={<Leads />} />
             <Route path="citas" element={<Citas />} />
             <Route path="clientes" element={<Clientes />} />

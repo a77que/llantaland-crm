@@ -131,6 +131,23 @@ model Usuario {
   @@map("usuarios")
 }
 
+// Suscripciones Web Push (PWA del vendedor en iOS/Android/escritorio). Guardamos
+// el endpoint del navegador + llaves; el backend envía un push por cada mensaje
+// nuevo de cliente al chat web. Sin VAPID configurado, esta tabla queda vacía y
+// el push inactivo (el chat en vivo por Socket.IO sigue funcionando igual).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  usuarioId String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([usuarioId])
+  @@map("push_subscriptions")
+}
+
 model Sesion {
   id        String   @id @default(cuid())
   usuarioId String

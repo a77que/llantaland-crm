@@ -6,6 +6,7 @@ import { useCitasNotification } from '../../context/CitasNotificationContext';
 
 const NAV_LLANTAS = [
   { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
+  { section: null,         to: '/chat',          label: 'Chat Web',              icon: '💬' },
   { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
   { section: 'WhatsApp',   to: '/citas',         label: 'Citas',                 icon: '📅' },
   { section: 'Ventas',     to: '/clientes',      label: 'Clientes',              icon: '👥' },
@@ -23,6 +24,7 @@ const NAV_LLANTAS = [
 // Negocio "El Patrón" (Sorprendete Perú) — mismas secciones, reetiquetadas para shows.
 const NAV_PATRON = [
   { section: null,         to: '/',             label: 'Dashboard',             icon: '📊', exact: true },
+  { section: null,         to: '/chat',          label: 'Chat Web',              icon: '💬' },
   { section: 'WhatsApp',   to: '/leads',         label: 'Leads WhatsApp',        icon: '📱' },
   { section: 'WhatsApp',   to: '/citas',         label: 'Agenda de Shows',       icon: '📅' },
   { section: 'Ventas',     to: '/clientes',      label: 'Clientes',              icon: '👥' },

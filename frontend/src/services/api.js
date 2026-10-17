@@ -201,6 +201,15 @@ export const patronApi = {
   eliminarAgregado:     (id)       => api.delete(`/patron/agregados/${id}`),
 };
 
+export const chatApi = {
+  conversaciones: ()                 => api.get('/chat/conversaciones'),
+  mensajes:       (sessionId, after) => api.get(`/chat/mensajes/${sessionId}`, { params: after ? { after } : {} }),
+  responder:      (sessionId, texto) => api.post('/chat/vendedor', { sessionId, texto }),
+  vapid:          ()                 => api.get('/chat/vapid'),
+  suscribirPush:  (subscription)     => api.post('/chat/push/subscribe', { subscription }),
+  desuscribirPush:(endpoint)         => api.post('/chat/push/unsubscribe', { endpoint }),
+};
+
 export const vehiculosApi = {
   placa:     (placa) => api.get(`/vehiculos/placa/${encodeURIComponent(placa)}`),
   versiones: (data)  => api.post('/vehiculos/versiones', data),
