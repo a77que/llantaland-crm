@@ -26,7 +26,18 @@ const uploadAudio = multer({
 });
 
 // Endpoints públicos del cliente (sin login): límite para evitar abuso.
-const limiter = rateLimit({ windowMs: 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false });
+// Límite por SESIÓN de chat (no por IP): el widget hace polling cada 4s, así que
+// 40/min por IP se agotaba rápido (y detrás del proxy varias sesiones comparten
+// IP). Keyeamos por sessionId con margen amplio; validate:false evita el warning
+// de trust-proxy en este limiter (ya está trust proxy activo globalmente).
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.body && req.body.sessionId) || req.params.sessionId || req.ip,
+  validate: false,
+});
 
 router.post('/session', limiter, iniciarSesion);
 router.post('/mensaje', limiter, enviarMensaje);

@@ -43,6 +43,13 @@ const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
+// El CRM corre detrás de Traefik + nginx (overlay de Docker). Sin esto, Express
+// ve siempre la IP del proxy: req.ip sería la misma para todos y los límites
+// "por IP" pasarían a ser un cupo global compartido. Con trust proxy, req.ip es
+// la IP real del cliente (del X-Forwarded-For) y además desaparece el warning
+// de express-rate-limit.
+app.set('trust proxy', true);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
