@@ -23,6 +23,11 @@ export default function Chat() {
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [grabando, setGrabando] = useState(false);
+  const [segGrab, setSegGrab] = useState(0);
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
   const [unread, setUnread] = useState(() => new Set());
   const [alerta, setAlerta] = useState(null);           // { sessionId, texto } del modal de sirena
   const [alertasOn, setAlertasOn] = useState(false);     // audio desbloqueado
@@ -143,6 +148,62 @@ export default function Chat() {
     } finally { setEnviando(false); }
   };
 
+  // ── Nota de voz del vendedor ──────────────────────────────────────────────
+  const pickMime = () => {
+    const cands = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'];
+    for (const c of cands) { try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c; } catch { /* no-op */ } }
+    return '';
+  };
+
+  const subirAudio = async (blob, mime) => {
+    if (!selected) return;
+    const ext = (mime || '').includes('mp4') ? 'm4a' : (mime || '').includes('ogg') ? 'ogg' : 'webm';
+    try {
+      const r = await chatApi.responderAudio(selected, blob, `nota.${ext}`);
+      setMensajes(prev => [...prev, { id: 'me-' + Date.now(), rol: 'vendedor', mensaje: '[nota de voz]', audioUrl: r?.audioUrl, timestamp: Date.now() }]);
+      setConvs(prev => upsertConv(prev, selected, { ultimoMensaje: '🎤 Nota de voz', ultimoRol: 'vendedor', ts: Date.now(), agenteActivo: true }));
+      scrollAbajo();
+    } catch { toast.error('No se pudo enviar el audio'); }
+  };
+
+  const iniciarGrabacion = async () => {
+    if (!selected || grabando) return;
+    if (!navigator.mediaDevices || !window.MediaRecorder) { toast.error('Tu navegador no soporta grabar audio'); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = pickMime();
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(timerRef.current);
+        if (rec._cancelado) return;
+        subirAudio(new Blob(chunksRef.current, { type: mime || 'audio/webm' }), mime);
+      };
+      recorderRef.current = rec;
+      rec.start();
+      setGrabando(true);
+      setSegGrab(0);
+      timerRef.current = setInterval(() => setSegGrab(s => s + 1), 1000);
+    } catch { toast.error('No se pudo acceder al micrófono (revisa permisos)'); }
+  };
+
+  const detenerYEnviar = () => {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== 'inactive') rec.stop();
+    setGrabando(false);
+  };
+
+  const cancelarGrabacion = () => {
+    const rec = recorderRef.current;
+    if (rec) { rec._cancelado = true; if (rec.state !== 'inactive') rec.stop(); }
+    setGrabando(false);
+    clearInterval(timerRef.current);
+  };
+
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
   // ── Activar alertas (audio) + push ────────────────────────────────────────
   const activarAlertas = async () => {
     const ok = desbloquearAudio();
@@ -240,8 +301,12 @@ export default function Chat() {
                       <div style={{
                         background: m.rol === 'cliente' ? COLORS.panel2 : m.rol === 'vendedor' ? COLORS.yellow : '#1f2937',
                         color: m.rol === 'vendedor' ? '#000' : COLORS.text,
-                        padding: '8px 11px', borderRadius: 12, fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                      }}>{m.mensaje}</div>
+                        padding: m.audioUrl ? '6px 8px' : '8px 11px', borderRadius: 12, fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      }}>
+                        {m.audioUrl
+                          ? <audio controls preload="metadata" src={m.audioUrl} style={{ display: 'block', maxWidth: 230, height: 38 }} />
+                          : m.mensaje}
+                      </div>
                       <div style={{ fontSize: 10, color: COLORS.muted, marginTop: 2, textAlign: mine ? 'right' : 'left' }}>
                         {m.rol === 'cliente' ? 'Cliente' : m.rol === 'vendedor' ? 'Tú' : 'Bot'} · {horaCorta(m.timestamp)}
                       </div>
@@ -250,16 +315,30 @@ export default function Chat() {
                 })}
               </div>
 
-              <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: `1px solid ${COLORS.border}` }}>
-                <textarea
-                  value={texto}
-                  onChange={e => setTexto(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } }}
-                  placeholder="Escribe un mensaje…"
-                  rows={1}
-                  style={{ flex: 1, resize: 'none', background: COLORS.panel2, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 10, padding: '10px 12px', fontSize: 16, maxHeight: 120 }}
-                />
-                <button onClick={enviar} disabled={enviando || !texto.trim()} style={{ ...btnPrimary, opacity: enviando || !texto.trim() ? .5 : 1 }}>Enviar</button>
+              <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: `1px solid ${COLORS.border}`, alignItems: 'center' }}>
+                {grabando ? (
+                  <>
+                    <button onClick={cancelarGrabacion} title="Cancelar" style={btnGhost}>✕</button>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, color: COLORS.red, fontWeight: 700 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: COLORS.red, animation: 'pulse 1s infinite' }} />
+                      Grabando… {Math.floor(segGrab / 60)}:{String(segGrab % 60).padStart(2, '0')}
+                    </div>
+                    <button onClick={detenerYEnviar} style={btnPrimary}>Enviar 🎤</button>
+                  </>
+                ) : (
+                  <>
+                    <textarea
+                      value={texto}
+                      onChange={e => setTexto(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } }}
+                      placeholder="Escribe un mensaje…"
+                      rows={1}
+                      style={{ flex: 1, resize: 'none', background: COLORS.panel2, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 10, padding: '10px 12px', fontSize: 16, maxHeight: 120 }}
+                    />
+                    <button onClick={iniciarGrabacion} title="Grabar nota de voz" style={btnMic}>🎤</button>
+                    <button onClick={enviar} disabled={enviando || !texto.trim()} style={{ ...btnPrimary, opacity: enviando || !texto.trim() ? .5 : 1 }}>Enviar</button>
+                  </>
+                )}
               </div>
             </>
           )}
@@ -290,6 +369,16 @@ export default function Chat() {
 const btnPrimary = {
   background: COLORS.yellow, color: '#000', border: 'none', borderRadius: 10,
   padding: '8px 16px', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: .5,
+};
+
+const btnMic = {
+  background: COLORS.panel2, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 10,
+  padding: '8px 12px', fontSize: 18, cursor: 'pointer', lineHeight: 1,
+};
+
+const btnGhost = {
+  background: 'transparent', color: COLORS.muted, border: `1px solid ${COLORS.border}`, borderRadius: 10,
+  padding: '8px 12px', fontSize: 16, cursor: 'pointer', lineHeight: 1,
 };
 
 // Inserta/actualiza una conversación en la lista y la sube al tope.

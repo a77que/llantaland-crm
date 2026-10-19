@@ -119,7 +119,7 @@ const listarMensajes = async (req, res, next) => {
       where: { telefono: sessionId, ...(after ? { timestamp: { gt: after } } : {}) },
       orderBy: { timestamp: 'asc' },
       take: 200,
-      select: { id: true, rol: true, mensaje: true, timestamp: true },
+      select: { id: true, rol: true, mensaje: true, audioUrl: true, timestamp: true },
     });
     res.json({ mensajes: msgs });
   } catch (err) { next(err); }
@@ -192,6 +192,32 @@ const responderVendedor = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// POST /api/chat/vendedor/audio  (requiere login, multipart campo "audio") — el
+// vendedor manda una NOTA DE VOZ al cliente. Pausa el bot (takeover) igual que el
+// texto, guarda el audio en /uploads y lo entrega al navegador del cliente.
+const responderVendedorAudio = async (req, res, next) => {
+  try {
+    const { sessionId } = req.body || {};
+    if (!esWeb(sessionId)) return res.status(400).json({ error: 'Sesión inválida' });
+    if (!req.file) return res.status(400).json({ error: 'Audio requerido' });
+
+    const lead = await prisma.leadCRM.findUnique({ where: { telefono: sessionId }, select: { id: true } });
+    if (!lead) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+    const audioUrl = '/uploads/' + req.file.filename;
+
+    await prisma.humanTakeover.upsert({
+      where: { telefono: sessionId },
+      update: { agenteActivo: true, timestampUltimoAgente: new Date() },
+      create: { leadId: lead.id, telefono: sessionId, agenteActivo: true, timestampUltimoAgente: new Date() },
+    });
+
+    await prisma.mensajeHistorial.create({ data: { leadId: lead.id, telefono: sessionId, rol: 'vendedor', mensaje: '[nota de voz]', audioUrl } });
+    emitirChat(sessionId, 'chat:bot', { texto: '', audioUrl, opciones: [], vendedor: true, ts: Date.now() });
+    res.json({ ok: true, audioUrl });
+  } catch (err) { next(err); }
+};
+
 // GET /api/chat/conversaciones  (requiere login) — lista las conversaciones web
 // para el panel del vendedor, con el último mensaje y si hay agente atendiendo.
 const listarConversaciones = async (req, res, next) => {
@@ -252,6 +278,6 @@ const desuscribirPush = async (req, res, next) => {
 };
 
 module.exports = {
-  iniciarSesion, enviarMensaje, listarMensajes, relay, responderVendedor, esWeb,
+  iniciarSesion, enviarMensaje, listarMensajes, relay, responderVendedor, responderVendedorAudio, esWeb,
   listarConversaciones, vapid, suscribirPush, desuscribirPush,
 };

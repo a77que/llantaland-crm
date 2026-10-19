@@ -205,6 +205,12 @@ export const chatApi = {
   conversaciones: ()                 => api.get('/chat/conversaciones'),
   mensajes:       (sessionId, after) => api.get(`/chat/mensajes/${sessionId}`, { params: after ? { after } : {} }),
   responder:      (sessionId, texto) => api.post('/chat/vendedor', { sessionId, texto }),
+  responderAudio: (sessionId, blob, filename) => {
+    const fd = new FormData();
+    fd.append('sessionId', sessionId);
+    fd.append('audio', blob, filename);
+    return api.post('/chat/vendedor/audio', fd, { timeout: 60000 }); // axios pone el multipart boundary solo
+  },
   vapid:          ()                 => api.get('/chat/vapid'),
   suscribirPush:  (subscription)     => api.post('/chat/push/subscribe', { subscription }),
   desuscribirPush:(endpoint)         => api.post('/chat/push/unsubscribe', { endpoint }),

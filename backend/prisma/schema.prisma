@@ -400,8 +400,9 @@ model MensajeHistorial {
   leadId      String
   telefono    String
   hashMensaje String?  @unique     // evita duplicados
-  rol         String               // "cliente" | "bot"
+  rol         String               // "cliente" | "bot" | "vendedor"
   mensaje     String   @db.Text
+  audioUrl    String?              // nota de voz del vendedor (ruta en /uploads) — null = mensaje de texto
   pasoActual  String?
   timestamp   DateTime @default(now())
 
