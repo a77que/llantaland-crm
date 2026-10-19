@@ -1,6 +1,33 @@
+const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const prisma = require('../lib/prisma');
 const { emitirChat, emitirVendedores } = require('../lib/io');
 const { notificarVendedores, vapidPublicKey, guardarSuscripcion, borrarSuscripcion } = require('../lib/push');
+
+// Convierte la nota de voz a AAC (.m4a), que se reproduce en TODOS los
+// dispositivos (iPhone incluido). Android/Chrome graba en webm/opus, que no
+// suena en iOS; esto lo normaliza. Si ya es .m4a no reconvierte. Si ffmpeg no
+// está (p.ej. entorno local), devuelve null y se usa el archivo original.
+function transcodificarM4a(inputPath) {
+  return new Promise((resolve) => {
+    const outPath = inputPath.replace(/\.[^.]+$/, '') + '.m4a';
+    if (inputPath === outPath) return resolve(inputPath); // ya es m4a (iOS) → universal
+    const ff = spawn('ffmpeg', ['-y', '-i', inputPath, '-vn', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', outPath]);
+    let err = '';
+    ff.stderr.on('data', (d) => { err += d.toString(); });
+    ff.on('error', () => resolve(null));           // ffmpeg no instalado
+    ff.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outPath)) {
+        try { fs.unlinkSync(inputPath); } catch { /* no-op */ }
+        resolve(outPath);
+      } else {
+        console.error('ffmpeg transcode falló:', err.slice(-300));
+        resolve(null);
+      }
+    });
+  });
+}
 
 // WhatsApp pausado: mientras YCloud cobra, no se envía nada a WhatsApp. El bot y
 // el chat web siguen funcionando; solo los números reales se dejan de reenviar.
@@ -204,7 +231,11 @@ const responderVendedorAudio = async (req, res, next) => {
     const lead = await prisma.leadCRM.findUnique({ where: { telefono: sessionId }, select: { id: true } });
     if (!lead) return res.status(404).json({ error: 'Sesión no encontrada' });
 
-    const audioUrl = '/uploads/' + req.file.filename;
+    // Normaliza a AAC para que suene en cualquier dispositivo del cliente; si
+    // ffmpeg falla, cae al archivo original (no rompe el envío).
+    const out = await transcodificarM4a(req.file.path);
+    const filename = out ? path.basename(out) : req.file.filename;
+    const audioUrl = '/uploads/' + filename;
 
     await prisma.humanTakeover.upsert({
       where: { telefono: sessionId },
