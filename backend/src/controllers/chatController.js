@@ -105,8 +105,8 @@ const enviarMensaje = async (req, res, next) => {
     const t = String(texto || '').trim();
     if (!t) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    await guardarMensaje(sessionId, 'cliente', t);
-    emitirVendedores('chat:cliente', { sessionId, texto: t, ts: Date.now() });
+    const savedCli = await guardarMensaje(sessionId, 'cliente', t);
+    emitirVendedores('chat:cliente', { sessionId, id: savedCli && savedCli.id, texto: t, ts: Date.now() });
 
     // Aviso push a los vendedores (PWA en iOS/Android/escritorio). Despierta al
     // vendedor aunque tenga el CRM cerrado; al abrirlo arranca la sirena fuerte.
@@ -165,9 +165,9 @@ const relay = async (req, res, next) => {
       const sessionId = esWeb(to) ? to : toRaw;
       const { texto, opciones } = parsearSalidaBot(body);
       if (texto || opciones.length) {
-        await guardarMensaje(sessionId, 'bot', texto || (opciones.length ? '[opciones]' : ''));
-        emitirChat(sessionId, 'chat:bot', { texto, opciones, ts: Date.now() });
-        emitirVendedores('chat:bot', { sessionId, texto, ts: Date.now() });
+        const savedBot = await guardarMensaje(sessionId, 'bot', texto || (opciones.length ? '[opciones]' : ''));
+        emitirChat(sessionId, 'chat:bot', { id: savedBot && savedBot.id, texto, opciones, ts: Date.now() });
+        emitirVendedores('chat:bot', { sessionId, id: savedBot && savedBot.id, texto, ts: Date.now() });
       }
       return res.json({ ok: true, canal: 'web' });
     }
@@ -213,8 +213,8 @@ const responderVendedor = async (req, res, next) => {
       create: { leadId: lead.id, telefono: sessionId, agenteActivo: true, timestampUltimoAgente: new Date() },
     });
 
-    await prisma.mensajeHistorial.create({ data: { leadId: lead.id, telefono: sessionId, rol: 'vendedor', mensaje: t } });
-    emitirChat(sessionId, 'chat:bot', { texto: t, opciones: [], vendedor: true, ts: Date.now() });
+    const mv = await prisma.mensajeHistorial.create({ data: { leadId: lead.id, telefono: sessionId, rol: 'vendedor', mensaje: t } });
+    emitirChat(sessionId, 'chat:bot', { id: mv.id, texto: t, opciones: [], vendedor: true, ts: Date.now() });
     res.json({ ok: true });
   } catch (err) { next(err); }
 };
@@ -243,8 +243,8 @@ const responderVendedorAudio = async (req, res, next) => {
       create: { leadId: lead.id, telefono: sessionId, agenteActivo: true, timestampUltimoAgente: new Date() },
     });
 
-    await prisma.mensajeHistorial.create({ data: { leadId: lead.id, telefono: sessionId, rol: 'vendedor', mensaje: '[nota de voz]', audioUrl } });
-    emitirChat(sessionId, 'chat:bot', { texto: '', audioUrl, opciones: [], vendedor: true, ts: Date.now() });
+    const ma = await prisma.mensajeHistorial.create({ data: { leadId: lead.id, telefono: sessionId, rol: 'vendedor', mensaje: '[nota de voz]', audioUrl } });
+    emitirChat(sessionId, 'chat:bot', { id: ma.id, texto: '', audioUrl, opciones: [], vendedor: true, ts: Date.now() });
     res.json({ ok: true, audioUrl });
   } catch (err) { next(err); }
 };

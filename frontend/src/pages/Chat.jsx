@@ -85,11 +85,12 @@ export default function Chat() {
     socketRef.current = socket;
     socket.on('connect', () => socket.emit('vendedor:join'));
 
-    socket.on('chat:cliente', ({ sessionId, texto: t, ts }) => {
+    socket.on('chat:cliente', ({ sessionId, id, texto: t, ts }) => {
       setConvs(prev => upsertConv(prev, sessionId, { ultimoMensaje: t, ultimoRol: 'cliente', ts }));
       const viendo = selectedRef.current === sessionId && document.visibilityState === 'visible';
       if (viendo) {
-        setMensajes(prev => [...prev, { id: 'rt-' + ts, rol: 'cliente', mensaje: t, timestamp: ts }]);
+        const mid = id || ('rt-' + ts);
+        setMensajes(prev => prev.some(m => m.id === mid) ? prev : [...prev, { id: mid, rol: 'cliente', mensaje: t, timestamp: ts }]);
         scrollAbajo();
       } else {
         setUnread(prev => new Set(prev).add(sessionId));
@@ -98,11 +99,12 @@ export default function Chat() {
       }
     });
 
-    socket.on('chat:bot', ({ sessionId, texto: t, ts, vendedor }) => {
-      if (!t) return;
-      setConvs(prev => upsertConv(prev, sessionId, { ultimoMensaje: t, ultimoRol: vendedor ? 'vendedor' : 'bot', ts }));
+    socket.on('chat:bot', ({ sessionId, id, texto: t, audioUrl, ts, vendedor }) => {
+      if (!t && !audioUrl) return;
+      setConvs(prev => upsertConv(prev, sessionId, { ultimoMensaje: audioUrl ? '🎤 Nota de voz' : t, ultimoRol: vendedor ? 'vendedor' : 'bot', ts }));
       if (selectedRef.current === sessionId) {
-        setMensajes(prev => [...prev, { id: 'rt-' + ts, rol: vendedor ? 'vendedor' : 'bot', mensaje: t, timestamp: ts }]);
+        const mid = id || ('rt-' + ts);
+        setMensajes(prev => prev.some(m => m.id === mid) ? prev : [...prev, { id: mid, rol: vendedor ? 'vendedor' : 'bot', mensaje: t, audioUrl, timestamp: ts }]);
         scrollAbajo();
       }
     });
