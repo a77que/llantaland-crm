@@ -48,7 +48,7 @@ const LEAD_SELECT_VENDEDOR = {
 
 const listar = async (req, res, next) => {
   try {
-    const { paso, ranking, q, hoy, cards, tipoNegocio, pendientes, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { paso, ranking, q, hoy, cards, pendientes, page = 1, limit = 50, orderBy, orderDir } = req.query;
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const take = Math.min(parseInt(limit) || 50, 100);
@@ -60,7 +60,7 @@ const listar = async (req, res, next) => {
     const where = {};
     const condicionesAnd = [];
 
-    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
+    where.tipoNegocio = 'LLANTAS';
     if (paso) where.pasoActual = paso;
     if (ranking) where.ranking = ranking;
     if (hoy === '1' || hoy === 'true') {
@@ -117,7 +117,7 @@ const obtener = async (req, res, next) => {
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const lead = await prisma.leadCRM.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       include: {
         humanTakeover: true,
         historial: isAdmin
@@ -168,7 +168,7 @@ const obtenerPorTelefono = async (req, res, next) => {
     const isAdmin = req.usuario?.rol === 'ADMIN';
 
     const lead = await prisma.leadCRM.findUnique({
-      where: { telefono: req.params.telefono },
+      where: { tipoNegocio: 'LLANTAS', telefono: req.params.telefono },
       include: {
         humanTakeover: true,
         historial: {
@@ -237,7 +237,7 @@ const actualizar = async (req, res, next) => {
 
     if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Sin datos válidos para actualizar' });
 
-    const lead = await prisma.leadCRM.update({ where: { id: req.params.id }, data });
+    const lead = await prisma.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: req.params.id }, data });
     res.json(lead);
   } catch (err) {
     // Mostrar mensaje de error específico para facilitar debugging
@@ -252,7 +252,7 @@ const actualizar = async (req, res, next) => {
 const marcarNoDesea = async (req, res, next) => {
   try {
     const lead = await prisma.leadCRM.update({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       data: { descartadoEn: new Date(), pasoActual: 'nuevo' },
     });
     res.json(lead);
@@ -265,7 +265,7 @@ const marcarNoDesea = async (req, res, next) => {
 const desmarcarNoDesea = async (req, res, next) => {
   try {
     const lead = await prisma.leadCRM.update({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       data: { descartadoEn: null },
     });
     res.json(lead);
@@ -284,7 +284,7 @@ const tomarConversacion = async (req, res, next) => {
   try {
     const activo = req.body?.activo !== false;
     const lead = await prisma.leadCRM.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       select: { id: true, telefono: true },
     });
     if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
@@ -324,7 +324,7 @@ const normNombre = (s) => String(s || '').trim().toLowerCase().normalize('NFD').
 
 const cotizarConsulta = async (req, res, next) => {
   try {
-    const lead = await prisma.leadCRM.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', id: req.params.id } });
     if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
 
     // Solo se cotiza lo que el cliente ELIGIÓ por marca (no todas las de la medida).
@@ -412,19 +412,18 @@ const cotizarConsulta = async (req, res, next) => {
 
 const resumen = async (req, res, next) => {
   try {
-    const { tipoNegocio } = req.query;
-    const where = tipoNegocio ? { tipoNegocio } : {};
+    const where = { tipoNegocio: 'LLANTAS' };
     const hoyInicio  = inicioHoy();
     const ayerInicio = inicioAyer();
     const [porPaso, porRanking, total, hoy, ayer, noDesea, conCotizacion, sinCotizacion] = await Promise.all([
       prisma.leadCRM.groupBy({ by: ['pasoActual'], _count: true, where }),
       prisma.leadCRM.groupBy({ by: ['ranking'], _count: true, where }),
       prisma.leadCRM.count({ where }),
-      prisma.leadCRM.count({ where: { ...where, timestamp: { gte: hoyInicio } } }),
-      prisma.leadCRM.count({ where: { ...where, timestamp: { gte: ayerInicio, lt: hoyInicio } } }),
-      prisma.leadCRM.count({ where: { ...where, descartadoEn: { not: null } } }),
-      prisma.leadCRM.count({ where: { ...where, cotizaciones: { some: {} } } }),
-      prisma.leadCRM.count({ where: { ...where, cotizaciones: { none: {} }, descartadoEn: null } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', ...where, timestamp: { gte: hoyInicio } } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', ...where, timestamp: { gte: ayerInicio, lt: hoyInicio } } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', ...where, descartadoEn: { not: null } } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', ...where, cotizaciones: { some: {} } } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', ...where, cotizaciones: { none: {} }, descartadoEn: null } }),
     ]);
     res.json({ porPaso, porRanking, total, hoy, ayer, noDesea, conCotizacion, sinCotizacion });
   } catch (err) {
@@ -435,7 +434,7 @@ const resumen = async (req, res, next) => {
 const eliminar = async (req, res, next) => {
   try {
     const lead = await prisma.leadCRM.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       select: { id: true, telefono: true, nombreCliente: true,
         _count: { select: { ventas: true, cotizaciones: true } } },
     });
@@ -448,7 +447,7 @@ const eliminar = async (req, res, next) => {
       // El onDelete: SetNull en Venta y Cotizacion ya lo maneja Prisma automáticamente
     }
 
-    await prisma.leadCRM.delete({ where: { id: req.params.id } });
+    await prisma.leadCRM.delete({ where: { tipoNegocio: 'LLANTAS', id: req.params.id } });
     res.json({
       ok: true,
       mensaje: `Cliente ${lead.nombreCliente || lead.telefono} eliminado`,

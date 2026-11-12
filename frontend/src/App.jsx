@@ -30,7 +30,6 @@ import Usuarios from './pages/Usuarios';
 import ImagenesStock from './pages/ImagenesStock';
 import CompletarIA from './pages/CompletarIA';
 import Precios from './pages/Precios';
-import PersonajesAgregados from './pages/PersonajesAgregados';
 import Chat from './pages/Chat';
 
 export default function App() {
@@ -63,7 +62,6 @@ export default function App() {
             <Route path="inventario/:id" element={<InventarioDetalle />} />
             <Route path="almacenes" element={<Almacenes />} />
             <Route path="facturacion" element={<Facturacion />} />
-            <Route path="personajes" element={<PersonajesAgregados />} />
 
             <Route element={<AdminRoute />}>
               <Route path="inventario/precios" element={<Precios />} />

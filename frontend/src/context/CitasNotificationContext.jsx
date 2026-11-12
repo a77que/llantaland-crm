@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useRef, useCallback, useEff
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { citasApi } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
 
 function playNotificationSound() {
   try {
@@ -28,20 +27,17 @@ function playNotificationSound() {
   } catch { /* AudioContext no soportado */ }
 }
 
-const LABEL_NEGOCIO = { LLANTAS: 'Llantaland', PATRON: 'Sorprendete Perú' };
 
 const CitasNotificationContext = createContext({
   nuevasIds: new Set(),
   marcarVisto: () => {},
   marcarTodosVistos: () => {},
   count: 0,
-  countLlantas: 0,
-  countPatron: 0,
 });
 
-// Mismo patrón que LeadsNotificationContext: un poll independiente por negocio,
-// con su propio set de "vistos" y su propio localStorage namespaced.
-function useNegocioPoll(tipoNegocio) {
+// Notificaciones exclusivas de Llantaland.
+function useLlantalandPoll() {
+  const tipoNegocio = 'LLANTAS';
   const [unreadIds, setUnreadIds] = useState(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem(`citas_unread_ids_${tipoNegocio}`) || '[]'));
@@ -114,7 +110,7 @@ function useNegocioPoll(tipoNegocio) {
 
     if (document.hidden && Notification.permission === 'granted') {
       try {
-        new Notification(`📅 Nueva cita — ${LABEL_NEGOCIO[tipoNegocio]}`, {
+        new Notification(`📅 Nueva cita — Llantaland`, {
           body: `${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} registrada${nuevasArr.length > 1 ? 's' : ''}`,
           icon: '/OsoLogoSVG.svg',
           tag: `cita-nueva-${tipoNegocio}`,
@@ -123,7 +119,7 @@ function useNegocioPoll(tipoNegocio) {
     }
 
     toast(
-      `📅 ${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} de ${LABEL_NEGOCIO[tipoNegocio]}`,
+      `📅 ${nuevasArr.length} nueva${nuevasArr.length > 1 ? 's' : ''} cita${nuevasArr.length > 1 ? 's' : ''} de Llantaland`,
       {
         icon: '🗓️',
         duration: 5000,
@@ -136,10 +132,7 @@ function useNegocioPoll(tipoNegocio) {
 }
 
 export function CitasNotificationProvider({ children }) {
-  const llantas = useNegocioPoll('LLANTAS');
-  const patron  = useNegocioPoll('PATRON');
-  const { businessType } = useAuth();
-  const activo = businessType === 'patron' ? patron : llantas;
+  const activo = useLlantalandPoll();
 
   return (
     <CitasNotificationContext.Provider value={{
@@ -147,8 +140,6 @@ export function CitasNotificationProvider({ children }) {
       marcarVisto: activo.marcarVisto,
       marcarTodosVistos: activo.marcarTodosVistos,
       count: activo.unreadIds.size,
-      countLlantas: llantas.unreadIds.size,
-      countPatron: patron.unreadIds.size,
     }}>
       {children}
     </CitasNotificationContext.Provider>

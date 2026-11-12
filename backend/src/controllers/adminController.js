@@ -104,16 +104,16 @@ const resumen = async (req, res, next) => {
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
 
     const [ventasTotal, ventasHoy, leadsTotal, leadsHoy, leadsCompletados, leadsCalientes] = await Promise.all([
-      prisma.venta.count({ where: { ...where, estado: { not: 'ANULADA' } } }),
-      prisma.venta.count({ where: { createdAt: { gte: hoy }, estado: { not: 'ANULADA' } } }),
-      prisma.leadCRM.count(),
-      prisma.leadCRM.count({ where: { timestamp: { gte: hoy } } }),
-      prisma.leadCRM.count({ where: { pasoActual: 'completado' } }),
-      prisma.leadCRM.count({ where: { ranking: 'caliente' } }),
+      prisma.venta.count({ where: { tipoNegocio: 'LLANTAS', ...where, estado: { not: 'ANULADA' } } }),
+      prisma.venta.count({ where: { tipoNegocio: 'LLANTAS', createdAt: { gte: hoy }, estado: { not: 'ANULADA' } } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS' } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', timestamp: { gte: hoy } } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', pasoActual: 'completado' } }),
+      prisma.leadCRM.count({ where: { tipoNegocio: 'LLANTAS', ranking: 'caliente' } }),
     ]);
 
     const ventasAgregado = await prisma.venta.aggregate({
-      where: { ...where, estado: { not: 'ANULADA' } },
+      where: { tipoNegocio: 'LLANTAS', ...where, estado: { not: 'ANULADA' } },
       _sum: { precioTotal: true },
       _count: true,
     });
@@ -135,7 +135,7 @@ const seedCitasTest = async (req, res, next) => {
     const stockMap2 = { Stock_L1_SantaAnita: 0, Stock_L1: 0, Stock_L2_Surco: 5, Stock_L2: 5 };
 
     const c1 = await prisma.leadCRM.upsert({
-      where: { telefono: '51900000001' },
+      where: { tipoNegocio: 'LLANTAS', telefono: '51900000001' },
       update: {
         nombreCliente: 'Carlos Mendoza Ríos', dniCe: '46123789',
         pasoActual: 'cotizado', ranking: 'caliente',
@@ -156,7 +156,7 @@ const seedCitasTest = async (req, res, next) => {
     });
 
     const c2 = await prisma.leadCRM.upsert({
-      where: { telefono: '51900000002' },
+      where: { tipoNegocio: 'LLANTAS', telefono: '51900000002' },
       update: {
         nombreCliente: 'María Flores Vega', dniCe: '72456318',
         pasoActual: 'completado', ranking: 'tibio',

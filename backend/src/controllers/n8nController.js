@@ -122,7 +122,7 @@ const leerCRM = async (req, res, next) => {
   try {
     const { telefono } = req.params;
     const lead = await prisma.leadCRM.findUnique({
-      where: { telefono },
+      where: { tipoNegocio: 'LLANTAS', telefono },
       include: { humanTakeover: true },
     });
     // n8n espera siempre un objeto, nunca 404
@@ -167,7 +167,7 @@ async function registrarConversacion(telefono, body, leadId) {
 
     let lid = leadId;
     if (!lid) {
-      const lead = await prisma.leadCRM.findUnique({ where: { telefono }, select: { id: true } });
+      const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono }, select: { id: true } });
       if (!lead) return;
       lid = lead.id;
     }
@@ -209,7 +209,7 @@ const crearCRM = async (req, res, next) => {
     const camposExtra = mapSheetToLead(b);
 
     const lead = await prisma.leadCRM.upsert({
-      where: { telefono: tel },
+      where: { tipoNegocio: 'LLANTAS', telefono: tel },
       update: {
         // En actualización solo actualizamos si hay datos nuevos útiles
         mensajeCliente: mensajeInicial || undefined,
@@ -242,7 +242,7 @@ const actualizarCRM = async (req, res, next) => {
     const data = mapSheetToLead(req.body);
 
     const lead = await prisma.leadCRM.upsert({
-      where: { telefono },
+      where: { tipoNegocio: 'LLANTAS', telefono },
       update: data,
       create: { telefono, ...data },
     });
@@ -258,7 +258,7 @@ const actualizarCRM = async (req, res, next) => {
 const resetearCRM = async (req, res, next) => {
   try {
     const lead = await prisma.leadCRM.update({
-      where: { telefono: req.params.telefono },
+      where: { tipoNegocio: 'LLANTAS', telefono: req.params.telefono },
       data: { pasoActual: 'nuevo' },
     });
     res.json(mapLeadToSheet(lead));
@@ -355,7 +355,7 @@ const guardarHistorial = async (req, res, next) => {
 
     const result = await prisma.$transaction(async (tx) => {
       const lead = await tx.leadCRM.upsert({
-        where: { telefono: tel },
+        where: { tipoNegocio: 'LLANTAS', telefono: tel },
         update: {},
         create: { telefono: tel },
       });
@@ -421,7 +421,7 @@ const activarHumanTakeover = async (req, res, next) => {
 
     const ht = await prisma.$transaction(async (tx) => {
       const lead = await tx.leadCRM.upsert({
-        where: { telefono: tel },
+        where: { tipoNegocio: 'LLANTAS', telefono: tel },
         update: {},
         create: { telefono: tel },
       });
@@ -559,7 +559,7 @@ const registrarVenta = async (req, res, next) => {
     const adminUser = await prisma.usuario.findFirst({ where: { rol: 'ADMIN', activo: true } });
     if (!adminUser) return res.status(500).json({ error: 'No hay usuario admin configurado' });
 
-    const lead = telefono ? await prisma.leadCRM.findUnique({ where: { telefono } }) : null;
+    const lead = telefono ? await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono } }) : null;
 
     const count = await prisma.venta.count();
     const numero = `VTA-WA-${String(count + 1).padStart(5, '0')}`;
@@ -605,7 +605,7 @@ const registrarVenta = async (req, res, next) => {
 
       // Actualización del lead atómica con la venta
       if (lead) {
-        await tx.leadCRM.update({ where: { id: lead.id }, data: { pasoActual: 'completado' } });
+        await tx.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: lead.id }, data: { pasoActual: 'completado' } });
       }
 
       return v;
@@ -692,7 +692,7 @@ const listarRecordatorios = async (req, res, next) => {
     const limiteAntiguo  = new Date(ahora - cfg.hasta * 60 * 1000); // updatedAt >  esto
 
     const leads = await prisma.leadCRM.findMany({
-      where: {
+      where: { tipoNegocio: 'LLANTAS',
         [cfg.campo]: false,
         updatedAt: { lte: limiteReciente, gt: limiteAntiguo },
         pasoActual: { notIn: Array.from(PASOS_NO_RECUPERABLES) },
@@ -746,125 +746,10 @@ const marcarRecordatorio = async (req, res, next) => {
     // columna física en la tabla (camelCase tal cual la define Prisma)
     const columna = { '15m': 'recordatorio15', '3h': 'recordatorio3h', '21h': 'recordatorio21h' }[nivel];
     await prisma.$executeRawUnsafe(
-      `UPDATE "leads_crm" SET "${columna}" = true WHERE "telefono" = $1`,
+      `UPDATE "leads_crm" SET "${columna}" = true WHERE "telefono" = $1 AND "tipoNegocio" = 'LLANTAS'`,
       telefono,
     );
     res.json({ ok: true, telefono, nivel });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ─── NEGOCIO "EL PATRÓN" (shows de personajes) ──────────────────────────────
-// Contrato simple en camelCase (flujo nuevo, sin compatibilidad con Sheets legacy).
-
-/** POST /api/n8n/patron/lead — crea/actualiza el lead del flujo Patrón por teléfono */
-const patronLead = async (req, res, next) => {
-  try {
-    const b = req.body;
-    const telefono = String(b.telefono || '').trim();
-    if (!telefono) return res.status(400).json({ error: 'telefono requerido' });
-
-    const data = { tipoNegocio: 'PATRON' };
-    if (b.pasoActual !== undefined) data.pasoActual = b.pasoActual;
-    if (b.nombreCliente !== undefined) data.nombreCliente = b.nombreCliente || null;
-    if (b.mensajeCliente !== undefined) data.mensajeCliente = b.mensajeCliente || null;
-    if (b.personajeId !== undefined) data.personajeId = b.personajeId || null;
-    if (b.distritoEvento !== undefined) data.distritoEvento = b.distritoEvento || null;
-    if (b.costoMovilidadAprox !== undefined) data.costoMovilidadAprox = b.costoMovilidadAprox === null ? null : parseFloat(b.costoMovilidadAprox);
-    if (b.agregadosSeleccionados !== undefined) data.agregadosSeleccionados = b.agregadosSeleccionados;
-    if (b.esProvincia !== undefined) data.esProvincia = b.esProvincia === true || b.esProvincia === 'true';
-
-    const lead = await prisma.leadCRM.upsert({
-      where: { telefono },
-      update: data,
-      create: { telefono, pasoActual: data.pasoActual || 'nuevo', timestamp: new Date(), ...data },
-    });
-
-    res.json(lead);
-  } catch (err) {
-    next(err);
-  }
-};
-
-/** GET /api/n8n/patron/personajes — catálogo activo (Patrón, Patrona, Oso Mariachi) */
-const patronListarPersonajes = async (req, res, next) => {
-  try {
-    const personajes = await prisma.personajeShow.findMany({
-      where: { activo: true },
-      orderBy: { nombre: 'asc' },
-    });
-    res.json(personajes.map(p => ({
-      id: p.id,
-      nombre: p.nombre,
-      precioBase: parseFloat(p.precioBase),
-      descripcion: p.descripcion || '',
-    })));
-  } catch (err) {
-    next(err);
-  }
-};
-
-/** GET /api/n8n/patron/distritos/:distrito — costo aproximado de movilidad */
-const patronCostoDistrito = async (req, res, next) => {
-  try {
-    const distrito = String(req.params.distrito || '').trim();
-    const item = await prisma.distritoCobertura.findFirst({
-      where: { distrito: { equals: distrito, mode: 'insensitive' }, activo: true },
-    });
-    if (!item) {
-      return res.json({ encontrado: false, distrito, costoTransporteAprox: null });
-    }
-    res.json({ encontrado: true, distrito: item.distrito, costoTransporteAprox: item.costoTransporteAprox ? parseFloat(item.costoTransporteAprox) : null });
-  } catch (err) {
-    next(err);
-  }
-};
-
-/** POST /api/n8n/patron/cita — agenda el show validando que no choque con otro ya agendado */
-const patronCita = async (req, res, next) => {
-  try {
-    const b = req.body;
-    const telefono = String(b.telefono || '').trim();
-    if (!telefono) return res.status(400).json({ error: 'telefono requerido' });
-    if (!b.fechaInstalacion) return res.status(400).json({ error: 'fechaInstalacion requerida' });
-
-    const fecha = new Date(b.fechaInstalacion);
-    const hora = b.horaInstalacion || null;
-
-    const choque = await prisma.leadCRM.findFirst({
-      where: {
-        tipoNegocio: 'PATRON',
-        telefono: { not: telefono },
-        fechaInstalacion: fecha,
-        horaInstalacion: hora,
-        estadoCita: { not: null },
-      },
-    });
-    if (choque) {
-      return res.status(409).json({ ok: false, error: 'Ya hay un show agendado en esa fecha y hora' });
-    }
-
-    const lead = await prisma.leadCRM.upsert({
-      where: { telefono },
-      update: {
-        fechaInstalacion: fecha,
-        horaInstalacion: hora,
-        estadoCita: 'ATENDIDO',
-        pasoActual: 'cotizado',
-      },
-      create: {
-        telefono,
-        tipoNegocio: 'PATRON',
-        timestamp: new Date(),
-        fechaInstalacion: fecha,
-        horaInstalacion: hora,
-        estadoCita: 'ATENDIDO',
-        pasoActual: 'cotizado',
-      },
-    });
-
-    res.json({ ok: true, lead });
   } catch (err) {
     next(err);
   }
@@ -986,6 +871,5 @@ module.exports = {
   registrarVenta,
   guardarColaReintento,
   listarRecordatorios, marcarRecordatorio,
-  patronLead, patronListarPersonajes, patronCostoDistrito, patronCita,
   invalidarCachePrecios,
 };

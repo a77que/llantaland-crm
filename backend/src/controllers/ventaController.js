@@ -4,13 +4,13 @@ const prisma = require('../lib/prisma');
 
 const listar = async (req, res, next) => {
   try {
-    const { estado, tipoVenta, tipoNegocio, desde, hasta, page, limit } = req.query;
+    const { estado, tipoVenta, desde, hasta, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
     const isAdmin = req.usuario?.rol === 'ADMIN';
     const where = {};
     if (estado) where.estado = estado;
     if (tipoVenta) where.tipoVenta = tipoVenta;
-    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
+    where.tipoNegocio = 'LLANTAS';
     // Vendedor solo ve sus propias ventas
     if (!isAdmin) where.usuarioId = req.usuario.id;
     if (desde || hasta) {
@@ -42,7 +42,7 @@ const listar = async (req, res, next) => {
 const obtener = async (req, res, next) => {
   try {
     const venta = await prisma.venta.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       include: {
         usuario: { select: { nombre: true, email: true } },
         lead: true,
@@ -59,11 +59,11 @@ const obtener = async (req, res, next) => {
 
 const crear = async (req, res, next) => {
   try {
-    const { items, medidaLlanta, marcaLlanta, modeloLlanta, cantidad, precioUnit, tipoNegocio, ...rest } = req.body;
+    const { items, medidaLlanta, marcaLlanta, modeloLlanta, cantidad, precioUnit, ...rest } = req.body;
 
     const cantFinal   = parseInt(cantidad || 1);
     const precioFinal = parseFloat(precioUnit || 0);
-    const negocioFinal = tipoNegocio || 'LLANTAS';
+    const negocioFinal = 'LLANTAS';
 
     // Validaciones de integridad
     if (cantFinal <= 0) return res.status(400).json({ error: 'Cantidad debe ser mayor a 0' });
@@ -140,7 +140,7 @@ const crear = async (req, res, next) => {
 const generarPdf = async (req, res, next) => {
   try {
     const venta = await prisma.venta.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       include: {
         usuario: { select: { nombre: true } },
         lead: { select: { telefono: true, nombreCliente: true } },
@@ -152,11 +152,11 @@ const generarPdf = async (req, res, next) => {
 
     const filename = await pdfService.generarVenta(venta);
     const pdfUrl = `/uploads/${filename}`;
-    await prisma.venta.update({ where: { id: req.params.id }, data: {} }); // touch
+    await prisma.venta.update({ where: { tipoNegocio: 'LLANTAS', id: req.params.id }, data: {} }); // touch
 
     // Recibo generado = entrega completada: la cita del lead pasa a ENTREGADO
     if (venta.leadId) {
-      await prisma.leadCRM.update({ where: { id: venta.leadId }, data: { estadoCita: 'ENTREGADO' } }).catch(() => {});
+      await prisma.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: venta.leadId }, data: { estadoCita: 'ENTREGADO' } }).catch(() => {});
     }
     res.json({ pdfUrl });
   } catch (err) {

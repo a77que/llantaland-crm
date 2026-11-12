@@ -4,13 +4,13 @@ const prisma = require('../lib/prisma');
 
 const listar = async (req, res, next) => {
   try {
-    const { estado, leadId, tipoNegocio, page, limit } = req.query;
+    const { estado, leadId, page, limit } = req.query;
     const { skip, take } = paginar(page, limit);
     const isAdmin = req.usuario?.rol === 'ADMIN';
     const where = {};
     if (estado) where.estado = estado;
     if (leadId) where.leadId = leadId;
-    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
+    where.tipoNegocio = 'LLANTAS';
     // Vendedor solo ve sus propias cotizaciones
     if (!isAdmin) where.usuarioId = req.usuario.id;
 
@@ -33,7 +33,7 @@ const listar = async (req, res, next) => {
 const obtener = async (req, res, next) => {
   try {
     const cot = await prisma.cotizacion.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       include: {
         usuario: { select: { nombre: true, email: true } },
         lead:    true,
@@ -49,7 +49,7 @@ const crear = async (req, res, next) => {
   try {
     const {
       leadId, medidaLlanta, marcaLlanta, modeloLlanta,
-      cantidad, precioUnit, descuento, cargoAdicional, notas, tipoNegocio,
+      cantidad, precioUnit, descuento, cargoAdicional, notas,
       nombreCliente, dniCe, telefonoCliente, marcaAuto, modeloAuto, anioAuto,
       // Datos de cita ingresados en el CRM
       generarCita, fechaInstalacion, horaInstalacion, localInstalacion: localInstalacionBody,
@@ -102,7 +102,8 @@ const crear = async (req, res, next) => {
     // Snapshot del lead si existe
     let leadData = {};
     if (leadId) {
-      const lead = await prisma.leadCRM.findUnique({ where: { id: leadId } });
+      const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', id: leadId } });
+      if (!lead) return res.status(404).json({ error: 'Lead no encontrado' });
       if (lead) leadData = {
         telefonoCliente: lead.telefono,
         nombreCliente:   lead.nombreCliente,
@@ -141,7 +142,7 @@ const crear = async (req, res, next) => {
     const finalHoraInst         = quiereCita ? (horaInstalacion || null) : null;
     // Si se genera cita y se confirma destino (local en Lima, o provincia) + fecha, nace ACEPTADA
     const estadoInicial         = (quiereCita && finalFechaInst && (finalLocalInstalacion || finalProvinciaDestino)) ? 'ACEPTADA' : 'BORRADOR';
-    const negocioFinal          = tipoNegocio || 'LLANTAS';
+    const negocioFinal          = 'LLANTAS';
 
     const cot = await prisma.$transaction(async (tx) => {
       const c = await tx.cotizacion.create({
@@ -197,10 +198,10 @@ const crear = async (req, res, next) => {
             },
           });
           citaLeadId = nuevoLead.id;
-          await tx.cotizacion.update({ where: { id: c.id }, data: { leadId: citaLeadId } });
+          await tx.cotizacion.update({ where: { tipoNegocio: 'LLANTAS', id: c.id }, data: { leadId: citaLeadId } });
         }
         await tx.leadCRM.update({
-          where: { id: citaLeadId },
+          where: { tipoNegocio: 'LLANTAS', id: citaLeadId },
           data: {
             estadoCita: 'ATENDIDO',
             fechaInstalacion: finalFechaInst,
@@ -225,7 +226,7 @@ const crear = async (req, res, next) => {
         if (pUnit > 0)       updateData.precioLlanta    = pUnit;
         if (qty > 0)         updateData.cantidadLlantas = qty;
         if (Object.keys(updateData).length > 0) {
-          await tx.leadCRM.update({ where: { id: leadId }, data: updateData });
+          await tx.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: leadId }, data: updateData });
         }
       }
 
@@ -263,7 +264,7 @@ const actualizar = async (req, res, next) => {
     }
 
     const cot = await prisma.cotizacion.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       select: { cantidad: true, precioUnit: true, descuento: true, leadId: true, items: true,
                 medidaLlanta: true, marcaLlanta: true, modeloLlanta: true,
                 nombreCliente: true, dniCe: true, marcaAuto: true, modeloAuto: true, anioAuto: true },
@@ -282,7 +283,7 @@ const actualizar = async (req, res, next) => {
       }
     }
 
-    const updated = await prisma.cotizacion.update({ where: { id: req.params.id }, data });
+    const updated = await prisma.cotizacion.update({ where: { tipoNegocio: 'LLANTAS', id: req.params.id }, data });
 
     // Cuando se confirma/acepta una cotización vinculada a un lead: sincronizar datos
     if (cot?.leadId && (data.estado === 'ACEPTADA' || data.estado === 'ENVIADA')) {
@@ -303,7 +304,7 @@ const actualizar = async (req, res, next) => {
       if (qty > 0)   syncData.cantidadLlantas = qty;
       if (data.estado === 'ACEPTADA') syncData.ranking = 'caliente';
       if (Object.keys(syncData).length > 0) {
-        await prisma.leadCRM.update({ where: { id: cot.leadId }, data: syncData });
+        await prisma.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: cot.leadId }, data: syncData });
       }
     }
 
@@ -313,7 +314,7 @@ const actualizar = async (req, res, next) => {
 
 const convertirAVenta = async (req, res, next) => {
   try {
-    const cot = await prisma.cotizacion.findUnique({ where: { id: req.params.id }, include: { lead: true } });
+    const cot = await prisma.cotizacion.findUnique({ where: { tipoNegocio: 'LLANTAS', id: req.params.id }, include: { lead: true } });
     if (!cot) return res.status(404).json({ error: 'Cotización no encontrada' });
     if (cot.venta) return res.status(400).json({ error: 'Esta cotización ya tiene una venta asociada' });
 
@@ -351,9 +352,9 @@ const convertirAVenta = async (req, res, next) => {
           estado:           'PENDIENTE',
         },
       });
-      await tx.cotizacion.update({ where: { id: cot.id }, data: { estado: 'CONVERTIDA' } });
+      await tx.cotizacion.update({ where: { tipoNegocio: 'LLANTAS', id: cot.id }, data: { estado: 'CONVERTIDA' } });
       if (cot.leadId) {
-        await tx.leadCRM.update({ where: { id: cot.leadId }, data: { pasoActual: 'completado' } });
+        await tx.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: cot.leadId }, data: { pasoActual: 'completado' } });
       }
       return v;
     });
@@ -365,7 +366,7 @@ const convertirAVenta = async (req, res, next) => {
 const generarPdf = async (req, res, next) => {
   try {
     const cot = await prisma.cotizacion.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       include: { usuario: { select: { nombre: true } } },
     });
     if (!cot) return res.status(404).json({ error: 'Cotización no encontrada' });

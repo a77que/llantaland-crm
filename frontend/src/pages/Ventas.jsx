@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { ventasApi } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { useAuth } from '../hooks/useAuth';
 
 const ESTADO_COLOR = { PENDIENTE: '#ca8a04', COMPLETADA: '#16a34a', ANULADA: '#dc2626' };
 const TIPO_ICON = { whatsapp: '📱', tienda: '🏪', web: '🌐' };
@@ -17,10 +16,9 @@ export default function Ventas() {
   const [estado, setEstado] = useState('');
   const [tipoVenta, setTipoVenta] = useState('');
   const [page, setPage] = useState(1);
-  const { businessType } = useAuth();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['ventas', businessType, { estado, tipoVenta, page }],
+    queryKey: ['ventas', { estado, tipoVenta, page }],
     queryFn: () => ventasApi.listar({ estado, tipoVenta, page, limit: 25 }),
     keepPreviousData: true,
   });

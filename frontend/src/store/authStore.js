@@ -6,11 +6,17 @@ export const useAuthStore = create(
     (set) => ({
       token: null,
       usuario: null,
-      businessType: 'llantas', // 'llantas' | 'patron'
       setAuth: (token, usuario) => set({ token, usuario }),
       logout: () => set({ token: null, usuario: null }),
-      setBusinessType: (businessType) => set({ businessType }),
     }),
-    { name: 'llantaland-auth' }
+    {
+      name: 'llantaland-auth',
+      partialize: ({ token, usuario }) => ({ token, usuario }),
+      merge: (saved, current) => ({
+        ...current,
+        token: saved?.token ?? null,
+        usuario: saved?.usuario ?? null,
+      }),
+    }
   )
 );

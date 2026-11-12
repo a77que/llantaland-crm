@@ -144,10 +144,10 @@ export default function Clientes() {
     }, { replace: true });
   };
 
-  const { isAdmin, businessType } = useAuth();
+  const { isAdmin } = useAuth();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['clientes-lista', businessType, { q, paso, page, sortBy, sortDir }],
+    queryKey: ['clientes-lista', { q, paso, page, sortBy, sortDir }],
     queryFn: () => leadsApi.listar({ q, paso, page, limit: 50, orderBy: sortBy, orderDir: sortDir }),
     keepPreviousData: true,
   });

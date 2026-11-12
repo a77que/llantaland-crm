@@ -6,7 +6,6 @@ import { cotizacionesApi } from '../services/api';
 import { BotonWhatsApp, BotonEnviarPdfWhatsApp, abrirAsync } from '../components/WhatsAppButtons';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useIsMobileOrTablet } from '../hooks/useIsMobile';
-import { useAuth } from '../hooks/useAuth';
 
 const ESTADO_COLOR = {
   BORRADOR: '#64748b', ENVIADA: '#3b82f6', ACEPTADA: '#16a34a',
@@ -124,10 +123,9 @@ export default function Cotizaciones() {
   const [estado, setEstado] = useState('');
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(false);
-  const { businessType } = useAuth();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cotizaciones', businessType, { estado, page }],
+    queryKey: ['cotizaciones', { estado, page }],
     queryFn: () => cotizacionesApi.listar({ estado, page, limit: 25 }),
     keepPreviousData: true,
   });

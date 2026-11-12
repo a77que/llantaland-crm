@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useRef, useCallback, useEff
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { leadsApi } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
 
 function playNotificationSound() {
   try {
@@ -27,21 +26,17 @@ function playNotificationSound() {
   } catch { /* AudioContext no soportado */ }
 }
 
-const LABEL_NEGOCIO = { LLANTAS: 'Llantaland', PATRON: 'Sorprendete Perú' };
 
 const LeadsNotificationContext = createContext({
   nuevosIds: new Set(),
   marcarVisto: () => {},
   marcarTodosVistos: () => {},
   count: 0,
-  countLlantas: 0,
-  countPatron: 0,
 });
 
-// Cada negocio (LLANTAS/PATRON) tiene su propio polling, su propio set de "vistos"
-// y su propio localStorage namespaced — así un lead nuevo de un negocio nunca
-// aparece como notificación ni cuenta en el otro.
-function useNegocioPoll(tipoNegocio) {
+// Notificaciones exclusivas de Llantaland.
+function useLlantalandPoll() {
+  const tipoNegocio = 'LLANTAS';
   const [unreadIds, setUnreadIds] = useState(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem(`leads_unread_ids_${tipoNegocio}`) || '[]'));
@@ -117,7 +112,7 @@ function useNegocioPoll(tipoNegocio) {
 
     if (document.hidden && Notification.permission === 'granted') {
       try {
-        new Notification(`📱 Nuevo lead — ${LABEL_NEGOCIO[tipoNegocio]}`, {
+        new Notification(`📱 Nuevo lead — Llantaland`, {
           body: `${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} esperando atención`,
           icon: '/OsoLogoSVG.svg',
           tag: `lead-nuevo-${tipoNegocio}`,
@@ -126,7 +121,7 @@ function useNegocioPoll(tipoNegocio) {
     }
 
     toast(
-      `📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de ${LABEL_NEGOCIO[tipoNegocio]}`,
+      `📱 ${nuevosArr.length} nuevo${nuevosArr.length > 1 ? 's' : ''} lead${nuevosArr.length > 1 ? 's' : ''} de Llantaland`,
       {
         icon: '🔔',
         duration: 5000,
@@ -146,10 +141,7 @@ export function LeadsNotificationProvider({ children }) {
     }
   }, []);
 
-  const llantas = useNegocioPoll('LLANTAS');
-  const patron  = useNegocioPoll('PATRON');
-  const { businessType } = useAuth();
-  const activo = businessType === 'patron' ? patron : llantas;
+  const activo = useLlantalandPoll();
 
   return (
     <LeadsNotificationContext.Provider value={{
@@ -157,8 +149,6 @@ export function LeadsNotificationProvider({ children }) {
       marcarVisto: activo.marcarVisto,
       marcarTodosVistos: activo.marcarTodosVistos,
       count: activo.unreadIds.size,
-      countLlantas: llantas.unreadIds.size,
-      countPatron: patron.unreadIds.size,
     }}>
       {children}
     </LeadsNotificationContext.Provider>

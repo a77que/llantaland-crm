@@ -74,7 +74,7 @@ function parsearSalidaBot(body) {
 }
 
 async function guardarMensaje(telefono, rol, mensaje) {
-  const lead = await prisma.leadCRM.findUnique({ where: { telefono }, select: { id: true } });
+  const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono }, select: { id: true } });
   if (!lead) return null;
   return prisma.mensajeHistorial.create({
     data: { leadId: lead.id, telefono, rol, mensaje },
@@ -86,7 +86,7 @@ const iniciarSesion = async (req, res, next) => {
   try {
     let { sessionId } = req.body || {};
     if (sessionId && esWeb(sessionId)) {
-      const existe = await prisma.leadCRM.findUnique({ where: { telefono: sessionId } });
+      const existe = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono: sessionId } });
       if (existe) return res.json({ sessionId, nuevo: false });
     }
     sessionId = nuevoWebId();
@@ -203,7 +203,7 @@ const responderVendedor = async (req, res, next) => {
     const t = String(texto || '').trim();
     if (!t) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    const lead = await prisma.leadCRM.findUnique({ where: { telefono: sessionId }, select: { id: true } });
+    const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono: sessionId }, select: { id: true } });
     if (!lead) return res.status(404).json({ error: 'Sesión no encontrada' });
 
     // Al entrar el vendedor, se pausa el bot para ese cliente (como en WhatsApp).
@@ -228,7 +228,7 @@ const responderVendedorAudio = async (req, res, next) => {
     if (!esWeb(sessionId)) return res.status(400).json({ error: 'Sesión inválida' });
     if (!req.file) return res.status(400).json({ error: 'Audio requerido' });
 
-    const lead = await prisma.leadCRM.findUnique({ where: { telefono: sessionId }, select: { id: true } });
+    const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono: sessionId }, select: { id: true } });
     if (!lead) return res.status(404).json({ error: 'Sesión no encontrada' });
 
     // Normaliza a AAC para que suene en cualquier dispositivo del cliente; si
@@ -254,7 +254,7 @@ const responderVendedorAudio = async (req, res, next) => {
 const listarConversaciones = async (req, res, next) => {
   try {
     const leads = await prisma.leadCRM.findMany({
-      where: { canal: 'web' },
+      where: { tipoNegocio: 'LLANTAS', canal: 'web' },
       orderBy: { updatedAt: 'desc' },
       take: 100,
       select: {

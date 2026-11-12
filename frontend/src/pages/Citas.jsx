@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 import { citasApi, cotizacionesApi, sedesApi } from '../services/api';
 import { useCitasNotification } from '../context/CitasNotificationContext';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { useAuth } from '../hooks/useAuth';
 import { BotonWhatsApp, BotonEnviarPdfWhatsApp, abrirAsync } from '../components/WhatsAppButtons';
 import CalendarioCitas from '../components/CalendarioCitas';
 
@@ -312,7 +311,6 @@ export default function Citas() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { marcarTodosVistos, nuevasIds, count } = useCitasNotification();
-  const { businessType } = useAuth();
 
   // Enviar a cotizar = ir a la página de Cotización Nueva (con APIs de DNI/RUC/CE) con los datos precargados
   const irACotizar = (cita) => {
@@ -339,7 +337,7 @@ export default function Citas() {
   const { data: sedes = [] } = useQuery({ queryKey: ['sedes'], queryFn: sedesApi.listar, staleTime: Infinity });
 
   const { data, isLoading, isFetching, isError, refetch } = useQuery({
-    queryKey: ['citas', businessType, page, q, orderBy, orderDir, filtro],
+    queryKey: ['citas', page, q, orderBy, orderDir, filtro],
     queryFn: () => citasApi.listar({ page, limit: 30, q: q || undefined, orderBy, orderDir, rango: filtro.rango || undefined, estado: filtro.estado || undefined }),
     staleTime: 15_000,
     refetchInterval: 20_000,
@@ -347,7 +345,7 @@ export default function Citas() {
 
   // Para el calendario necesitamos todas las citas (no solo la página actual).
   const { data: calData } = useQuery({
-    queryKey: ['citas-calendario', businessType, q, filtro.estado],
+    queryKey: ['citas-calendario', q, filtro.estado],
     queryFn: () => citasApi.listar({ page: 1, limit: 500, q: q || undefined, estado: filtro.estado || undefined }),
     enabled: vista === 'calendario',
     staleTime: 15_000,

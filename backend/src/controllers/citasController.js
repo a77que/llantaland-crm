@@ -3,7 +3,7 @@ const prisma = require('../lib/prisma');
 const { localValido } = require('../utils/helpers');
 
 // Pasos que indican que el cliente eligió una tienda en Lima o colocó una provincia
-// (negocio Llantas) o ya cotizó un show (negocio Patrón)
+// para la instalación de llantas.
 const CITAS_PASOS = [
   'lima_lista',
   'esperando_eleccion_b',
@@ -46,7 +46,7 @@ function stockEnLocalElegido(lead) {
 
 const listar = async (req, res, next) => {
   try {
-    const { q, estado, rango, tipoNegocio, page = 1, limit = 50, orderBy, orderDir } = req.query;
+    const { q, estado, rango, page = 1, limit = 50, orderBy, orderDir } = req.query;
 
     const take = Math.min(parseInt(limit) || 50, 100);
     const skip = (parseInt(page) - 1) * take;
@@ -61,7 +61,7 @@ const listar = async (req, res, next) => {
     const sortDir   = orderDir === 'asc' ? 'asc' : 'desc';
 
     const where = { pasoActual: { in: CITAS_PASOS } };
-    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
+    where.tipoNegocio = 'LLANTAS';
 
     // Filtro por rango de fecha de instalación: hoy | manana
     if (rango === 'hoy' || rango === 'manana') {
@@ -151,9 +151,8 @@ const listar = async (req, res, next) => {
 // Polling ligero para notificaciones
 const poll = async (req, res, next) => {
   try {
-    const { tipoNegocio } = req.query;
     const where = { pasoActual: { in: CITAS_PASOS } };
-    if (tipoNegocio) where.tipoNegocio = tipoNegocio;
+    where.tipoNegocio = 'LLANTAS';
     const citas = await prisma.leadCRM.findMany({
       where,
       select: { id: true, updatedAt: true, pasoActual: true },
@@ -179,7 +178,7 @@ const actualizar = async (req, res, next) => {
     // Si agenda fecha y no hay estado explícito, pasa a ATENDIDO
     if (data.fechaInstalacion && estadoCita === undefined) data.estadoCita = 'ATENDIDO';
 
-    const lead = await prisma.leadCRM.update({ where: { id: req.params.id }, data });
+    const lead = await prisma.leadCRM.update({ where: { tipoNegocio: 'LLANTAS', id: req.params.id }, data });
     res.json({ ok: true, cita: lead });
   } catch (err) {
     next(err);
@@ -191,7 +190,7 @@ const actualizar = async (req, res, next) => {
 const generarPdf = async (req, res, next) => {
   try {
     const lead = await prisma.leadCRM.findUnique({
-      where: { id: req.params.id },
+      where: { tipoNegocio: 'LLANTAS', id: req.params.id },
       include: { cotizaciones: { orderBy: { createdAt: 'desc' }, take: 1, include: { usuario: { select: { nombre: true } } } } },
     });
     if (!lead) return res.status(404).json({ error: 'Cita no encontrada' });

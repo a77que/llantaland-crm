@@ -92,23 +92,9 @@ enum CasoFlujo {
   E
 }
 
-// Negocio al que pertenece el registro (CRM compartido, varias verticales)
+// Registros exclusivos de Llantaland.
 enum TipoNegocio {
   LLANTAS
-  PATRON
-}
-
-enum TipoPersonaje {
-  PATRON
-  PATRONA
-  OSO_MARIACHI
-}
-
-enum TipoAgregado {
-  RAMO_FLORES
-  CHOCOLATES
-  PELUCHE
-  OTRO
 }
 
 // ─── USUARIOS Y SESIONES ─────────────────────────────────────────────────────
@@ -348,13 +334,6 @@ model LeadCRM {
   ofertaPrecios          Json?       // opciones presentadas al cliente (todas las marcas con stock de esa medida)
   llantasElegidas        Json?       // { texto, items[] } — las llantas que el cliente eligió por marca
 
-  // Negocio "El Patrón" (shows de personajes)
-  personajeId            String?
-  distritoEvento         String?
-  costoMovilidadAprox    Decimal?    @db.Decimal(10, 2)
-  agregadosSeleccionados Json?       // [{ agregadoId, nombre, precio }]
-  esProvincia            Boolean?
-
   // Cierre
   estadoLogistica        String?
   fechaCita              String?
@@ -382,8 +361,6 @@ model LeadCRM {
   humanTakeover    HumanTakeover?
   ventas           Venta[]
   cotizaciones     Cotizacion[]
-  // Restrict: el personaje del catálogo no se borra si tiene leads asociados
-  personaje        PersonajeShow? @relation(fields: [personajeId], references: [id], onDelete: SetNull)
 
   @@index([pasoActual])
   @@index([ranking])
@@ -724,47 +701,6 @@ model AlertaStock {
   @@index([resuelta])
   @@index([productoId])
   @@map("alertas_stock")
-}
-
-// ─── NEGOCIO "EL PATRÓN" (shows de personajes) ───────────────────────────────
-// Catálogo administrado desde el CRM, vista "Detalles del Patrón"
-
-model PersonajeShow {
-  id          String        @id @default(cuid())
-  nombre      TipoPersonaje @unique
-  precioBase  Decimal       @default(150) @db.Decimal(10, 2)
-  descripcion String?
-  imagenUrl   String?
-  activo      Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  leads LeadCRM[]
-
-  @@map("personajes_show")
-}
-
-model DistritoCobertura {
-  id                   String   @id @default(cuid())
-  distrito             String   @unique
-  costoTransporteAprox Decimal? @db.Decimal(10, 2)
-  activo               Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  @@map("distritos_cobertura")
-}
-
-model AgregadoRegalo {
-  id        String       @id @default(cuid())
-  nombre    String
-  tipo      TipoAgregado
-  precio    Decimal      @db.Decimal(10, 2)
-  activo    Boolean      @default(true)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-
-  @@map("agregados_regalo")
 }
 
 // ─── WEBHOOK LOGS ─────────────────────────────────────────────────────────────

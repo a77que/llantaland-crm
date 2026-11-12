@@ -16,7 +16,6 @@ const {
   registrarVenta,
   guardarColaReintento,
   listarRecordatorios, marcarRecordatorio,
-  patronLead, patronListarPersonajes, patronCostoDistrito, patronCita,
 } = require('../controllers/n8nController');
 
 router.use(n8nAuth);
@@ -60,11 +59,5 @@ router.post('/cola-reintentos',    guardarColaReintento);
 // ── Recuperación de carrito (recordatorios 15min / 3h / 21h) ──
 router.get('/recordatorios',          listarRecordatorios);  // ?nivel=15m|3h|21h
 router.post('/recordatorios/marcar',  marcarRecordatorio);   // { telefono, nivel }
-
-// ── Negocio "El Patrón" (shows de personajes) ─────────────────
-router.post('/patron/lead',              patronLead);
-router.get('/patron/personajes',         patronListarPersonajes);
-router.get('/patron/distritos/:distrito', patronCostoDistrito);
-router.post('/patron/cita',              patronCita);
 
 module.exports = router;
