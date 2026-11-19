@@ -55,7 +55,7 @@ function nuevoWebId() {
 
 // Extrae texto + opciones de un cuerpo estilo YCloud (texto o interactivo).
 function parsearSalidaBot(body) {
-  const out = { texto: '', opciones: [] };
+  const out = { texto: '', opciones: [], audioUrl: null };
   if (!body || typeof body !== 'object') return out;
   if (body.text && body.text.body) out.texto = String(body.text.body);
   else if (body.interactive) {
@@ -68,16 +68,19 @@ function parsearSalidaBot(body) {
       ...filas.map(r => ({ id: r.id, titulo: r.title, descripcion: r.description })),
     ].filter(o => o.id != null);
   } else if (body.image) out.texto = '[imagen]' + (body.image.caption ? ' ' + body.image.caption : '');
-  else if (body.audio) out.texto = '[nota de voz]';
+  else if (body.audio) {
+    out.texto = '[nota de voz]';
+    if (typeof body.audio.link === 'string' && /^https?:\/\//i.test(body.audio.link)) out.audioUrl = body.audio.link;
+  }
   else if (body.document) out.texto = '[documento]';
   return out;
 }
 
-async function guardarMensaje(telefono, rol, mensaje) {
+async function guardarMensaje(telefono, rol, mensaje, audioUrl = null) {
   const lead = await prisma.leadCRM.findUnique({ where: { tipoNegocio: 'LLANTAS', telefono }, select: { id: true } });
   if (!lead) return null;
   return prisma.mensajeHistorial.create({
-    data: { leadId: lead.id, telefono, rol, mensaje },
+    data: { leadId: lead.id, telefono, rol, mensaje, audioUrl },
   });
 }
 
@@ -163,11 +166,11 @@ const relay = async (req, res, next) => {
 
     if (esWeb(to) || esWeb(toRaw)) {
       const sessionId = esWeb(to) ? to : toRaw;
-      const { texto, opciones } = parsearSalidaBot(body);
+      const { texto, opciones, audioUrl } = parsearSalidaBot(body);
       if (texto || opciones.length) {
-        const savedBot = await guardarMensaje(sessionId, 'bot', texto || (opciones.length ? '[opciones]' : ''));
-        emitirChat(sessionId, 'chat:bot', { id: savedBot && savedBot.id, texto, opciones, ts: Date.now() });
-        emitirVendedores('chat:bot', { sessionId, id: savedBot && savedBot.id, texto, ts: Date.now() });
+        const savedBot = await guardarMensaje(sessionId, 'bot', texto || (opciones.length ? '[opciones]' : ''), audioUrl);
+        emitirChat(sessionId, 'chat:bot', { id: savedBot && savedBot.id, texto, opciones, audioUrl, ts: Date.now() });
+        emitirVendedores('chat:bot', { sessionId, id: savedBot && savedBot.id, texto, audioUrl, ts: Date.now() });
       }
       return res.json({ ok: true, canal: 'web' });
     }
@@ -312,3 +315,4 @@ module.exports = {
   iniciarSesion, enviarMensaje, listarMensajes, relay, responderVendedor, responderVendedorAudio, esWeb,
   listarConversaciones, vapid, suscribirPush, desuscribirPush,
 };
+
